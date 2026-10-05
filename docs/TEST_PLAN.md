@@ -1,6 +1,10 @@
 # Plano de validação
 
-Fonte: [escopo](Focus%20Blocker_%20escopo%20do%20projeto.md), [requisitos rastreados](REQUIREMENTS.md) e respostas em [DECISIONS.md](DECISIONS.md). Status: planejamento; nenhum teste de aplicação foi executado, pois ainda não há software. Os cenários abaixo descrevem evidências a coletar durante as entregas. IDs de decisões respondidas servem de rastreabilidade; somente seus detalhes pendentes impedem fechar o caso.
+Fonte: [escopo](Focus%20Blocker_%20escopo%20do%20projeto.md), [requisitos rastreados](REQUIREMENTS.md) e respostas em [DECISIONS.md](DECISIONS.md). Fase 1 executada: 75 testes OK em Python 3.14.6 por `python -B -m unittest discover -s tests -v`. Os cenários das demais fases continuam planejamento; testes dessa etapa não verificam efeitos reais no Windows. IDs respondidos servem de rastreabilidade.
+
+## Evidência da fase 1
+
+Testes em `tests/test_config.py`, `tests/test_scheduler.py`, `tests/test_scheduler_reference.py`, `tests/test_main.py` e `tests/test_phase1_integration.py`. Há comparação independente do calendário, validação/roundtrip, falhas de fsync/replace com original preservado, consultas via subprocess e watch com recarga/Ctrl+C controlados. Nenhum teste altera hosts, encerra processos ou usa o perfil real. Sintaxe 3.12 verificada; runtime validado foi 3.14.6.
 
 ## Resultados esperados já esclarecidos pelo usuário
 
@@ -16,7 +20,7 @@ Fonte: [escopo](Focus%20Blocker_%20escopo%20do%20projeto.md), [requisitos rastre
 - Para regras de processo e hosts, primeiro usar entradas e arquivos isolados; só depois integração Windows com alvos de teste autorizados.
 - Usar ambiente Windows dedicado para encerramento de processos, hosts, privilégio elevado, tarefa agendada e desinstalação. Registrar versão Windows/Brave, privilégios e estado do DNS seguro.
 - Medir desempenho do executável distribuído. Não prometer RNF de CPU/RAM com base em teste unitário.
-- Ferramentas, versões e automação de testes ainda não escolhidas. Não adicionar dependências nesta tarefa.
+- Fase 1 usa unittest da biblioteca padrão; ferramentas/ambientes de integração das fases posteriores ainda a definir.
 
 ## Cenários por área
 

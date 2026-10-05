@@ -1,6 +1,6 @@
 # Plano de entrega e coordenação
 
-Base: sete fases da seção 11 do [escopo](Focus%20Blocker_%20escopo%20do%20projeto.md). Estado atual: documentação em análise; todas as fases de software ainda não iniciadas. Não há estimativa de prazo ou esforço aprovada.
+Base: sete fases da seção 11 do [escopo](Focus%20Blocker_%20escopo%20do%20projeto.md). Desenvolvimento autorizado em 2026-10-05; fase 1 concluída com CLI e 75 testes, fases 2–7 pendentes. Não há estimativa de prazo ou esforço aprovada.
 
 ## Preparação documental
 
@@ -12,11 +12,11 @@ Base: sete fases da seção 11 do [escopo](Focus%20Blocker_%20escopo%20do%20proj
 
 ## Entregas do software
 
-A atribuição e o detalhamento abaixo são **proposta de organização da equipe**, alinhada às fases existentes; não autorizam iniciar implementação nesta tarefa documental.
+A fase 1 foi distribuída aos três agentes pelo Maestro; as atribuições das fases posteriores continuam como proposta de organização. O usuário autorizou iniciar o desenvolvimento, preservando as decisões e limites registrados.
 
 | Fase | Entrega do escopo | Responsável proposto e colaboração | Dependências para fechar | Critério de pronto |
 | --- | --- | --- | --- | --- |
-| 1 | Agendador, JSON e testes | Backend: agendamento; Banco: contrato/persistência; Frontend: revisão do contrato | D04, D08, D13, D17; fronteira de pausa em D09 | Janelas, dias, meia-noite e sobreposição verificados; configuração válida preservada; inválida tratada conforme decisão |
+| 1 | Agendador, JSON e testes | Backend: agenda; Banco: JSON; Frontend: CLI e integração; Maestro: referência independente/revisão | D04/D08/D13/D20 e leitura D17 respondidos; contratos definidos em PHASE1_CONTRACT; pausa fica na fase 4 | Janelas/dias/meia-noite/sobreposição/adjacência; gravação preserva dados; JSON inválido interrompe com erro |
 | 2 | Bloqueio de processos | Backend; Banco: definição de eventos; Frontend: surfacing de erros | Fase 1; D14–D16 | Launchers/jogos elegíveis encerram, reabertura é detectada e protegidos ficam intactos |
 | 3 | Bloqueio de sites | Backend; Frontend: alertas/onboarding | Fase 1; D03, D07, D13, D17 | Hosts modificado só no bloco do app; backup e flush; Brave verificado durante/fora da janela; garantia de recuperação validada |
 | 4 | Avisos e pausa | Backend: transições; Frontend: contagem/cancelamento; Banco: registros | Fases 1–3; D01–D02, D09–D10, D16 | Avisos definidos; espera cancelável; 15 min liberados; retorno e persistência de eventos consistentes |
@@ -48,4 +48,4 @@ Maestro integra cada unidade; em trabalho compartilhado, evitar commits concorre
 
 ## Retomada
 
-O calendário, os limites/adjacência e a ativação inicial já têm respostas em `DECISIONS.md`. Fechar validação/persistência para a fase 1; em paralelo, propor identificação de domínio ativo e contrato da lista editável de estudo no Brave (D19), necessário à fase 6. Revisar contratos especialistas antes de implementá-los. A tarefa atual é documental; nenhuma fase de software foi iniciada.
+Consultar `DEVELOPMENT_LOG.md` para o resultado da fase 1. Antes da fase 2, resolver a proteção de processos (D14) e correspondência de cmdline/pastas (D15). Para a fase 6, propor identificação do domínio ativo e contrato da lista editável de estudo no Brave (D19); não atribuir foco a qualquer página aberta.

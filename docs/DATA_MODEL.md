@@ -1,5 +1,7 @@
 # Modelo de dados do Focus Blocker
 
+**Implementação atual:** contrato JSON da fase 1 implementado em `core/config.py` e `core/models.py`, incluindo gravação atômica/preservação em erro e dias vazios desativados. Ver [PHASE1_CONTRACT.md](PHASE1_CONTRACT.md). Tabelas SQLite continuam conceituais, sem banco/schema criado.
+
 ## 1. Status e fonte de verdade
 
 Este documento registra o que consta em `docs/Focus Blocker_ escopo do projeto.md` e identifica lacunas para revisão pelo Maestro. Não aprova schema, defaults adicionais, políticas de dados ou alterações de escopo. Não contém SQL nem implementação.
@@ -34,7 +36,7 @@ O contrato confirmado aqui é a estrutura apresentada na seção 5, vinculada ao
 | --- | --- | --- |
 | `windows`: lista de objetos | Janelas editáveis; cruzamento de meia-noite; unir sobrepostas e adjacentes. RF01–RF03; D08. | D13: começar sem horários ativos e escolher antes de ativar. Exemplos 08:00–12:00/14:00–18:00 não são defaults. Quantidade máxima pendente. |
 | `windows[].start`, `windows[].end`: textos como `08:00` | D08: início incluído/fim excluído; igualdade inválida. RF01 e seção 5. | Representação `HH:MM`; gramática completa/segundos ainda a formalizar. |
-| `windows[].days`: lista de números como `[0,1,2,3,4,5,6]` | RF01: todos os dias por padrão. D04: dia de início; segunda=0 até domingo=6. | Ausência do campo, seleção vazia, duplicados e tipos inválidos: pendentes. |
+| `windows[].days`: lista de números como `[0,1,2,3,4,5,6]` | RF01: todos por padrão se ausentes; D04: dia inicial, segunda=0 até domingo=6. D20: lista vazia desativa. | Fase 1 exige inteiros únicos 0–6 (sem bool); ver PHASE1_CONTRACT. |
 | `warn_minutes`: lista numérica `[5,1]` | Avisos 5 e 1 minuto antes. RF05, seção 5 e D01. | D01 confirmou esses tempos, superando “2 a 5 min” da seção 1. Ser editável ou fixo e aceitar outros valores: pendente. |
 | `pause.wait_seconds`: número `60` | Espera cancelável de 60 segundos. RF16. | Comportamento explícito, não apenas exemplo. Possibilidade de alteração pela configuração: pendente. |
 | `pause.duration_minutes`: número `15` | Liberação de sites e apps por 15 minutos. RF17. | Comportamento explícito, não apenas exemplo. Possibilidade de alteração pela configuração: pendente. |

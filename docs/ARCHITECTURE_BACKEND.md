@@ -1,6 +1,8 @@
 # Arquitetura do backend — Focus Blocker
 
-Documento de referência para implementação, ainda sem código. Fontes: [Focus Blocker: escopo do projeto](<Focus Blocker_ escopo do projeto.md>) e [decisões registradas pelo Maestro](DECISIONS.md), com respostas explícitas do usuário em 2026-10-05. As referências a seção e RF apontam para o escopo; os IDs D apontam para respostas e detalhes pendentes no registro central. Este documento incorpora respostas sem alterar o original nem aprovar soluções para outras lacunas.
+**Implementação atual:** fase 1 em `core/models.py`, `core/config.py`, `core/scheduler.py` e `main.py`, conforme [PHASE1_CONTRACT.md](PHASE1_CONTRACT.md), verificada por 75 testes. O desenho das demais fases abaixo continua referência/proposta; não descreve bloqueadores já executáveis.
+
+Referência arquitetural, com a fase 1 implementada conforme contrato específico. Fontes: [Focus Blocker: escopo do projeto](<Focus Blocker_ escopo do projeto.md>) e [decisões registradas pelo Maestro](DECISIONS.md), com respostas explícitas em 2026-10-05. Referências a seção/RF apontam para o escopo; IDs D para respostas/detalhes pendentes. O original foi preservado; mecanismos futuros continuam propostas.
 
 ## 1. Classificação e alcance
 
@@ -11,7 +13,7 @@ Documento de referência para implementação, ainda sem código. Fontes: [Focus
 - **Decisão pendente (P):** lacuna, conflito ou escolha ainda não resolvida. Os identificadores locais P01–P12 agrupam questões para o Maestro, sem substituir os IDs de `DECISIONS.md`. P01 foi fechada por D03; P07 perdeu a divergência de minutos por D01, mas conserva outras lacunas.
 - **Fato técnico externo:** comportamento documentado de uma dependência, com fonte oficial. Uma biblioteca permitir algo não torna seu uso uma decisão do projeto.
 
-“Backend” designa o núcleo local e seus adaptadores de sistema operacional, configuração e estatísticas. Os contratos descritos são internos ao processo; não são endpoints, API HTTP, serviço remoto ou esquema definitivo de classes. Os caminhos da seção 4 do escopo são a estrutura prevista, não evidência de módulos já implementados. Não se declara aqui nenhuma funcionalidade como pronta.
+“Backend” designa o núcleo local e seus adaptadores. Os contratos conceituais abaixo são internos; não são endpoints HTTP ou esquema final das fases futuras. Módulos presentes na implementação atual estão indicados no início; demais caminhos da seção 4 do escopo continuam estrutura prevista.
 
 ## 2. Arquitetura confirmada e limites
 

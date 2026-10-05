@@ -1,5 +1,7 @@
 # Focus Blocker — Fluxos de interface
 
+**Implementação atual:** CLI de diagnóstico em `main.py` na fase 1, com configuração/consulta/watch; nenhuma bandeja ou janela gráfica implementada. Fluxos de UI abaixo continuam referência para a fase 5. Ver [instruções de execução](../README.md).
+
 ## 1. Finalidade, fonte e classificação
 
 Documento de referência para a interface, sem implementação. Fonte dos requisitos: [Focus Blocker: escopo do projeto](Focus%20Blocker_%20escopo%20do%20projeto.md), especialmente seções 1–11. A documentação não comprova que as funcionalidades já estejam implementadas.

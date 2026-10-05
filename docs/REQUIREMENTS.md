@@ -2,7 +2,7 @@
 
 Fonte: [escopo original](Focus%20Blocker_%20escopo%20do%20projeto.md), seções 1–13, e respostas do usuário em 2026-10-05, registradas em `DECISIONS.md`. Os IDs RF são os da fonte. Os IDs RNF e C usados aqui são identificadores documentais, sem criar novos requisitos.
 
-Status: requisitos extraídos; critérios abaixo ainda não executados. Quando a fonte é ambígua, a pendência em [DECISIONS.md](DECISIONS.md) impede fechar o aceite correspondente.
+Status: fase 1 verificada com 75 testes de JSON/agendador/CLI. RF01 tem persistência disponível, edição gráfica fica na fase 5; RF02–RF04 têm agenda e ciclo de diagnóstico. Os demais critérios ainda não foram executados. Quando a fonte é ambígua, consultar [DECISIONS.md](DECISIONS.md).
 
 ## Objetivo e fronteira
 

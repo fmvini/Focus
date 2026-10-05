@@ -34,6 +34,8 @@ Respondidos D01–D05, D07–D08 e o fluxo de D13; D06, D09, D11–D12 e D16 tê
 | D16 | Sim, uma tentativa por processo efetivamente encerrado, sem visitas a sites | Não contar falha de encerramento nem acesso web; identidade/deduplicação ainda a detalhar |
 | D08 | Sim às regras propostas de limites e união | Intervalos com início incluído/fim excluído; início igual ao fim inválido; unir janelas adjacentes além das sobrepostas |
 | D19 — produto respondido | Contar por sites: usuário adiciona domínios considerados estudo e personaliza sites bloqueados | Manter lista de estudo distinta da lista de bloqueio; contar Brave em primeiro plano somente quando domínio for elegível, dentro da janela e fora da pausa. Mecanismo de identificar domínio e política de subdomínios ainda a definir |
+| D17 — leitura respondida | Sim, preservar e informar erro de JSON inválido/corrompido | Interromper inicialização com erro, sem substituir configurações; exigir correção. Demais políticas de persistência continuam distintas |
+| D20 | Salvar como janela desativada | `days: []` é válido e não bloqueia; ausência de `days` usa todos os dias, conforme RF01 |
 
 **Ajuste explícito do escopo em D03:** a frase de §3 sobre não ficar bloqueado para sempre passa a ser interpretada conforme a recuperação ao reabrir de §8, escolhida pelo usuário. A documentação não promete liberação automática após crash. O original foi preservado para rastreabilidade.
 
@@ -57,13 +59,20 @@ Respondidos D01–D05, D07–D08 e o fluxo de D13; D06, D09, D11–D12 e D16 tê
 | D14 | Safelist de sistema completa, identificação por nome/caminho e possibilidade de editar/remover proteções? | RF10; prioridade definida, conteúdo e governança incompletos | Usuário aprova política; Backend propõe identificação |
 | D15 | Padrão cmdline é substring literal ou regex? Case sensitivity? Expandir variáveis/atalhos/junctions em pastas? Qual tratamento de acesso negado? | RF07–09, §6–7; proteção contra falso positivo | Usuário para regra; Backend para normalização e falhas |
 | D16 — parcial | Processo encerrado com sucesso; visitas web não contam; falta identidade/deduplicação técnica | RF11/21 e resposta | Banco/Backend |
-| D17 | Config inválida, gravação atômica, migrações, recuperação DB, backup hosts e destino de configuração/backups na desinstalação? Histórico será apagado conforme D11 | RF15, §§5/10 e D11; durabilidade/continuidade | Usuário para política visível; Banco/Backend para mecanismos |
+| D17 — parcial | JSON inválido interrompe com erro e arquivo intacto, confirmado; substituição atômica escolhida para fase 1. Migrações/SQLite, backup hosts e configuração/backups na desinstalação ainda pendentes | RF15, §§5/10, D11 e resposta de 2026-10-05; durabilidade | Usuário para política visível; equipe para mecanismos |
 | D18 | Versões/arquiteturas Windows/Brave de validação, hardware de referência, método de CPU/RAM, instalador e assinatura? | §§1/3/9–10/13; entrega e critérios medíveis | Usuário para público-alvo; equipe propõe matriz |
 | D19 — mecanismo pendente | Regra por domínios editáveis aprovada; como identificar domínio da aba ativa? Correspondência exata ou com subdomínios? Como tratar domínio ausente e conflito estudo/bloqueio? | Respostas do usuário; amplia RF20 originalmente baseado só em processo | Equipe propõe mecanismo; usuário aprova comportamentos ainda ambíguos |
+| D20 — fechado | Dias vazios desativam a janela sem excluí-la | Resposta do usuário ao iniciar desenvolvimento | Usuário, 2026-10-05 |
 
 ### Perguntas respondidas e detalhamento futuro
 
 As perguntas enviadas nesta sessão foram respondidas e consolidadas acima. D19 aprova lista de domínios de estudo editável e personalização de sites bloqueados, sem estabelecer domínios iniciais obrigatórios. Não assumir análise de títulos, extensão, histórico de navegação, API local ou mudança na política de dados locais. A escolha do mecanismo e os demais detalhes abertos serão tratados antes das fases dependentes.
+
+## Escolhas técnicas da fase 1
+
+Desenvolvimento autorizado pelo usuário em 2026-10-05. O Maestro definiu as APIs em [PHASE1_CONTRACT.md](PHASE1_CONTRACT.md), biblioteca padrão e `unittest`, sem dependências externas para esta fase. Configuração valida somente `windows` e preserva campos adicionais para evolução, sem executá-los como regras de bloqueio. `windows` é obrigatório; dias ausentes usam todos; dias vazios desativam conforme D20. Gravação usa temporário no diretório de destino e substituição atômica. Identificação da conta via APPDATA sem fallback oculto.
+
+CLI de diagnóstico: status por padrão; criação explícita sem sobrescrever; horários ISO locais sem fuso para consulta; `--at` não combinado com modo contínuo; retorno 0 sucesso/Ctrl+C, 1 erro operacional/configuração, 2 argumento inválido. São escolhas de implementação desta etapa, não afirmações de que bloqueadores/GUI estejam prontos.
 
 ## Contradições e limites que não podem ser ocultados
 

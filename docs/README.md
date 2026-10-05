@@ -1,6 +1,6 @@
 # Documentação de desenvolvimento — Focus Blocker
 
-Status: base documental consolidada com respostas do usuário; detalhes técnicos em aberto. Nenhuma funcionalidade implementada nesta etapa.
+Status: fase 1 implementada — JSON, agendador e CLI; fases posteriores e detalhes técnicos em aberto. Ver [instruções de execução](../README.md).
 
 ## Fonte e autoridade
 
@@ -22,13 +22,14 @@ Status: base documental consolidada com respostas do usuário; detalhes técnico
 | [DELIVERY_PLAN.md](DELIVERY_PLAN.md) | Sete fases do escopo, dependências, responsáveis e condições para iniciar |
 | [TEST_PLAN.md](TEST_PLAN.md) | Validação das regras, integração Windows, casos de falha e entrega |
 | [DEVELOPMENT_LOG.md](DEVELOPMENT_LOG.md) | Estado real do projeto e ponto de retomada |
+| [PHASE1_CONTRACT.md](PHASE1_CONTRACT.md) | APIs e limites da primeira implementação |
 
 ## Coordenação da equipe
 
-Os agentes conectados foram identificados por `maestri list`: Maestro, Backend, Frontend e Banco de dados. Nesta tarefa, cada especialista produz apenas seu documento; Maestro revisa coerência, consolida as pendências e integra a documentação.
+Agentes identificados por `maestri list`: Maestro, Backend, Frontend e Banco de dados. Na etapa documental, cada especialista produziu seu documento. Na fase 1, Backend entregou agendador; Banco, JSON; Frontend, CLI/integração. Maestro definiu tipos, verificou a agenda independentemente, revisou a unidade e integrou documentação/commit.
 
 Para desenvolvimento posterior, a proposta de divisão está no plano de entrega. Antes de iniciar implementação, consultar o log e as decisões pendentes. Não interpretar ausência de resposta como autorização para escolher comportamento de produto.
 
 ## Limites desta documentação
 
-O repositório começou esta tarefa contendo somente o escopo. Não há aplicação, testes executáveis, instalador, schema SQLite ou dependências instaladas. Critérios de aceite e roteiros de testes são planejamento, não evidência de funcionamento. Cobertura dos sites, compatibilidade Windows/Brave, desempenho e recuperação precisam ser verificados quando houver implementação.
+O projeto agora possui núcleo de agenda/configuração e CLI, com 75 testes executáveis da fase 1. Não há bloqueadores de processos/sites, GUI, schema SQLite ou instalador. A validação dessa fase não comprova cobertura de sites, integração Brave, desempenho ou recuperação do hosts; esses critérios serão verificados nas entregas correspondentes.
