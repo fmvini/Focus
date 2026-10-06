@@ -1,6 +1,6 @@
 # Arquitetura do backend — Focus Blocker
 
-**Implementação atual:** fase 1 em `core/models.py`, `core/config.py`, `core/scheduler.py` e `main.py`, conforme [PHASE1_CONTRACT.md](PHASE1_CONTRACT.md), verificada por 75 testes. O desenho das demais fases abaixo continua referência/proposta; não descreve bloqueadores já executáveis.
+**Implementação atual:** agenda/configuração e `core/proc_blocker.py` com adaptador psutil, guardas e eventos de confirmação em memória; CLI só aplica processos por flag explícito. Contratos [fase 1](PHASE1_CONTRACT.md) e [fase 2](PHASE2_CONTRACT.md) prevalecem sobre propostas históricas abaixo. D14/D15 fecharam política/correspondência; proteção por catálogo não certifica classificação universal. Sites, avisos/pausa, threads da GUI, mutex/elevação e SQLite ainda são entregas futuras. Evidências em TEST_PLAN/DEVELOPMENT_LOG.
 
 Referência arquitetural, com a fase 1 implementada conforme contrato específico. Fontes: [Focus Blocker: escopo do projeto](<Focus Blocker_ escopo do projeto.md>) e [decisões registradas pelo Maestro](DECISIONS.md), com respostas explícitas em 2026-10-05. Referências a seção/RF apontam para o escopo; IDs D para respostas/detalhes pendentes. O original foi preservado; mecanismos futuros continuam propostas.
 
@@ -324,8 +324,8 @@ Estas perguntas são itens de coordenação para o Maestro, não solicitações 
 | ID | Prioridade | Pergunta/decisão necessária | Sugestão não aprovada |
 | --- | --- | --- | --- |
 | P01 | Fechada por D03 | Recuperação após crash ao reabrir; bloco residual pode permanecer até esse momento | Não exigir watchdog nem prometer cleanup autônomo; mecanismos de erro permanecem em P08/P10/P11 |
-| P04 | Crítica | Como garantir proteção de todas as categorias de RF10, inclusive com dados inacessíveis e listas editáveis? Como proteger o próprio app? | Proteção obrigatória e ausência de encerramento quando proteção não puder ser verificada |
-| P05 | Alta | Qual semântica exata de nomes/pastas/cmdline? Como representar `javaw.exe` + `.minecraft`, resolver caminhos iniciais e domínios abreviados? Quais listas são editáveis? | Correspondência explícita, comparação de componentes de caminho e validações contra regras amplas, após aprovação |
+| P04 | Política respondida; cobertura pendente | D14 aprovou proteção obrigatória/adicional editável e preservar dados inseguros; fase 2 implementa próprio app/ancestrais vivos/Windows/catálogo | Validar cobertura de ferramentas adicionais/renomeadas/portáteis; catálogo finito não certifica RF10 universal |
+| P05 | Processos respondidos; domínios pendentes | D15 aprovou nomes/pastas e cmdline conjunta literal sem caixa por argumento; contrato fase 2 implementa. Domínios/abreviações seguem fases 3/6 | Não reabrir regras de processo; não inventar instalações ou domínios |
 | P02 | Alta | Qual relógio mede espera/pausa? Suspensão consome duração? Qual fuso/reação a mudança de hora? Prazos sobrevivem a reinício? | Separar hora civil de duração, sem escolher política de suspensão implicitamente |
 | P06 | Alta; parcial D04/D08/D09 | Calendário, bordas e adjacência respondidos; pausa só em bloqueio, sem contagem cancelada ou retomada fora de janela. Restam espera com janela encerrada, pedidos repetidos e reinício/suspensão | Manter respostas; fechar somente as lacunas restantes |
 | P07 | Alta; minutos fechados por D01 | Avisos confirmados em 5/1 min. São configuráveis? RF06 vale na retomada? Como tratar limiar perdido, deduplicação e identificação de jogo/launcher? | Fechar políticas de eventos mantendo D01; não perguntar novamente quais minutos prevalecem |

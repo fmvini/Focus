@@ -22,10 +22,15 @@ def window(**changes):
     return result
 
 
+def canonical(data):
+    return {"block_exes": [], "block_folders": [], "safelist_exes": [],
+            "block_cmdline": [], **data}
+
+
 class ParseConfigTests(unittest.TestCase):
     def test_default_has_no_windows_or_activated_suggestions(self):
         self.assertEqual(default_config(), AppConfig(windows=(), extra={}))
-        self.assertEqual(config_to_dict(default_config()), {"windows": []})
+        self.assertEqual(config_to_dict(default_config()), canonical({"windows": []}))
         self.assertEqual(parse_config({"windows": []}), default_config())
 
     def test_missing_days_means_every_day(self):
@@ -36,7 +41,7 @@ class ParseConfigTests(unittest.TestCase):
         data = {"windows": [window(days=[])]}
         config = parse_config(data)
         self.assertEqual(config.windows[0].days, ())
-        self.assertEqual(config_to_dict(config), data)
+        self.assertEqual(config_to_dict(config), canonical(data))
 
     def test_overnight_and_numeric_days_preserve_order(self):
         config = parse_config({"windows": [window(start="22:00", end="02:00", days=[6, 0])]})
@@ -103,7 +108,7 @@ class ParseConfigTests(unittest.TestCase):
         self.assertEqual(config.extra["blocked_processes"], "not-yet-validated")
         self.assertNotIn("windows", config.extra)
         result = config_to_dict(config)
-        self.assertEqual(result, data)
+        self.assertEqual(result, canonical(data))
         data["future"]["values"].append("input mutation")
         result["future"]["values"].append("output mutation")
         self.assertEqual(config.extra["future"]["values"], [None, True, 7, "ação"])
@@ -144,7 +149,7 @@ class PersistenceTests(unittest.TestCase):
         config = parse_config(data)
         save_config(self.path, config)
         self.assertEqual(load_config(self.path), config)
-        self.assertEqual(json.loads(self.path.read_text(encoding="utf-8")), data)
+        self.assertEqual(json.loads(self.path.read_text(encoding="utf-8")), canonical(data))
         self.assertEqual(set(self.root.iterdir()), {self.path})
         self.assertIn("ação", self.path.read_text(encoding="utf-8"))
 

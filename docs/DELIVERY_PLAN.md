@@ -1,6 +1,6 @@
 # Plano de entrega e coordenação
 
-Base: sete fases da seção 11 do [escopo](Focus%20Blocker_%20escopo%20do%20projeto.md). Desenvolvimento autorizado em 2026-10-05; fase 1 concluída com CLI e 75 testes, fases 2–7 pendentes. Não há estimativa de prazo ou esforço aprovada.
+Base: sete fases da seção 11 do [escopo](Focus%20Blocker_%20escopo%20do%20projeto.md). Desenvolvimento autorizado em 2026-10-05; fase 1 concluída e implementação da fase 2 integrada por CLI, com evidências/limites no log. Fases 3–7 pendentes. Não há estimativa de prazo ou esforço aprovada.
 
 ## Preparação documental
 
@@ -17,7 +17,7 @@ A fase 1 foi distribuída aos três agentes pelo Maestro; as atribuições das f
 | Fase | Entrega do escopo | Responsável proposto e colaboração | Dependências para fechar | Critério de pronto |
 | --- | --- | --- | --- | --- |
 | 1 | Agendador, JSON e testes | Backend: agenda; Banco: JSON; Frontend: CLI e integração; Maestro: referência independente/revisão | D04/D08/D13/D20 e leitura D17 respondidos; contratos definidos em PHASE1_CONTRACT; pausa fica na fase 4 | Janelas/dias/meia-noite/sobreposição/adjacência; gravação preserva dados; JSON inválido interrompe com erro |
-| 2 | Bloqueio de processos | Backend; Banco: definição de eventos; Frontend: surfacing de erros | Fase 1; D14–D16 | Launchers/jogos elegíveis encerram, reabertura é detectada e protegidos ficam intactos |
+| 2 | Bloqueio de processos por CLI implementado | Backend: adaptador/guardas; Banco: JSON; Frontend: aplicação/erros; Maestro: integração/revisão | D14/D15 respondidos; D16 evento em memória | Matcher, ciclo e confirmação testados com doubles; contexto Windows verificado por leitura. Encerramentos reais/jogos e cobertura Windows alvo ainda exigem aceite dedicado; catálogo não certifica proteção universal |
 | 3 | Bloqueio de sites | Backend; Frontend: alertas/onboarding | Fase 1; D03, D07, D13, D17 | Hosts modificado só no bloco do app; backup e flush; Brave verificado durante/fora da janela; garantia de recuperação validada |
 | 4 | Avisos e pausa | Backend: transições; Frontend: contagem/cancelamento; Banco: registros | Fases 1–3; D01–D02, D09–D10, D16 | Avisos definidos; espera cancelável; 15 min liberados; retorno e persistência de eventos consistentes |
 | 5 | Bandeja e configuração | Frontend; Backend: comandos/snapshots; Banco: gravação | Fases 1–4; D06, D13–D15 | Cinco abas e menu; edição prevista sem JSON manual; estados e falhas refletem o núcleo |
@@ -48,4 +48,4 @@ Maestro integra cada unidade; em trabalho compartilhado, evitar commits concorre
 
 ## Retomada
 
-Consultar `DEVELOPMENT_LOG.md` para o resultado da fase 1. Antes da fase 2, resolver a proteção de processos (D14) e correspondência de cmdline/pastas (D15). Para a fase 6, propor identificação do domínio ativo e contrato da lista editável de estudo no Brave (D19); não atribuir foco a qualquer página aberta.
+Consultar `DEVELOPMENT_LOG.md` para resultados das fases 1/2. Próxima implementação: fase 3, hosts; fechar detalhes de backup/marcadores/preservação/erros de D17 antes de escrever o arquivo real. Manter ensaios Windows de processos como validação pendente, usando somente alvos dedicados. Para fase 6, fechar domínio ativo/lista de estudo Brave (D19); não atribuir foco a qualquer página.

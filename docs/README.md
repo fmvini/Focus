@@ -1,6 +1,6 @@
 # Documentação de desenvolvimento — Focus Blocker
 
-Status: fase 1 implementada — JSON, agendador e CLI; fases posteriores e detalhes técnicos em aberto. Ver [instruções de execução](../README.md).
+Status: fases 1/2 — JSON, agendador e bloqueador de processos por CLI; etapas restantes e limites de validação no log. Ver [instruções de execução](../README.md).
 
 ## Fonte e autoridade
 
@@ -16,6 +16,7 @@ Status: fase 1 implementada — JSON, agendador e CLI; fases posteriores e detal
 | --- | --- |
 | [REQUIREMENTS.md](REQUIREMENTS.md) | RF01–RF24, requisitos não funcionais, critérios observáveis e rastreabilidade |
 | [DECISIONS.md](DECISIONS.md) | Divergências, perguntas ao usuário e decisões técnicas ainda não aprovadas |
+| [USER_ANSWERS.md](USER_ANSWERS.md) | Canal local de perguntas/respostas; usuário preenche aqui, Maestro preserva e consolida decisões |
 | [ARCHITECTURE_BACKEND.md](ARCHITECTURE_BACKEND.md) | Núcleo, agendamento, bloqueadores, comunicação e recuperação |
 | [UI_FLOWS.md](UI_FLOWS.md) | Bandeja, abas, pausa, configuração e feedback ao usuário |
 | [DATA_MODEL.md](DATA_MODEL.md) | JSON, estatísticas locais em SQLite e lacunas do contrato de dados |
@@ -23,13 +24,16 @@ Status: fase 1 implementada — JSON, agendador e CLI; fases posteriores e detal
 | [TEST_PLAN.md](TEST_PLAN.md) | Validação das regras, integração Windows, casos de falha e entrega |
 | [DEVELOPMENT_LOG.md](DEVELOPMENT_LOG.md) | Estado real do projeto e ponto de retomada |
 | [PHASE1_CONTRACT.md](PHASE1_CONTRACT.md) | APIs e limites da primeira implementação |
+| [PHASE2_CONTRACT.md](PHASE2_CONTRACT.md) | Proteções, regras conjuntas, adaptador e modo de aplicação de processos |
 
 ## Coordenação da equipe
 
 Agentes identificados por `maestri list`: Maestro, Backend, Frontend e Banco de dados. Na etapa documental, cada especialista produziu seu documento. Na fase 1, Backend entregou agendador; Banco, JSON; Frontend, CLI/integração. Maestro definiu tipos, verificou a agenda independentemente, revisou a unidade e integrou documentação/commit.
 
-Para desenvolvimento posterior, a proposta de divisão está no plano de entrega. Antes de iniciar implementação, consultar o log e as decisões pendentes. Não interpretar ausência de resposta como autorização para escolher comportamento de produto.
+Na fase 2, Backend mantém bloqueador/adaptador; Banco, JSON tipado; Frontend, CLI; Maestro, contratos/revisão/integração. Antes de iniciar implementação posterior, consultar log/decisões; não interpretar ausência de resposta como autorização para escolher comportamento de produto.
+
+A pedido do usuário, novas perguntas ficam em USER_ANSWERS, sem formulários/mensagens Maestri para colher respostas. Ler esse arquivo antes de cada etapa; preservar o texto preenchido, acrescentar perguntas com novos IDs e consolidar somente respostas explícitas em DECISIONS. Relatórios dos agentes não são respostas do usuário.
 
 ## Limites desta documentação
 
-O projeto agora possui núcleo de agenda/configuração e CLI, com 75 testes executáveis da fase 1. Não há bloqueadores de processos/sites, GUI, schema SQLite ou instalador. A validação dessa fase não comprova cobertura de sites, integração Brave, desempenho ou recuperação do hosts; esses critérios serão verificados nas entregas correspondentes.
+O projeto possui núcleo de agenda/configuração e aplicação de regras de processos por CLI. Não há bloqueador de sites, avisos/pausa, GUI, schema SQLite ou instalador. Testes/resultados ficam em TEST_PLAN/DEVELOPMENT_LOG; catálogo de proteção não comprova reconhecimento universal de aplicativos. Versões Windows alvo, sites/Brave, desempenho e recuperação do hosts exigem validação própria.

@@ -1,5 +1,7 @@
 # Contrato de implementação — fase 1
 
+Registro da primeira entrega. A fase 2 promoveu quatro campos antes opacos e acrescentou aplicação explícita de processos; consulte [PHASE2_CONTRACT.md](PHASE2_CONTRACT.md) para extensões que prevalecem sobre a fronteira histórica abaixo.
+
 Escolhas técnicas do Maestro para a implementação autorizada em 2026-10-05. Regras de produto vinculadas a `DECISIONS.md`; usuário confirmou preservar JSON inválido com erro e salvar dias vazios como janela desativada.
 
 ## Fronteiras

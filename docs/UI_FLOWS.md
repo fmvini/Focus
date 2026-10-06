@@ -1,6 +1,6 @@
 # Focus Blocker — Fluxos de interface
 
-**Implementação atual:** CLI de diagnóstico em `main.py` na fase 1, com configuração/consulta/watch; nenhuma bandeja ou janela gráfica implementada. Fluxos de UI abaixo continuam referência para a fase 5. Ver [instruções de execução](../README.md).
+**Implementação atual:** CLI em `main.py`, diagnóstico por padrão e aplicação explícita de processos via `--watch --apply-processes`, com recarga/erros/Ctrl+C e resultados confirmados/pendentes separados. Nenhuma bandeja ou janela gráfica implementada; edição ainda via JSON. Fluxos abaixo continuam referência para a fase 5. Ver [execução](../README.md) e [contrato da fase 2](PHASE2_CONTRACT.md). D14/D15 foram respondidos; propostas históricas de proteção/correspondência abaixo devem ser lidas à luz desse contrato.
 
 ## 1. Finalidade, fonte e classificação
 

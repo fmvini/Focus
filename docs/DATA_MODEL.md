@@ -1,12 +1,20 @@
 # Modelo de dados do Focus Blocker
 
-**Implementação atual:** contrato JSON da fase 1 implementado em `core/config.py` e `core/models.py`, incluindo gravação atômica/preservação em erro e dias vazios desativados. Ver [PHASE1_CONTRACT.md](PHASE1_CONTRACT.md). Tabelas SQLite continuam conceituais, sem banco/schema criado.
+**Implementação atual:** configuração da agenda e quatro listas tipadas de processos em `core/config.py`/`core/models.py`. Ver [PHASE1_CONTRACT.md](PHASE1_CONTRACT.md) e [PHASE2_CONTRACT.md](PHASE2_CONTRACT.md), que prevalecem sobre propostas históricas abaixo. Tabelas SQLite continuam conceituais, sem banco/schema criado.
+
+## Contrato efetivo da fase 2
+
+`AppConfig` acrescenta `block_exes`, `block_folders`, `safelist_exes` e `block_cmdline`, mantendo `windows`/`extra`. Os quatro campos ausentes equivalem a listas vazias; gravação explícita emite as quatro listas. Nenhuma sugestão de bloqueio é ativada. Outros campos raiz continuam preservados e opacos. Colisões de `extra` com campos tipados são erro.
+
+Nomes exigem `.exe` completo sem diretório/wildcard/espaços externos. Pastas são absolutas Windows após expansão de `%VAR%` conhecida, conservando a entrada original no JSON; parsing não verifica instalação. O adaptador precisa resolver destinos antes de efeitos. Cmdline agora exige objetos com exatamente `executable` e `contains`, trecho não vazio/sem controles, e aplica conjunção literal sem caixa dentro de cada argumento. Strings legadas geram erro explícito e arquivo intacto; não são migradas por inferência.
+
+Eventos de encerramento confirmado ficam somente em memória, com identidade PID+create_time e instante observado de confirmação, deduplicados por execução. Não incluem cmdline completa e não constituem tabela SQLite ou histórico persistente. Confirmação pendente pode ser reconciliada depois sem novo encerramento; falhas, protegidos e desaparecimento anterior à solicitação não geram tentativa. Esquema/agregações continuam na fase 6.
 
 ## 1. Status e fonte de verdade
 
 Este documento registra o que consta em `docs/Focus Blocker_ escopo do projeto.md` e identifica lacunas para revisão pelo Maestro. Não aprova schema, defaults adicionais, políticas de dados ou alterações de escopo. Não contém SQL nem implementação.
 
-**Consolidação pelo Maestro, 2026-10-05:** respostas em [DECISIONS.md](DECISIONS.md) confirmam avisos 5/1 min, Sair com liberação, recuperação ao reabrir, calendário/limites/adjacência, foco só nas janelas e fora da pausa, apps de estudo editáveis, única conta, configurar antes de ativar e domínios de estudo editáveis para Brave. Nenhum schema SQLite ou chave JSON nova foi aprovado. Identificação real dos apps e mecanismo do domínio ativo (D19) continuam pendentes.
+**Consolidação pelo Maestro, 2026-10-05:** respostas em [DECISIONS.md](DECISIONS.md) confirmam avisos 5/1 min, saída/recuperação, calendário, foco e configuração inicial. D14/D15 fecharam política de proteção e correspondência; nomes de campos/representação conjunta são escolhas técnicas em PHASE2_CONTRACT. Schema SQLite e mecanismo do domínio ativo (D19) continuam pendentes.
 
 As classificações usadas são:
 
@@ -41,10 +49,10 @@ O contrato confirmado aqui é a estrutura apresentada na seção 5, vinculada ao
 | `pause.wait_seconds`: número `60` | Espera cancelável de 60 segundos. RF16. | Comportamento explícito, não apenas exemplo. Possibilidade de alteração pela configuração: pendente. |
 | `pause.duration_minutes`: número `15` | Liberação de sites e apps por 15 minutos. RF17. | Comportamento explícito, não apenas exemplo. Possibilidade de alteração pela configuração: pendente. |
 | `sites`: objeto com nomes de sites associados a listas de textos | Domínios para bloquear no hosts; edição de domínios pela UI. RF12–RF14 e RF24. | YouTube e Netflix ilustram o JSON. A seção 1 inclui outros serviços; a seção 6 chama os domínios de ponto de partida a validar. Não é uma lista definitiva validada. |
-| `block_exes`: lista de textos | Bloqueio por nome do executável. RF07. | Valores da seção 5 são exemplos; a seção 6 fornece listas iniciais mais extensas. A composição exata do arquivo inicial é pendente. |
-| `block_folders`: lista de textos | Bloqueio por caminho dentro das pastas. RF08. | Caminho da seção 5 é exemplo; a seção 6 inclui caminhos e marcadores como `...` e `%LOCALAPPDATA%`. Resolução de variáveis e instalação: pendentes. |
-| `block_cmdline`: lista de textos | Bloqueio por padrão contido na linha de comando. RF09. | A seção 6 explicita `javaw.exe` somente quando a linha de comando contém `.minecraft`, para preservar IDEs Java. Sintaxe dos padrões e representação desse vínculo no JSON: pendentes. |
-| `safelist_exes`: lista de textos | Proteção prioritária; nunca encerrar IDEs, terminais, navegadores e processos do sistema. RF10; seções 7 e 8. | A lista de quatro executáveis da seção 5 é exemplo e não descreve toda a proteção exigida. Parte fixa versus editável e proteção do sistema: pendentes. |
+| `block_exes`: lista de textos | Bloqueio por nome do executável. RF07. | Fase 2: nome completo `.exe` sem caixa; ausente/vazio não bloqueia. Usuário escolhe a lista. |
+| `block_folders`: lista de textos | Bloqueio por caminho dentro das pastas. RF08. | D15: absoluta/subpastas/variáveis; destino incerto preservado. Caminhos de exemplo não são instalações assumidas. |
+| `block_cmdline`: originalmente lista de textos | Bloqueio por padrão contido na linha de comando. RF09. | Fase 2 substitui por objetos executable+contains obrigatórios, literal sem caixa por argumento (D15). Forma antiga rejeitada, arquivo preservado. |
+| `safelist_exes`: lista de textos | Proteção prioritária; RF10; seções 7 e 8. | D14: adicional editável complementa base obrigatória; lista vazia não remove proteção. Cobertura universal de catálogo não comprovada. |
 | `dev_apps`: lista de textos | Apps elegíveis em primeiro plano com usuário ativo, nas janelas e fora da pausa (D05); lista editável (D06). | Brave, IDEs, Codex, Claude e ChatGPT; executáveis/uso via terminal pendentes. Brave exige domínio de estudo de D19; fonte/contrato ainda a definir. |
 
 **Requisito explícito:** RF06 permite configurar o aviso para sempre aparecer, em vez de aparecer somente com jogo ou launcher aberto. **Decisão pendente:** a seção 5 não possui chave correspondente. Não foi inventado um nome para essa chave.
@@ -53,7 +61,7 @@ O contrato confirmado aqui é a estrutura apresentada na seção 5, vinculada ao
 
 ### Validação sugerida — proposta técnica não aprovada
 
-- Validar estrutura, tipos, horários e referências antes de publicar uma configuração para o núcleo; manter a última configuração válida se a nova for rejeitada, com erro visível.
+- Validar estrutura, tipos, horários e referências antes de publicar. Fases 1/2 adotam erro interrompendo execução e arquivo intacto, sem usar snapshot anterior após recarga inválida (D17); a proposta histórica de manter última configuração não foi adotada.
 - Definir normalização de nomes de executáveis, caminhos e domínios sem ampliar regras de bloqueio de forma implícita. Distinguir entrada original de valor normalizado se isso for necessário para a UI.
 - Exigir domínios concretos no formato acordado: o escopo declara que hosts não aceita curingas (seção 6). Abreviações como `www.` nessa seção precisam de expansão confirmada, não de cópia literal ou interpretação silenciosa.
 - Verificar a relação entre regras bloqueadas e safelist preservando sua prioridade explícita. O modo de informar conflitos permanece pendente.

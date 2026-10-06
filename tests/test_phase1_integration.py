@@ -54,7 +54,10 @@ class Phase1IntegrationTests(unittest.TestCase):
     def test_initial_config_stays_inactive_until_user_chooses_windows(self):
         result = self.run_cli("--init-config", "--at", "2026-10-05T22:00:00")
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(json.loads(self.config.read_text(encoding="utf-8")), {"windows": []})
+        self.assertEqual(json.loads(self.config.read_text(encoding="utf-8")), {
+            "windows": [], "block_exes": [], "block_folders": [],
+            "safelist_exes": [], "block_cmdline": [],
+        })
         self.assertIn("Estado calculado da agenda: fora da janela", result.stdout)
         self.assertIn("Próximo início efetivo: nenhum", result.stdout)
         self.write_config([{"start": "22:00", "end": "02:00", "days": [0]}])
@@ -139,7 +142,10 @@ class Phase1IntegrationTests(unittest.TestCase):
         result = self.run_python(str(ENTRY), "--init-config", "--check")
         self.assertEqual(result.returncode, 0, result.stderr)
         target = self.root / "appdata" / "FocusBlocker" / "config.json"
-        self.assertEqual(json.loads(target.read_text(encoding="utf-8")), {"windows": []})
+        self.assertEqual(json.loads(target.read_text(encoding="utf-8")), {
+            "windows": [], "block_exes": [], "block_folders": [],
+            "safelist_exes": [], "block_cmdline": [],
+        })
         env = self.env.copy()
         env.pop("APPDATA", None)
         result = self.run_python(str(ENTRY), "--init-config", env=env)

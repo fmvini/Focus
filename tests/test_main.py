@@ -38,7 +38,10 @@ class MainTests(unittest.TestCase):
     def test_init_creates_empty_config_only_on_explicit_request(self):
         code, out, err = self.invoke("--init-config")
         self.assertEqual((code, err), (0, ""))
-        self.assertEqual(json.loads(self.path.read_text(encoding="utf-8")), {"windows": []})
+        self.assertEqual(json.loads(self.path.read_text(encoding="utf-8")), {
+            "windows": [], "block_exes": [], "block_folders": [],
+            "safelist_exes": [], "block_cmdline": [],
+        })
         self.assertIn("sem janelas ativas", out)
 
     def test_init_refuses_existing_valid_and_corrupt_files(self):
@@ -105,7 +108,7 @@ class MainTests(unittest.TestCase):
         with patch.object(cli, "is_blocking") as state:
             code, out, err = self.invoke("--check")
         self.assertEqual((code, err), (0, ""))
-        self.assertIn("Configuração válida para a fase 1", out)
+        self.assertIn("Configuração válida", out)
         state.assert_not_called()
         self.assertEqual(self.path.read_bytes(), original)
 
@@ -179,7 +182,10 @@ class MainTests(unittest.TestCase):
             code = cli.main(["--init-config"])
         self.assertEqual(code, 0)
         target = self.root / "profile" / "FocusBlocker" / "config.json"
-        self.assertEqual(json.loads(target.read_text(encoding="utf-8")), {"windows": []})
+        self.assertEqual(json.loads(target.read_text(encoding="utf-8")), {
+            "windows": [], "block_exes": [], "block_folders": [],
+            "safelist_exes": [], "block_cmdline": [],
+        })
 
     def test_missing_appdata_has_no_fallback_or_write(self):
         with patch.dict(os.environ, {}, clear=True):

@@ -1,6 +1,16 @@
 # Plano de validação
 
-Fonte: [escopo](Focus%20Blocker_%20escopo%20do%20projeto.md), [requisitos rastreados](REQUIREMENTS.md) e respostas em [DECISIONS.md](DECISIONS.md). Fase 1 executada: 75 testes OK em Python 3.14.6 por `python -B -m unittest discover -s tests -v`. Os cenários das demais fases continuam planejamento; testes dessa etapa não verificam efeitos reais no Windows. IDs respondidos servem de rastreabilidade.
+Fonte: [escopo](Focus%20Blocker_%20escopo%20do%20projeto.md), [requisitos](REQUIREMENTS.md) e [decisões](DECISIONS.md). Fases 1/2: 206 testes OK em Python 3.14.6/psutil 7.2.2 por `.venv/Scripts/python.exe -B -m unittest discover -s tests` (10,542 s). Sintaxe 3.12 dos 18 arquivos Python conferida; runtime 3.12 ainda não executado. Encerramentos reais e fases posteriores continuam pendentes.
+
+## Evidência da fase 2
+
+- `tests/test_process_config.py`: listas promovidas/defaults vazios, nomes/pastas/variáveis, regras conjuntas/legado rejeitado, extras/bytes preservados e falhas antes de gravação.
+- `tests/test_proc_blocker.py` e `tests/test_process_adapter.py`: fronteira de SO falsa; proteção antes de regras, helpers/ancestrais vivos/órfãos, acesso negado, destinos, PID reutilizado e metadados alterados antes de efeitos. Descoberta leve não autoriza ação; candidatos são reinspecionados completamente.
+- Espera coletiva limitada, pending confirmado fora da janela sem nova enumeração/efeito, uma tentativa por identidade confirmada, falhas/desaparecimento prévio sem evento, relatório parcial entregue uma vez, Ctrl+C e ciclos concorrentes recusados.
+- `tests/test_process_main.py`: flag explícito, lazy import, relógio fresco, recarga/erro sem snapshot antigo, prazos/atrasos, pending separado de sucesso e relatórios parciais. `tests/test_phase2_integration.py` integra JSON/agenda/CLI/bloqueador real com adaptador falso.
+- `tests/test_process_wait_integration.py`: wait_procs instalado com handles falsos, sem processos do sistema; confirmação/negado/alive/interrupt/reuso de identidade.
+- Integração **somente por leitura** no Windows build 10.0.19045: contexto próprio passou após corrigir ancestral do Explorer já ausente. Aproximadamente 293 processos; descoberta vazia 0,910 s, por nome sintético 0,923 s, por pasta workspace 1,243 s, com terminate/kill impedidos: zero chamadas/eventos. Antes da otimização, uma varredura completa de 291 registros levou 21,899 s.
+- Essas amostras não comprovam RNF01, cadência sob muitos alvos, elevação, jogos reais, classificação universal do catálogo, Windows 11 ou instalador. Nenhum teste alterou hosts ou encerrou aplicativo do usuário.
 
 ## Evidência da fase 1
 

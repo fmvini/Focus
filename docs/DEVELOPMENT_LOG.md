@@ -1,3 +1,36 @@
+## 2026-10-05 — Fase 2: bloqueador de processos e perguntas em arquivo
+
+### Implementado
+- Bloqueador com adaptador psutil, proteção prioritária, regra conjunta por executável/trecho literal sem caixa, pastas por destino resolvido e preservação de dados inacessíveis.
+- Identidade PID+create_time revalidada antes de efeitos; uma espera coletiva de até 2 s, kill revalidado e confirmação pendente somente por leitura nos ciclos seguintes. Eventos deduplicados em memória; relatório parcial em erro global.
+- JSON promove quatro listas de processos sem defaults ativos, preservando extras e bytes em erro; cmdline legada em texto exige correção explícita sem migração inferida.
+- CLI mantém diagnóstico padrão; `--watch --apply-processes` aplica somente processos, com relógio real/gates, recarga validada, cadência monotônica e Ctrl+C. Fora da janela só reconcilia pedidos anteriores, sem novos alvos.
+- Coordenação Maestri: Banco/Backend/Frontend implementaram seus lotes; Maestro definiu contratos, revisou e integrou. Descoberta foi otimizada sem autorizar efeitos por metadados leves.
+- A pedido do usuário, `docs/USER_ANSWERS.md` centraliza perguntas/respostas para evitar interferência de relatórios do Maestri; campos preenchidos devem ser preservados. Próximas perguntas de hosts estão ali, ainda sem aprovação.
+
+### Arquivos principais alterados
+- `core/models.py`, `core/config.py`, `core/proc_blocker.py`, `main.py`, `requirements.txt`.
+- `tests/test_config.py`, `tests/test_main.py`, `tests/test_phase1_integration.py`, `tests/test_process_config.py`, `tests/test_proc_blocker.py`, `tests/test_process_adapter.py`, `tests/test_process_main.py`, `tests/test_process_wait_integration.py`, `tests/test_phase2_integration.py`.
+- `README.md`, `docs/PHASE2_CONTRACT.md`, `docs/USER_ANSWERS.md` e documentos de decisões/arquitetura/dados/requisitos/validação/entrega.
+
+### Decisões técnicas
+- Usuário confirmou D14/D15 e reconfirmou VS Code/IntelliJ/PyCharm/terminal/Codex e trecho cmdline sem caixa por argumento. Nenhuma instalação/lista de bloqueio foi inventada.
+- psutil 7.2.2 fixado em ambiente virtual local; testes doubles evitam encerramentos reais. ProcessDiscovery não tem identidade nem autoriza ação; cache de caminhos só vale na descoberta, nunca nas guardas antes de efeito.
+- Ancestral já ausente ou PID comprovadamente reutilizado termina cadeia de ancestrais vivos; acesso negado/identidade ambígua preserva a guarda. Corrigida recusa de inicialização causada pelo ancestral já encerrado do Explorer.
+- Arquivo de respostas será lido antes de novas etapas; vazio não é aprovação. Decisões confirmadas são consolidadas em DECISIONS sem reescrever respostas do usuário.
+
+### Estado atual
+- Implementação da fase 2 integrada. Suíte final: **206 testes OK**, 10,542 s em Python 3.14.6/psutil 7.2.2; sintaxe 3.12 em 18 arquivos Python e links locais/UTF-8 conferidos. Runtime 3.12 ainda não executado.
+- Windows build 10.0.19045: contexto próprio e varreduras somente por leitura passaram. Com cerca de 293 processos, vazio/nome/pasta levaram 0,910/0,923/1,243 s; chamadas terminate/kill impedidas, zero chamadas/eventos. Antes da otimização, inspeção completa levou 21,899 s.
+- Não houve teste de encerramento real de jogos/apps, nem edição de hosts/perfil do usuário. Aceite Windows dedicado, Windows 11, recursos RNF01, muitos alvos/latência e elevação continuam pendentes. Catálogo não garante classificação universal de apps renomeados/portáteis/helpers órfãos; incluir ferramentas adicionais na safelist.
+- Sem sites, avisos/pausa, GUI/bandeja, SQLite, mutex/instalador ou histórico durável; fases correspondentes permanecem futuras. Encerramento no Windows é forçado e não garante salvar o jogo.
+
+### Próximos passos
+- Ler `docs/USER_ANSWERS.md`; aguardar respostas Q-HOSTS-01–05 antes dos comportamentos dependentes da fase 3. Não enviar perguntas por formulários enquanto este fluxo em arquivo estiver em uso.
+- Fase 3: definir contrato do hosts/backup/marcadores/flush/preservação e implementar primeiro com arquivos isolados, sem tocar hosts real antes das decisões e revisão.
+- Manter aceite de processos reais em ambiente dedicado pendente; não tratar catálogo finito ou amostras locais como prova universal.
+- Fase 6 continua dependendo do mecanismo de domínio ativo Brave (D19); eventos de processos ainda não são SQLite.
+
 ## 2026-10-05 — Fase 1: configuração JSON e agendador
 
 ### Implementado

@@ -1,7 +1,7 @@
-"""Tipos compartilhados pela configuração e pelo agendador.
+"""Tipos compartilhados pela configuração, agenda e regras de processos.
 
 As regras de entrada são verificadas por core.config. Os campos extras são
-preservados no JSON, mas não são executados nesta primeira fase.
+preservados no JSON; somente campos tipados têm regras implementadas.
 """
 
 from dataclasses import dataclass, field
@@ -17,6 +17,16 @@ class ScheduleWindow:
 
 
 @dataclass(frozen=True)
+class CmdlineRule:
+    executable: str
+    contains: str
+
+
+@dataclass(frozen=True)
 class AppConfig:
     windows: tuple[ScheduleWindow, ...] = ()
     extra: dict[str, Any] = field(default_factory=dict)
+    block_exes: tuple[str, ...] = ()
+    block_folders: tuple[str, ...] = ()
+    safelist_exes: tuple[str, ...] = ()
+    block_cmdline: tuple[CmdlineRule, ...] = ()
