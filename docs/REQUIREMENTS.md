@@ -2,7 +2,7 @@
 
 Fonte: [escopo original](Focus%20Blocker_%20escopo%20do%20projeto.md), seções 1–13, e respostas do usuário em 2026-10-05, registradas em `DECISIONS.md`. Os IDs RF são os da fonte. Os IDs RNF e C usados aqui são identificadores documentais, sem criar novos requisitos.
 
-Status: agenda/JSON/CLI e regras de processos implementados, conforme contratos das fases 1/2. RF01 tem persistência, edição gráfica fica na fase 5; RF02–RF04 têm agenda/ciclo; RF07–RF11 têm matcher, guardas, adaptação Windows e confirmação por identidade testados com doubles. Contexto real verificado por leitura; encerramentos reais e classificação universal de RF10 não foram comprovados. Resultados/limites em TEST_PLAN/DEVELOPMENT_LOG; ambiguidades em [DECISIONS.md](DECISIONS.md).
+Status: agenda/JSON/CLI e regras de processos implementados, conforme contratos das fases 1/2. RF01 e parte de RF24 têm edição interativa de horários/processos por CLI conforme [contrato do editor](CONFIG_EDITOR_CONTRACT.md); edição gráfica e demais campos ficam na fase 5. RF02–RF04 têm agenda/ciclo; RF07–RF11 têm matcher, guardas, adaptação Windows e confirmação por identidade testados com doubles. Contexto real verificado por leitura; encerramentos reais e classificação universal de RF10 não foram comprovados. Resultados/limites em TEST_PLAN/DEVELOPMENT_LOG; ambiguidades em [DECISIONS.md](DECISIONS.md).
 
 ## Objetivo e fronteira
 

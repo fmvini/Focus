@@ -2,6 +2,15 @@
 
 Fonte: [escopo](Focus%20Blocker_%20escopo%20do%20projeto.md), [requisitos](REQUIREMENTS.md) e [decisões](DECISIONS.md). Fases 1/2: 206 testes OK em Python 3.14.6/psutil 7.2.2 por `.venv/Scripts/python.exe -B -m unittest discover -s tests` (10,542 s). Sintaxe 3.12 dos 18 arquivos Python conferida; runtime 3.12 ainda não executado. Encerramentos reais e fases posteriores continuam pendentes.
 
+## Evidência do editor independente — 2026-10-08
+
+- Suíte completa com as fases 1/2 e editor: **273 testes OK**, 18,358 s, Python 3.14.6, na conferência final do Maestro após os três relatórios. Frontend confirmou independentemente 273 testes em 18,507 s e os sete testes de flags/importações com `ui.config_cli` previamente importado. Sintaxe Python 3.12 verificada por `ast.parse(feature_version=(3, 12))` em 27 arquivos; runtime 3.12 ainda não executado. UTF-8/links locais conferidos.
+- `tests/test_config_editor.py`: CRUD de janelas/quatro listas, dias/índices estritos, iteração de dias com falha, erro sem mutação, ordem/duplicatas, extras/cópias defensivas e ausência de IO.
+- `tests/test_config_repository.py`: mesma leitura capturada/validada, UTF-8/JSON inválido, chaves duplicadas/constantes inválidas, roundtrip, conflitos inclusive remoção/formatação, segunda conferência após fsync, falhas de escrita/flush/replace/cleanup e baseline próprio após escritor posterior.
+- `tests/test_config_cli.py` e `tests/test_config_editor_main.py`: menus/índices humanos, CRUD, validação, salvar/retry, conflito/reload, baseline após salvar, EOF/Ctrl+C e flags/lazy import sem bloqueadores. Doubles exercitam as fronteiras do frontend; testes de integração abaixo usam módulos reais.
+- `tests/test_config_editor_integration.py`: cinco sessões com JSON/agenda reais, três via subprocess. Incluem janela noturna, regra conjunta, dias vazios, extras, EOF sem salvar, conflito externo seguido de recarga e falha real de publicação injetada seguida de retry com rascunho preservado.
+- Arquivos de teste isolados no workspace; nenhum hosts, perfil do usuário ou processo real alterado. GUI/bandeja não são validadas nesta entrega. Comparação de bytes não elimina a pequena corrida entre conferência e replace, conforme [contrato](CONFIG_EDITOR_CONTRACT.md).
+
 ## Evidência da fase 2
 
 - `tests/test_process_config.py`: listas promovidas/defaults vazios, nomes/pastas/variáveis, regras conjuntas/legado rejeitado, extras/bytes preservados e falhas antes de gravação.

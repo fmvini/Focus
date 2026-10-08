@@ -1,0 +1,1 @@
+"""Interfaces interativas da aplicação."""

@@ -2,6 +2,8 @@
 
 **Implementação atual:** configuração da agenda e quatro listas tipadas de processos em `core/config.py`/`core/models.py`. Ver [PHASE1_CONTRACT.md](PHASE1_CONTRACT.md) e [PHASE2_CONTRACT.md](PHASE2_CONTRACT.md), que prevalecem sobre propostas históricas abaixo. Tabelas SQLite continuam conceituais, sem banco/schema criado.
 
+O [editor independente](CONFIG_EDITOR_CONTRACT.md) usa `core/config_editor.py` para rascunhos/cópias defensivas e `core/config_repository.py` para snapshots com os bytes exatos da leitura validada. Salvar preserva campos opacos e ordem das listas, compara o destino ao baseline antes da preparação e antes do replace e retorna baseline dos próprios bytes publicados. Alteração/remoção externa detectada exige recarga; não há merge automático. A comparação não constitui CAS/lock do sistema operacional: permanece uma pequena corrida entre a última leitura e o replace. Não há mudança de schema ou banco SQLite nesta unidade.
+
 ## Contrato efetivo da fase 2
 
 `AppConfig` acrescenta `block_exes`, `block_folders`, `safelist_exes` e `block_cmdline`, mantendo `windows`/`extra`. Os quatro campos ausentes equivalem a listas vazias; gravação explícita emite as quatro listas. Nenhuma sugestão de bloqueio é ativada. Outros campos raiz continuam preservados e opacos. Colisões de `extra` com campos tipados são erro.

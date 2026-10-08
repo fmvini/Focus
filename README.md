@@ -1,6 +1,6 @@
 # Focus Blocker
 
-Aplicativo em desenvolvimento para Windows 10/11. Configuração JSON, avaliação de horários e bloqueador de processos por CLI. Sites, avisos/pausa, bandeja, interface gráfica, estatísticas e instalador continuam nas próximas fases.
+Aplicativo em desenvolvimento para Windows 10/11. Configuração JSON com editor interativo, avaliação de horários e bloqueador de processos por CLI. Sites, avisos/pausa, bandeja, interface gráfica, estatísticas e instalador continuam nas próximas fases.
 
 ## Preparar e executar
 
@@ -10,6 +10,7 @@ Requer Python 3.12+. O diagnóstico usa a biblioteca padrão; o bloqueador usa p
 python -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -r requirements.txt
 python main.py --config .\data\config.json --init-config
+python main.py --config .\data\config.json --edit-config
 python main.py --config .\data\config.json --check
 python main.py --config .\data\config.json --status
 python main.py --config .\data\config.json --status --at 2026-10-05T09:00:00
@@ -18,7 +19,7 @@ python main.py --config .\data\config.json --watch
 
 Sem `--config`, o caminho é `%APPDATA%\FocusBlocker\config.json`. A criação é explícita por `--init-config`, sem janela ou regra ativa, e não sobrescreve arquivo existente. `--watch` sozinho consulta a agenda a cada 5 segundos; Ctrl+C encerra. Esses comandos são diagnóstico, sem encerramentos.
 
-Para configurar, editar o JSON enquanto a interface gráfica ainda não estiver disponível. Exemplo escolhido apenas para demonstrar uma janela noturna de segunda-feira:
+Para configurar sem editar JSON, use `--edit-config` depois de criar o arquivo. Exemplo de JSON escolhido apenas para demonstrar uma janela noturna de segunda-feira:
 
 ```json
 {
@@ -30,9 +31,17 @@ Para configurar, editar o JSON enquanto a interface gráfica ainda não estiver 
 
 Segunda=0 até domingo=6; o dia é o de início da janela. Segunda 22:00–02:00 inclui terça até 02:00. Início é incluído e fim excluído; início igual ao fim é inválido. Janelas sobrepostas/adjacentes são unidas. `days: []` desativa; sem `days`, usam-se todos os dias. Arquivo inválido gera erro e é preservado para correção. `--check` valida agenda e regras de processos; outros campos adicionais continuam preservados, sem execução.
 
+## Editar horários e regras
+
+`--edit-config` abre um menu em português para listar, adicionar, alterar e remover horários e regras de processos. As alterações ficam em um rascunho até **Salvar**; **Sair**, EOF ou Ctrl+C descartam o que não foi salvo. Dias: segunda=0 até domingo=6, separados por vírgula; vazio seleciona todos e `nenhum` desativa o horário. Números de itens começam em 1. Regras de cmdline pedem executável e trecho literal em campos separados.
+
+Erros de validação ou gravação mantêm o rascunho para correção/nova tentativa. Se o arquivo mudar ou for removido externamente, salvar informa conflito; **Recarregar** descarta o rascunho e lê a versão atual. Campos adicionais são preservados. A gravação usa temporário, fsync e substituição atômica, com comparação dos bytes antes da preparação e novamente antes da substituição. Há uma pequena corrida entre a última conferência e a substituição; não há lock entre editores externos nem mesclagem automática.
+
+O editor combina somente com `--config` e não inicia bloqueadores. Um `--watch --apply-processes` já em execução poderá ler a configuração salva no próximo ciclo. Sites, apps/domínios de estudo, pausa e avisos ainda não são editáveis por esse menu. A safelist adicional não remove as proteções obrigatórias. Ver [contrato do editor](docs/CONFIG_EDITOR_CONTRACT.md).
+
 ## Aplicar bloqueio de processos
 
-Escolha horários e listas no JSON antes de executar. Os campos opcionais `block_exes`, `block_folders`, `safelist_exes` e `block_cmdline` são listas; quando ausentes, ficam vazios. A interface para editar essas listas será entregue na fase 5. Exemplo de regra conjunta, para adicionar ao objeto de configuração somente se você quiser bloquear Minecraft Java:
+Escolha horários e listas pelo editor ou pelo JSON antes de executar. Os campos opcionais `block_exes`, `block_folders`, `safelist_exes` e `block_cmdline` são listas; quando ausentes, ficam vazios. A interface gráfica será entregue na fase 5. Exemplo de regra conjunta, para adicionar ao objeto de configuração somente se você quiser bloquear Minecraft Java:
 
 ```json
 "block_cmdline": [{"executable": "javaw.exe", "contains": ".minecraft"}]

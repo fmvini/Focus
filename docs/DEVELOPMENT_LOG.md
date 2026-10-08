@@ -1,3 +1,31 @@
+## 2026-10-08 — Editor interativo de horários e processos
+
+### Implementado
+- `--edit-config` permite listar/adicionar/alterar/remover horários e as quatro listas de processos por menu em português, sem JSON manual. Rascunho validado, Salvar explícito, Recarregar com descarte e Sair/EOF/Ctrl+C sem gravar alterações pendentes.
+- Snapshots validam a mesma leitura capturada; salvar compara bytes antes da preparação e novamente antes do replace, detectando alterações/remoção externas. Falhas preservam arquivo/rascunho; baseline retornado corresponde aos próprios bytes publicados.
+- Retomada coordenada dos agentes Maestri: Backend revisou rascunho/CRUD; Banco, persistência; Frontend, menus/flags/erros; Maestro integrou, validou e atualizou documentos. A unidade existente no working tree foi concluída sem promover pendências de produto a decisões.
+
+### Arquivos principais alterados
+- `core/config.py`, `core/config_editor.py`, `core/config_repository.py`, `main.py`, `ui/__init__.py`, `ui/config_cli.py`.
+- `tests/test_config_editor.py`, `tests/test_config_repository.py`, `tests/test_config_cli.py`, `tests/test_config_editor_main.py`, `tests/test_config_editor_integration.py`.
+- `README.md`, `docs/CONFIG_EDITOR_CONTRACT.md`, `docs/README.md`, `docs/DELIVERY_PLAN.md`, `docs/DECISIONS.md`, `docs/REQUIREMENTS.md`, `docs/ARCHITECTURE_BACKEND.md`, `docs/DATA_MODEL.md`, `docs/UI_FLOWS.md`, `docs/TEST_PLAN.md`, `docs/DEVELOPMENT_LOG.md`.
+
+### Decisões técnicas
+- Complemento independente das fases 1/2 e preparação de RF01/RF24; não entrega GUI/bandeja da fase 5. Biblioteca padrão, sem novas dependências ou mudança de schema.
+- Reutilizar parsing/serialização/gravação temporária/fsync/replace existentes. Detecção por bytes é otimista: há pequena corrida entre última conferência e replace, sem CAS/lock para escritores externos, merge automático ou sobrescrita forçada.
+- Extras permanecem opacos e preservados; ordem/duplicatas das listas mantidas. Editor não instancia bloqueadores, mas watcher já em execução pode observar JSON salvo no próximo ciclo. Safelist adicional não remove proteção obrigatória.
+
+### Estado atual
+- Suíte completa final: **273 testes OK**, 18,358 s em Python 3.14.6, conferidos pelo Maestro após os três relatórios; Frontend também confirmou 273 testes em 18,507 s. A contagem anterior de 272 foi substituída pela evidência final. Cinco testes de integração do editor, incluindo três subprocessos. Sintaxe 3.12 nos 27 arquivos Python e UTF-8/links locais conferidos; runtime 3.12 não executado.
+- Fases 1/2 e editor CLI funcionais. Sem hosts, avisos/pausa, GUI/bandeja, SQLite, instalador ou aceite de encerramentos reais. Nenhum teste desta unidade alterou hosts/perfil ou encerrou aplicativo do usuário.
+- Diretórios `.config-cli-*` já presentes na retomada foram preservados fora da unidade/commit; novas fixtures têm cleanup e a suíte passou.
+- Revisões completas de Backend/Banco/Frontend recebidas e integradas à validação acima: erro de iteração dos dias convertido em ConfigError sem mutação; persistência validada contra bytes capturados/publicados; lazy import testado sem dependência da ordem de discovery. A restrição inicial de escrita em `.git/index.lock` foi resolvida na retomada com escalonamento autorizado para preparar o commit local único; sem push.
+
+### Próximos passos
+- Ler `docs/USER_ANSWERS.md` e consolidar respostas Q-HOSTS-01–05 em DECISIONS antes dos comportamentos dependentes da fase 3; campos ainda vazios, sem aprovação. Preservar integralmente respostas preenchidas.
+- Após respostas, definir `docs/PHASE3_CONTRACT.md` para domínios, marcadores, backup, preservação, flush e falhas; dividir entre Backend/Banco/Frontend e validar com arquivos isolados antes de hosts real.
+- Executar futuramente o runtime Python 3.12 e aceite de processos em ambiente dedicado; manter catálogo/desempenho/Windows 11 como limites pendentes. GUI segue CustomTkinter/pystray; fase 6 depende do mecanismo de domínio ativo Brave (D19).
+
 ## 2026-10-05 — Fase 2: bloqueador de processos e perguntas em arquivo
 
 ### Implementado

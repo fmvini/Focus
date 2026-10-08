@@ -1,6 +1,6 @@
 # Documentação de desenvolvimento — Focus Blocker
 
-Status: fases 1/2 — JSON, agendador e bloqueador de processos por CLI; etapas restantes e limites de validação no log. Ver [instruções de execução](../README.md).
+Status: fases 1/2 e editor interativo de horários/processos por CLI; etapas restantes e limites de validação no log. Ver [instruções de execução](../README.md).
 
 ## Fonte e autoridade
 
@@ -25,6 +25,7 @@ Status: fases 1/2 — JSON, agendador e bloqueador de processos por CLI; etapas 
 | [DEVELOPMENT_LOG.md](DEVELOPMENT_LOG.md) | Estado real do projeto e ponto de retomada |
 | [PHASE1_CONTRACT.md](PHASE1_CONTRACT.md) | APIs e limites da primeira implementação |
 | [PHASE2_CONTRACT.md](PHASE2_CONTRACT.md) | Proteções, regras conjuntas, adaptador e modo de aplicação de processos |
+| [CONFIG_EDITOR_CONTRACT.md](CONFIG_EDITOR_CONTRACT.md) | Rascunho, edição pela CLI, salvamento e conflitos externos |
 
 ## Coordenação da equipe
 
@@ -32,8 +33,10 @@ Agentes identificados por `maestri list`: Maestro, Backend, Frontend e Banco de 
 
 Na fase 2, Backend mantém bloqueador/adaptador; Banco, JSON tipado; Frontend, CLI; Maestro, contratos/revisão/integração. Antes de iniciar implementação posterior, consultar log/decisões; não interpretar ausência de resposta como autorização para escolher comportamento de produto.
 
+No editor independente, Backend mantém `ConfigDraft`; Banco, snapshots/persistência; Frontend, menu e flags; Maestro, integração, documentação e commit único. A unidade complementa as fases 1/2 e prepara a configuração da fase 5, sem entregar GUI/bandeja.
+
 A pedido do usuário, novas perguntas ficam em USER_ANSWERS, sem formulários/mensagens Maestri para colher respostas. Ler esse arquivo antes de cada etapa; preservar o texto preenchido, acrescentar perguntas com novos IDs e consolidar somente respostas explícitas em DECISIONS. Relatórios dos agentes não são respostas do usuário.
 
 ## Limites desta documentação
 
-O projeto possui núcleo de agenda/configuração e aplicação de regras de processos por CLI. Não há bloqueador de sites, avisos/pausa, GUI, schema SQLite ou instalador. Testes/resultados ficam em TEST_PLAN/DEVELOPMENT_LOG; catálogo de proteção não comprova reconhecimento universal de aplicativos. Versões Windows alvo, sites/Brave, desempenho e recuperação do hosts exigem validação própria.
+O projeto possui núcleo de agenda/configuração, editor interativo de horários/processos e aplicação de regras de processos por CLI. Não há bloqueador de sites, avisos/pausa, GUI, schema SQLite ou instalador. Testes/resultados ficam em TEST_PLAN/DEVELOPMENT_LOG; catálogo de proteção não comprova reconhecimento universal de aplicativos. Versões Windows alvo, sites/Brave, desempenho e recuperação do hosts exigem validação própria.

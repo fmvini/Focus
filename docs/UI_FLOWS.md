@@ -1,6 +1,6 @@
 # Focus Blocker — Fluxos de interface
 
-**Implementação atual:** CLI em `main.py`, diagnóstico por padrão e aplicação explícita de processos via `--watch --apply-processes`, com recarga/erros/Ctrl+C e resultados confirmados/pendentes separados. Nenhuma bandeja ou janela gráfica implementada; edição ainda via JSON. Fluxos abaixo continuam referência para a fase 5. Ver [execução](../README.md) e [contrato da fase 2](PHASE2_CONTRACT.md). D14/D15 foram respondidos; propostas históricas de proteção/correspondência abaixo devem ser lidas à luz desse contrato.
+**Implementação atual:** CLI em `main.py`, diagnóstico por padrão e aplicação explícita de processos via `--watch --apply-processes`, com recarga/erros/Ctrl+C e resultados confirmados/pendentes separados. `--edit-config` oferece edição de horários e quatro listas de processos, com rascunho, Salvar, Recarregar e Sair; falhas preservam o rascunho e conflitos impedem sobrescrita da versão externa detectada. Nenhuma bandeja ou janela gráfica implementada. Fluxos gráficos abaixo continuam referência para a fase 5; [contrato do editor](CONFIG_EDITOR_CONTRACT.md) prevalece para o menu já entregue. Ver [execução](../README.md) e [contrato da fase 2](PHASE2_CONTRACT.md). D14/D15 foram respondidos; propostas históricas de proteção/correspondência abaixo devem ser lidas à luz desses contratos.
 
 ## 1. Finalidade, fonte e classificação
 

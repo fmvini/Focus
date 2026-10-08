@@ -8,6 +8,7 @@ import os
 from pathlib import Path
 import re
 import tempfile
+from typing import Callable
 import unicodedata
 
 from core.models import AppConfig, CmdlineRule, ScheduleWindow
@@ -226,30 +227,45 @@ def _unique_json_object(pairs: list[tuple[str, object]]) -> dict:
     return result
 
 
+def _parse_config_contents(contents: bytes) -> AppConfig:
+    """Valida exatamente os bytes capturados, sem uma segunda leitura."""
+    data = json.loads(
+        contents.decode("utf-8"), parse_constant=_invalid_json_constant,
+        object_pairs_hook=_unique_json_object,
+    )
+    return parse_config(data)
+
+
 def load_config(path: str | os.PathLike[str]) -> AppConfig:
     """Lê UTF-8/JSON; nunca cria ou substitui o arquivo em caso de erro."""
     try:
-        with Path(path).open("r", encoding="utf-8") as stream:
-            data = json.load(
-                stream, parse_constant=_invalid_json_constant,
-                object_pairs_hook=_unique_json_object,
-            )
-        return parse_config(data)
+        return _parse_config_contents(Path(path).read_bytes())
     except (OSError, UnicodeError, ValueError, TypeError, RecursionError) as exc:
         raise ConfigError(f"Não foi possível ler configuração em {path}: {exc}") from exc
 
 
-def save_config(path: str | os.PathLike[str], config: AppConfig) -> None:
-    """Valida e substitui atomicamente usando temporário no mesmo diretório."""
-    temporary_path = None
-    failure = None
+def _serialize_config(config: AppConfig) -> bytes:
+    """Valida e codifica antes de qualquer efeito de gravação."""
     try:
         data = config_to_dict(config)
         contents = json.dumps(data, ensure_ascii=False, indent=2, allow_nan=False) + "\n"
+        return contents.encode("utf-8")
+    except (UnicodeError, ValueError, TypeError, RecursionError) as exc:
+        raise ConfigError(f"Não foi possível serializar configuração: {exc}") from exc
+
+
+def _write_config_contents(
+    path: str | os.PathLike[str], contents: bytes, *,
+    before_replace: Callable[[], None] | None = None,
+) -> None:
+    """Publica bytes preparados; permite conferir revisão antes do replace."""
+    temporary_path = None
+    failure = None
+    try:
         destination = Path(path)
         destination.parent.mkdir(parents=True, exist_ok=True)
         with tempfile.NamedTemporaryFile(
-            mode="w", encoding="utf-8", newline="\n",
+            mode="wb",
             dir=destination.parent, prefix=f".{destination.name}.",
             suffix=".tmp", delete=False,
         ) as stream:
@@ -258,6 +274,8 @@ def save_config(path: str | os.PathLike[str], config: AppConfig) -> None:
             stream.flush()
             os.fsync(stream.fileno())
         # O arquivo temporário está fechado antes do replace, inclusive no Windows.
+        if before_replace is not None:
+            before_replace()
         os.replace(temporary_path, destination)
         temporary_path = None
     except ConfigError as exc:
@@ -276,6 +294,11 @@ def save_config(path: str | os.PathLike[str], config: AppConfig) -> None:
                     failure.add_note(message)
                 else:
                     raise ConfigError(message) from exc
+
+
+def save_config(path: str | os.PathLike[str], config: AppConfig) -> None:
+    """Valida e substitui atomicamente usando temporário no mesmo diretório."""
+    _write_config_contents(path, _serialize_config(config))
 
 
 def default_config_path() -> Path:

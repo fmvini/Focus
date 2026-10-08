@@ -84,6 +84,12 @@ D16 usa PID+create_time e evento somente após pedido aceito e saída confirmada
 
 Proteção é obrigatória, mas nomes conhecidos/caminhos/contas não classificam universalmente todo aplicativo renomeado, portátil ou helper desconhecido. Ferramentas adicionais precisam entrar na safelist; processos com dados necessários inacessíveis são preservados. Cobertura nas versões Windows alvo e desempenho ainda exigem validação. Não declarar RF10 universalmente comprovado por catálogo finito.
 
+## Escolhas técnicas do editor independente — 2026-10-08
+
+Continuidade autorizada pelo usuário ao Maestro e aos três agentes. O [contrato](CONFIG_EDITOR_CONTRACT.md) complementa as fases 1/2 e prepara RF01/RF24 sem fechar decisões de hosts, pausa, foco ou GUI. `--edit-config` edita horários e quatro listas já tipadas em rascunho, com salvamento explícito, recarga que descarta o rascunho e saída/EOF/Ctrl+C sem salvar. Não inicia bloqueadores; watcher já em execução pode ler o novo JSON no próximo ciclo.
+
+Persistência reutiliza parsing e gravação atômica da fase 1; comparação dos bytes detecta conflitos antes da preparação e novamente antes do replace. Retorno representa os bytes publicados, sem adotar revisão de escritor posterior. Não há sobrescrita forçada, merge nem CAS/lock para editores externos; a pequena corrida final permanece documentada. Extras continuam opacos/preservados, listas não são deduplicadas e nenhuma sugestão é ativada. Q-HOSTS-01–05 continuam sem resposta; esta unidade não os resolve.
+
 ## Contradições e limites que não podem ser ocultados
 
 - **Recuperação, resolvida por D03:** um processo encerrado abruptamente não consegue executar a limpeza. O usuário escolheu limpar ao reabrir; não se exige mecanismo independente. Encerramento normal continua exigindo cleanup, sem pressupor que `atexit` cubra crash.
