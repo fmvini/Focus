@@ -6,3 +6,13 @@ dist/
 *.egg-info/
 .pytest_cache/
 /data/
+
+# Temporários dos testes criados na raiz do workspace
+/.config-cli-*/
+/.editor-integration-*/
+/.phase1-cli-*/
+/.phase2-cli-*/
+/.phase2-integration-*/
+/config-test-*/
+/process-config-test-*/
+/repository-test-*/

@@ -1,3 +1,24 @@
+## 2026-10-08 — Limpeza dos temporários de testes
+
+### Implementado
+- Removidas, a pedido do usuário, 14 pastas `.config-cli-<UUID>` preexistentes na raiz, verificadas como fixtures com apenas `config.json` de teste.
+- `.gitignore` cobre os oito padrões de diretórios temporários usados pela suíte, restritos à raiz do workspace.
+
+### Arquivos principais alterados
+- `.gitignore`
+- `docs/DEVELOPMENT_LOG.md`
+
+### Decisões técnicas
+- Ignorar somente prefixos identificados no código dos testes; não usar regra genérica para pastas `.config*`. Diretórios necessários do projeto e dados locais foram preservados.
+- Testes já registram cleanup; resíduos podem permanecer após interrupção/falha de limpeza. Ignorar temporários não substitui essa limpeza.
+
+### Estado atual
+- 14 resíduos removidos; os 19 testes da CLI passaram em 0,684 s sem deixar novas pastas `.config-cli-*`.
+- `git check-ignore` confirmou os oito padrões e a preservação de cinco caminhos normais; `git diff --check` sem erros.
+
+### Próximos passos
+- Manter cleanup explícito nas novas fixtures e acrescentar ao `.gitignore` apenas novos prefixos temporários efetivamente usados. Desenvolvimento de hosts segue aguardando Q-HOSTS-01–05 em `docs/USER_ANSWERS.md`.
+
 ## 2026-10-08 — Editor interativo de horários e processos
 
 ### Implementado
