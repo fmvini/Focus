@@ -90,6 +90,10 @@ Continuidade autorizada pelo usuário ao Maestro e aos três agentes. O [contrat
 
 Persistência reutiliza parsing e gravação atômica da fase 1; comparação dos bytes detecta conflitos antes da preparação e novamente antes do replace. Retorno representa os bytes publicados, sem adotar revisão de escritor posterior. Não há sobrescrita forçada, merge nem CAS/lock para editores externos; a pequena corrida final permanece documentada. Extras continuam opacos/preservados, listas não são deduplicadas e nenhuma sugestão é ativada. Q-HOSTS-01–05 continuam sem resposta; esta unidade não os resolve.
 
+## Escolhas técnicas do editor gráfico — 2026-10-09
+
+Continuidade solicitada pelo usuário. Enquanto as decisões de sites seguem abertas, `--gui` implementa a edição gráfica das regras existentes, sem antecipar sites/pausa/foco. CustomTkinter 6.0.0 mantém a stack do escopo; importações sob demanda preservam os outros modos. `ConfigSession` reutiliza `ConfigDraft` e o repositório, sem schema novo. Três abas mostram somente recursos desta unidade. Fechamento com alterações oferece salvar/descartar/cancelar; não há bandeja nesta janela independente. Agenda exibida é a última carregada/salva e não confirmação de bloqueio aplicado. Renderização nativa ainda precisa ser validada em ambiente com a dependência instalada. Ver [contrato gráfico](GUI_EDITOR_CONTRACT.md).
+
 ## Contradições e limites que não podem ser ocultados
 
 - **Recuperação, resolvida por D03:** um processo encerrado abruptamente não consegue executar a limpeza. O usuário escolheu limpar ao reabrir; não se exige mecanismo independente. Encerramento normal continua exigindo cleanup, sem pressupor que `atexit` cubra crash.

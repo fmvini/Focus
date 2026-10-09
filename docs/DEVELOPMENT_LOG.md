@@ -1,3 +1,31 @@
+## 2026-10-09 — Editor gráfico de horários e aplicativos
+
+### Implementado
+- `--gui` abre editor CustomTkinter com abas Horários, Jogos / Apps e Configuração. CRUD de janelas/dias e quatro listas de processos, seletor de pastas e campos separados de cmdline; nenhum default de bloqueio ativado.
+- Diálogos atualizam o rascunho; Salvar/Ctrl+S publica pelo repositório existente. Recarregar/Ctrl+R confirma descarte quando necessário; fechar oferece salvar/descartar/cancelar. Erros e conflitos preservam a edição. Callbacks de inicialização/status são cancelados ao fechar.
+- `ConfigSession` mantém baseline/rascunho e consulta a última agenda carregada/salva; não mistura edição pendente com estado de bloqueio aplicado. Dependência gráfica importada somente em `--gui`; modos existentes continuam independentes.
+
+### Arquivos principais alterados
+- `main.py`, `requirements.txt`, `core/config_session.py`, `ui/config_gui.py`.
+- `tests/test_config_session.py`, `tests/test_config_gui_main.py`, `tests/test_config_gui.py`, `tests/test_config_gui_native.py`.
+- `README.md`, `docs/GUI_EDITOR_CONTRACT.md`, `docs/README.md`, `docs/REQUIREMENTS.md`, `docs/UI_FLOWS.md`, `docs/ARCHITECTURE_BACKEND.md`, `docs/DATA_MODEL.md`, `docs/DECISIONS.md`, `docs/DELIVERY_PLAN.md`, `docs/TEST_PLAN.md`, `docs/DEVELOPMENT_LOG.md`.
+
+### Decisões técnicas
+- Complemento independente das fases 1/2 enquanto Q-HOSTS-01–05 continuam sem resposta; `docs/USER_ANSWERS.md` preservado. Não fechar decisões de sites, pausa, foco ou integração da bandeja nesta unidade.
+- CustomTkinter 6.0.0 fixado, mantendo a stack do escopo. Nenhuma mudança de schema, migração, SQLite ou bloqueador; persistência/validação reutilizadas. Concorrência continua otimista, com pequena corrida antes do replace já documentada.
+- Consulta gráfica usa o snapshot carregado/salvo, não o rascunho nem uma leitura automática de arquivos externos. Fechar este editor não encerra um watcher separado. Bandeja e fase 5 completa continuam pendentes.
+
+### Estado atual
+- Suíte final: **306 testes descobertos, 304 aprovados e 2 ignorados**, 11,390 s em Python 3.14.6. Novos testes cobrem 31 cenários de sessão/dispatch/fluxos com arquivos reais; os dois smoke tests nativos foram ignorados por ausência de CustomTkinter.
+- Sintaxe Python 3.12 válida nos 33 arquivos Python; runtime 3.12 ainda não executado. UTF-8/links locais e diff conferidos. Testes não tocaram hosts/perfil real nem encerraram aplicativos.
+- Editor gráfico implementado, mas **renderização e execução nativa ainda não verificadas**: ambiente impede download do PyPI, e o helper de Computer Use falhou por native pipe indisponível, inclusive após reinicialização. Não registrar fase 5 como concluída; testes simulados não substituem aceite gráfico.
+- A restrição inicial de escrita em `.git/index.lock` foi resolvida na retomada com permissão explícita do usuário para o commit local. Os 19 arquivos desta unidade foram preparados em conjunto; a conferência adicional da suíte manteve 304 aprovados e 2 ignorados. Sem push.
+
+### Próximos passos
+- Em Windows com rede, instalar `requirements.txt`, executar `tests.test_config_gui_native` e abrir `main.py --config .\data\config.json --gui` (criar JSON com `--init-config` somente se ausente). Conferir abertura, diálogos, teclado, tamanhos mínimos e DPI; corrigir incompatibilidades observadas antes de declarar aceite nativo.
+- Ler e preservar respostas em `docs/USER_ANSWERS.md`; fechar Q-HOSTS-01–05 antes do contrato/implementação de hosts. Ensaiar sites primeiro com arquivos isolados.
+- Integração da GUI ao bloqueador/bandeja, pausas/avisos, SQLite/estatísticas e instalador permanecem etapas posteriores. Aceite de encerramentos reais e runtime 3.12 também continuam pendentes.
+
 ## 2026-10-08 — Limpeza dos temporários de testes
 
 ### Implementado

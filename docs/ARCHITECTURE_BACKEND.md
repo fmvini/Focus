@@ -4,6 +4,8 @@
 
 Complemento de configuração: `core/config_editor.py` mantém rascunho puro validado; `core/config_repository.py` captura leitura única e detecta conflito por bytes; `ui/config_cli.py` oferece o menu `--edit-config`, importado sob demanda por `main.py`. Parsing/serialização/gravação são reutilizados de `core/config.py`, sem mudar as APIs de carga/save existentes. O editor não instancia bloqueadores. Um watcher existente pode consumir o JSON salvo no próximo ciclo; a comparação externa não elimina a corrida imediatamente anterior ao replace. Ver [contrato do editor](CONFIG_EDITOR_CONTRACT.md).
 
+Complemento gráfico de 2026-10-09: `core/config_session.py` mantém baseline/rascunho, flag de alterações pendentes e consulta da agenda carregada; `ui/config_gui.py` abre `--gui` com importações gráficas sob demanda, na thread principal. Não há integração com threads de bloqueadores/bandeja. Renderização nativa permanece pendente por indisponibilidade da dependência/controle de janelas no ambiente de validação. Ver [contrato gráfico](GUI_EDITOR_CONTRACT.md).
+
 Referência arquitetural, com a fase 1 implementada conforme contrato específico. Fontes: [Focus Blocker: escopo do projeto](<Focus Blocker_ escopo do projeto.md>) e [decisões registradas pelo Maestro](DECISIONS.md), com respostas explícitas em 2026-10-05. Referências a seção/RF apontam para o escopo; IDs D para respostas/detalhes pendentes. O original foi preservado; mecanismos futuros continuam propostas.
 
 ## 1. Classificação e alcance

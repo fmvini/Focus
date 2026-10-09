@@ -2,6 +2,16 @@
 
 Fonte: [escopo](Focus%20Blocker_%20escopo%20do%20projeto.md), [requisitos](REQUIREMENTS.md) e [decisões](DECISIONS.md). Fases 1/2: 206 testes OK em Python 3.14.6/psutil 7.2.2 por `.venv/Scripts/python.exe -B -m unittest discover -s tests` (10,542 s). Sintaxe 3.12 dos 18 arquivos Python conferida; runtime 3.12 ainda não executado. Encerramentos reais e fases posteriores continuam pendentes.
 
+## Evidência do editor gráfico — 2026-10-09
+
+- Suíte final: **306 testes descobertos, 304 aprovados e 2 ignorados**, 11,390 s em Python 3.14.6. Os dois ignorados são smoke tests nativos, pois CustomTkinter não está instalado no ambiente de validação.
+- `tests/test_config_session.py`: 11 testes com configuração/repositório reais; salvamento, consultas do baseline, dias vazios, extras, conflitos, arquivo removido, recarga inválida, falhas/retry e escritor posterior ao replace.
+- `tests/test_config_gui_main.py`: oito testes de flags/importações/dispatch, erro de dependência, configuração inválida e Ctrl+C, sem importar bloqueadores ou abrir janela real.
+- `tests/test_config_gui.py`: 12 testes de callbacks com widgets simulados e JSON real: CRUD, validação/correção, seleção de pastas, categorias, cmdline literal, conflito, recarga, saída e cancelamento de callbacks pendentes. Não comprovam renderização/compatibilidade nativa dos widgets.
+- `tests/test_config_gui_native.py`: dois smoke tests opcionais, com widgets CustomTkinter reais e janelas ocultas, preparados para serem executados após instalar as dependências. Ainda não executados nesta entrega.
+- Sintaxe Python 3.12 conferida em 33 arquivos; runtime executado continua 3.14.6. `git diff --check`, UTF-8 e links locais conferidos. Nenhum hosts, perfil do usuário ou processo real foi alterado pelos testes.
+- Instalação impedida pelo bloqueio de rede do ambiente; helper de Computer Use indisponível (native pipe não encontrado). Abrir `--gui` no Windows após instalar dependências para validar layout, DPI e interação nativa. Limites e comandos em [GUI_EDITOR_CONTRACT.md](GUI_EDITOR_CONTRACT.md).
+
 ## Evidência do editor independente — 2026-10-08
 
 - Suíte completa com as fases 1/2 e editor: **273 testes OK**, 18,358 s, Python 3.14.6, na conferência final do Maestro após os três relatórios. Frontend confirmou independentemente 273 testes em 18,507 s e os sete testes de flags/importações com `ui.config_cli` previamente importado. Sintaxe Python 3.12 verificada por `ast.parse(feature_version=(3, 12))` em 27 arquivos; runtime 3.12 ainda não executado. UTF-8/links locais conferidos.

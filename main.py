@@ -1,7 +1,7 @@
 """Diagnóstico por padrão; aplicação de processos somente por flag explícito.
 
 Códigos de saída: 0 = sucesso ou Ctrl+C; 1 = erro global/configuração/IO;
-2 = argumentos inválidos (argparse). Somente --init-config grava dados.
+2 = argumentos inválidos (argparse). Editores gravam somente ao salvar.
 A criação inicial é exclusiva, sem sobrescrita, mas não é atômica: falha de
 escrita pode deixar o arquivo novo incompleto.
 """
@@ -51,6 +51,7 @@ def _parser() -> argparse.ArgumentParser:
             "alvo; erro global/configuração interrompe novas ações. "
             "--edit-config edita um JSON existente e combina somente com "
             "--config; alterações ficam no rascunho até Salvar. "
+            "--gui abre o editor gráfico e também combina somente com --config. "
             "Códigos: 0 sucesso/Ctrl+C; 1 erro global/configuração/IO; "
             "2 argumentos inválidos. A criação inicial é exclusiva; falha "
             "durante a escrita pode deixar o arquivo novo incompleto."
@@ -64,6 +65,7 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--watch", action="store_true", help="recarrega e reavalia a cada 5 s até Ctrl+C")
     parser.add_argument("--apply-processes", action="store_true", help="encerra processos elegíveis; exige --watch e relógio real")
     parser.add_argument("--edit-config", action="store_true", help="abre editor interativo de horários e regras de processos")
+    parser.add_argument("--gui", action="store_true", help="abre editor gráfico de horários e regras; combina somente com --config")
     return parser
 
 
@@ -191,6 +193,11 @@ def _watch_processes(path: Path, config) -> int:
 def main(argv: list[str] | None = None) -> int:
     parser = _parser()
     args = parser.parse_args(argv)
+    if args.gui and (
+        args.init_config or args.check or args.status or args.at is not None
+        or args.watch or args.apply_processes or args.edit_config
+    ):
+        parser.error("--gui pode ser combinado somente com --config")
     if args.edit_config and (
         args.init_config or args.check or args.status or args.at is not None
         or args.watch or args.apply_processes
@@ -205,6 +212,10 @@ def main(argv: list[str] | None = None) -> int:
     show_status = args.status or args.at is not None or not (args.init_config or args.check)
     try:
         path = args.config if args.config is not None else default_config_path()
+        if args.gui:
+            from ui.config_gui import run_config_gui
+
+            return run_config_gui(path)
         if args.edit_config:
             # O editor é importado somente quando solicitado: ajuda, status e
             # modos de aplicação mantêm a mesma superfície de dependências.
@@ -231,7 +242,7 @@ def main(argv: list[str] | None = None) -> int:
             _print_status(config, args.at if args.at is not None else datetime.now())
         return 0
     except KeyboardInterrupt:
-        if args.edit_config:
+        if args.edit_config or args.gui:
             message = "Editor encerrado por Ctrl+C; alterações não salvas descartadas."
         elif args.apply_processes:
             message = "Varredura de processos encerrada por Ctrl+C; apps encerrados não são reabertos."

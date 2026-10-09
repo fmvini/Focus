@@ -1,10 +1,10 @@
 # Focus Blocker
 
-Aplicativo em desenvolvimento para Windows 10/11. Configuração JSON com editor interativo, avaliação de horários e bloqueador de processos por CLI. Sites, avisos/pausa, bandeja, interface gráfica, estatísticas e instalador continuam nas próximas fases.
+Aplicativo em desenvolvimento para Windows 10/11. Configuração JSON com editores de terminal e gráfico, avaliação de horários e bloqueador de processos por CLI. Sites, avisos/pausa, bandeja, estatísticas e instalador continuam nas próximas fases. O editor gráfico foi implementado; a renderização nativa ainda precisa ser validada no Windows com as dependências instaladas.
 
 ## Preparar e executar
 
-Requer Python 3.12+. O diagnóstico usa a biblioteca padrão; o bloqueador usa psutil, instalado no ambiente virtual do projeto.
+Requer Python 3.12+. O diagnóstico usa a biblioteca padrão; o bloqueador usa psutil e a janela usa CustomTkinter. Use o Python do ambiente virtual para executar a interface e o bloqueador.
 
 ```powershell
 python -m venv .venv
@@ -33,6 +33,25 @@ Segunda=0 até domingo=6; o dia é o de início da janela. Segunda 22:00–02:00
 
 ## Editar horários e regras
 
+### Editor gráfico
+
+Após instalar as dependências, crie a configuração se ela ainda não existir e abra a janela:
+
+```powershell
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt
+# Apenas na primeira vez; --init-config recusa sobrescrever um arquivo existente.
+.\.venv\Scripts\python.exe main.py --config .\data\config.json --init-config
+.\.venv\Scripts\python.exe main.py --config .\data\config.json --gui
+```
+
+A aba **Horários** permite adicionar, editar e remover janelas com seleção dos dias da semana. Todos os dias vêm selecionados em um novo horário; desmarcar todos desativa a janela. **Jogos / Apps** reúne executáveis, pastas, proteção adicional e regras conjuntas de linha de comando; pastas também podem ser escolhidas pelo seletor. **Configuração** mostra o arquivo e explica o salvamento.
+
+**Adicionar/Aplicar alteração** atualiza apenas o rascunho. **Salvar** (Ctrl+S) grava o JSON. **Recarregar** (Ctrl+R) descarta a edição após confirmação. Ao fechar com alterações pendentes, você pode salvar, descartar ou cancelar a saída. Erros preservam o rascunho; conflito externo exige recarga. A consulta da agenda usa a última versão carregada/salva, sem incluir mudanças pendentes e sem reler automaticamente edições externas.
+
+`--gui` combina somente com `--config` e configura o aplicativo; o bloqueio continua sendo iniciado pelo comando `--watch --apply-processes` da seção abaixo. Outro bloqueador já em execução poderá consumir o JSON salvo no próximo ciclo. Sites, pausa, bandeja e estatísticas não fazem parte deste editor. Ver [contrato gráfico](docs/GUI_EDITOR_CONTRACT.md).
+
+### Editor de terminal
+
 `--edit-config` abre um menu em português para listar, adicionar, alterar e remover horários e regras de processos. As alterações ficam em um rascunho até **Salvar**; **Sair**, EOF ou Ctrl+C descartam o que não foi salvo. Dias: segunda=0 até domingo=6, separados por vírgula; vazio seleciona todos e `nenhum` desativa o horário. Números de itens começam em 1. Regras de cmdline pedem executável e trecho literal em campos separados.
 
 Erros de validação ou gravação mantêm o rascunho para correção/nova tentativa. Se o arquivo mudar ou for removido externamente, salvar informa conflito; **Recarregar** descarta o rascunho e lê a versão atual. Campos adicionais são preservados. A gravação usa temporário, fsync e substituição atômica, com comparação dos bytes antes da preparação e novamente antes da substituição. Há uma pequena corrida entre a última conferência e a substituição; não há lock entre editores externos nem mesclagem automática.
@@ -41,7 +60,7 @@ O editor combina somente com `--config` e não inicia bloqueadores. Um `--watch 
 
 ## Aplicar bloqueio de processos
 
-Escolha horários e listas pelo editor ou pelo JSON antes de executar. Os campos opcionais `block_exes`, `block_folders`, `safelist_exes` e `block_cmdline` são listas; quando ausentes, ficam vazios. A interface gráfica será entregue na fase 5. Exemplo de regra conjunta, para adicionar ao objeto de configuração somente se você quiser bloquear Minecraft Java:
+Escolha horários e listas por um dos editores ou pelo JSON antes de executar. Os campos opcionais `block_exes`, `block_folders`, `safelist_exes` e `block_cmdline` são listas; quando ausentes, ficam vazios. Bandeja e integração gráfica com o bloqueador continuam na fase 5. Exemplo de regra conjunta, para adicionar ao objeto de configuração somente se você quiser bloquear Minecraft Java:
 
 ```json
 "block_cmdline": [{"executable": "javaw.exe", "contains": ".minecraft"}]
@@ -66,3 +85,5 @@ Somente saída confirmada após solicitação aceita gera evento de tentativa; p
 ```
 
 Testes usam relógios/adaptadores controlados e diretórios isolados; não alteram hosts nem encerram aplicativos do usuário. Ver [documentação de desenvolvimento](docs/README.md), [contratos da fase 1](docs/PHASE1_CONTRACT.md), [fase 2](docs/PHASE2_CONTRACT.md) e [registro de desenvolvimento](docs/DEVELOPMENT_LOG.md).
+
+Os dois smoke tests com widgets nativos são executados quando CustomTkinter está instalado, com janelas ocultas. Sem essa dependência, são marcados como ignorados; os testes de fluxo com widgets simulados e repositório real continuam funcionando. A inspeção visual e de DPI deve ser feita abrindo `--gui` no Windows. Nesta implementação, a instalação local foi impedida pelo bloqueio de rede do ambiente e o controle de janelas estava indisponível; não há evidência de renderização nativa ainda.

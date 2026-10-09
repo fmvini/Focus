@@ -28,7 +28,9 @@ A definição de eventos de pausa/tentativas deve ocorrer antes da fase 4, embor
 
 ## Unidade complementar — editor de configuração
 
-Enquanto Q-HOSTS-01–05 permanecem sem resposta, foi concluído o editor independente de horários/processos conforme [CONFIG_EDITOR_CONTRACT.md](CONFIG_EDITOR_CONTRACT.md). Complementa as fases 1/2 sem depender de hosts, pausa ou medição de foco. Backend: rascunho validado; Banco: snapshots e conflitos; Frontend: `--edit-config`; Maestro: integração, docs e commit. GUI/bandeja e edição dos campos futuros continuam na fase 5.
+Enquanto Q-HOSTS-01–05 permanecem sem resposta, foi concluído o editor CLI independente de horários/processos conforme [CONFIG_EDITOR_CONTRACT.md](CONFIG_EDITOR_CONTRACT.md). Complementa as fases 1/2 sem depender de hosts, pausa ou medição de foco. Backend: rascunho validado; Banco: snapshots e conflitos; Frontend: `--edit-config`; Maestro: integração, docs e commit.
+
+Continuidade em 2026-10-09: editor gráfico `--gui` implementado conforme [GUI_EDITOR_CONTRACT.md](GUI_EDITOR_CONTRACT.md), reutilizando rascunho/repositório e acrescentando sessão com baseline/alterações pendentes. Renderização nativa e smoke tests reais continuam pendentes de instalação da dependência em ambiente com rede. Bandeja, integração ao bloqueador e edição dos campos futuros continuam na fase 5; a fase completa não está concluída.
 
 ## Dependências entre agentes
 
@@ -52,4 +54,4 @@ Maestro integra cada unidade; em trabalho compartilhado, evitar commits concorre
 
 ## Retomada
 
-Consultar `DEVELOPMENT_LOG.md` para resultados das fases 1/2 e do editor complementar. Próxima implementação: fase 3, hosts; ler `USER_ANSWERS.md` e fechar Q-HOSTS-01–05, consolidar decisões e definir contrato antes dos comportamentos dependentes. Validar primeiro com arquivos isolados. Manter ensaios Windows de processos como validação pendente, usando somente alvos dedicados. Para fase 6, fechar domínio ativo/lista de estudo Brave (D19); não atribuir foco a qualquer página.
+Consultar `DEVELOPMENT_LOG.md` para resultados das fases 1/2 e dos editores complementares. Próximo aceite do editor: instalar dependências, executar os dois smoke tests nativos e conferir `--gui` no Windows, incluindo DPI. Próxima implementação de sites: ler `USER_ANSWERS.md` e fechar Q-HOSTS-01–05, consolidar decisões e definir contrato antes dos comportamentos dependentes. Validar primeiro com arquivos isolados. Manter ensaios Windows de processos como validação pendente, usando somente alvos dedicados. Para fase 6, fechar domínio ativo/lista de estudo Brave (D19); não atribuir foco a qualquer página.
