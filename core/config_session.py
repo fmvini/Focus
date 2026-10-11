@@ -5,6 +5,7 @@ from datetime import datetime
 from pathlib import Path
 
 from core.config_editor import ConfigDraft
+from core.config_portability import export_new_config
 from core.config_repository import read_snapshot, save_snapshot
 from core.scheduler import is_blocking, next_block_start
 
@@ -34,6 +35,15 @@ class ConfigSession:
         snapshot = read_snapshot(self.path)
         draft = ConfigDraft(snapshot.config)
         self.snapshot, self.draft = snapshot, draft
+
+    def import_config(self, path: str | Path) -> None:
+        """Importa somente para edição; Salvar continua explícito e com conflito."""
+        draft = ConfigDraft(read_snapshot(path).config)
+        self.draft = draft
+
+    def export_config(self, path: str | Path) -> None:
+        """Exporta o rascunho validado sem mudar o baseline ou salvar o ativo."""
+        export_new_config(path, self.draft.config, active_path=self.path)
 
     def agenda_status(self, now: datetime) -> AgendaStatus:
         """Consulta a última agenda carregada/salva, nunca o rascunho."""

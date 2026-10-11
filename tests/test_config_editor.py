@@ -68,6 +68,52 @@ class ConfigDraftTests(unittest.TestCase):
         days.clear()
         self.assertEqual(draft.config.windows[0].days, (4, 0))
 
+    def test_duplicate_appends_selected_window_preserving_config_and_source(self):
+        source = AppConfig(
+            windows=(
+                ScheduleWindow(time(8), time(9), (4, 0)),
+                ScheduleWindow(time(22), time(2), (6,)),
+                ScheduleWindow(time(14), time(18), ()),
+            ),
+            extra={"opaque": {"values": [1]}},
+            block_exes=("game.exe",), block_folders=(r"C:\Games",),
+            safelist_exes=("code.exe",),
+            block_cmdline=(CmdlineRule("javaw.exe", ".minecraft"),),
+        )
+        for index in range(3):
+            with self.subTest(index=index):
+                draft = ConfigDraft(source)
+                self.assertIsNone(draft.duplicate_window(index))
+                expected = config_to_dict(source)
+                expected["windows"].append(expected["windows"][index].copy())
+                self.assertEqual(draft.config, parse_config(expected))
+                self.assertEqual(len(source.windows), 3)
+                self.assertEqual(source.extra, {"opaque": {"values": [1]}})
+
+    def test_duplicate_is_independent_when_original_and_copy_are_edited(self):
+        draft = ConfigDraft(AppConfig())
+        draft.add_window("22:00", "02:00", (6,))
+        draft.duplicate_window(0)
+        draft.update_window(0, "08:00", "09:00", (0,))
+        self.assertEqual(draft.config.windows[1], ScheduleWindow(time(22), time(2), (6,)))
+        draft.update_window(1, "14:00", "15:00", ())
+        self.assertEqual(draft.config.windows[0], ScheduleWindow(time(8), time(9), (0,)))
+        draft.duplicate_window(1)
+        draft.remove_window(1)
+        self.assertEqual(draft.config.windows, (
+            ScheduleWindow(time(8), time(9), (0,)),
+            ScheduleWindow(time(14), time(15), ()),
+        ))
+
+    def test_duplicate_validation_failure_preserves_draft_and_allows_retry(self):
+        draft = ConfigDraft(AppConfig(extra={"opaque": {"values": [1]}}))
+        draft.add_window("22:00", "02:00", (6,))
+        with patch("core.config_editor.parse_config", side_effect=ConfigError("validação")):
+            self.assert_rejected_without_change(draft, lambda: draft.duplicate_window(0))
+        draft.duplicate_window(0)
+        self.assertEqual(draft.config.windows, (ScheduleWindow(time(22), time(2), (6,)),) * 2)
+        self.assertEqual(draft.config.extra, {"opaque": {"values": [1]}})
+
     def test_failed_days_iteration_preserves_draft_and_allows_retry(self):
         draft = ConfigDraft(AppConfig(extra={"opaque": {"values": [1]}}))
         draft.add_window("08:00", "09:00", [4])
@@ -200,12 +246,14 @@ class ConfigDraftTests(unittest.TestCase):
             with self.subTest(index=index):
                 self.assert_rejected_without_change(draft, lambda: draft.update_window(index, "09:00", "10:00"))
                 self.assert_rejected_without_change(draft, lambda: draft.remove_window(index))
+                self.assert_rejected_without_change(draft, lambda: draft.duplicate_window(index))
                 for field in ("block_exes", "block_folders", "safelist_exes", "block_cmdline"):
                     self.assert_rejected_without_change(draft, lambda: draft.update_rule(field, index, None))
                     self.assert_rejected_without_change(draft, lambda: draft.remove_rule(field, index))
         empty = ConfigDraft(AppConfig())
         self.assert_rejected_without_change(empty, lambda: empty.update_window(0, "08:00", "09:00"))
         self.assert_rejected_without_change(empty, lambda: empty.remove_window(0))
+        self.assert_rejected_without_change(empty, lambda: empty.duplicate_window(0))
         for field in ("block_exes", "block_folders", "safelist_exes", "block_cmdline"):
             with self.subTest(empty_field=field):
                 self.assert_rejected_without_change(empty, lambda: empty.update_rule(field, 0, None))
@@ -240,6 +288,8 @@ class ConfigDraftTests(unittest.TestCase):
             draft = ConfigDraft(AppConfig(extra={"sites": ["opaque"]}))
             draft.add_window("08:00", "09:00")
             draft.update_window(0, "09:00", "10:00", [])
+            draft.duplicate_window(0)
+            draft.remove_window(1)
             draft.remove_window(0)
             draft.add_rule("block_exes", "game.exe")
             draft.update_rule("block_exes", 0, "other.exe")

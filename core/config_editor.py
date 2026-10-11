@@ -66,6 +66,13 @@ class ConfigDraft:
         del candidate["windows"][index]
         self._accept(candidate)
 
+    def duplicate_window(self, index) -> None:
+        """Acrescenta ao final uma cópia validada da janela selecionada."""
+        candidate = config_to_dict(self._config)
+        index = self._index(index, candidate["windows"])
+        candidate["windows"].append(deepcopy(candidate["windows"][index]))
+        self._accept(candidate)
+
     def add_rule(self, field: str, value) -> None:
         field = self._field(field)
         candidate = config_to_dict(self._config)

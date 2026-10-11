@@ -6,10 +6,16 @@ gráfica de RF01 e parte de RF24; a fase 5 completa permanece pendente.
 
 ## Escopo implementado
 
+Evolução em 2026-10-11: a quarta aba **Visão geral** acrescenta painel semanal
+do rascunho e orientação inicial; horários ganham duplicação, regras ganham
+busca e Configuração ganha importação/exportação. APIs e comportamento no
+[contrato da evolução](CONFIG_EVOLUTION_CONTRACT.md). Os limites do editor
+independente descritos abaixo continuam vigentes.
+
 - `--gui` abre um JSON existente, com o mesmo `--config`/APPDATA da CLI.
   Criação inicial continua explícita em `--init-config`; arquivo inválido
   não é substituído. A flag rejeita outros modos antes de IO/importações.
-- Três abas: Horários, Jogos / Apps e Configuração. Janela CustomTkinter na
+- Quatro abas: Visão geral, Horários, Jogos / Apps e Configuração. Janela CustomTkinter na
   thread principal, sem threads de bloqueadores ou bandeja.
 - Horários: adicionar/editar/remover; sete checkboxes, todos selecionados por
   padrão. Dias vazios desativam. Mesma validação de horários noturnos,
@@ -60,7 +66,7 @@ a conferência final e o replace; não equivale a CAS/lock de escritores externo
 - `tests/test_config_gui.py`: callbacks de CRUD, validação e correção,
   categorias, salvamento, recarga e saída usando widgets simulados com JSON
   e repositório reais. Não valida renderização ou compatibilidade dos widgets.
-- `tests/test_config_gui_native.py`: dois smoke tests com CustomTkinter real
+- `tests/test_config_gui_native.py`: cinco smoke tests com CustomTkinter real
   quando instalado, com janelas ocultas; não substituem inspeção visual.
 
 A dependência não pôde ser instalada neste ambiente: downloads do PyPI são

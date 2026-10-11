@@ -218,3 +218,12 @@ As respostas registradas em `DECISIONS.md` prevalecem sobre perguntas já respon
 D19 confirmou regra por sites: usuário adiciona domínios considerados estudo e personaliza quais bloquear. O processo em primeiro plano não distingue páginas sozinho. A lista de domínios de estudo precisa de representação própria, diferente de `sites` de bloqueio; nome da chave, formato, subdomínios e conflitos ainda a definir. Não há domínios iniciais obrigatórios aprovados. Guardar navegação completa não foi autorizado; manter dados mínimos de D11.
 
 Proposta técnica não aprovada: obter apenas o domínio elegível da aba ativa para decidir crédito, sem persistir URL completa ou histórico. Fonte desse domínio, validade temporal, falha de leitura e formato de mensagens/JSON ainda precisam de desenho e revisão; nenhuma integração foi escolhida.
+
+## 11. Portabilidade e planejamento — 2026-10-11
+
+A [evolução do editor](CONFIG_EVOLUTION_CONTRACT.md) mantém o mesmo schema JSON.
+Importação valida um arquivo e substitui apenas o rascunho da sessão, preservando
+baseline/caminho ativo. Exportação serializa o rascunho para destino novo, sem
+sobrescrever arquivos nem limpar alterações pendentes. Extras e Unicode seguem
+o parser existente; importação inválida preserva a sessão. O painel semanal é
+calculado em memória, sem SQLite, coleta de foco ou histórico persistido.

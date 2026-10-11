@@ -1,12 +1,13 @@
 """Editor gráfico independente; não importa nem inicia bloqueadores."""
 
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 import sys
 
 from core.config import ConfigError
 from core.config_repository import ConfigConflictError
 from core.config_session import ConfigSession
+from core.agenda_preview import week_preview
 
 
 def run_config_gui(path: str | Path) -> int:
@@ -74,6 +75,7 @@ def _build_app(ctk, tk, filedialog, messagebox, session):
             self.grid_rowconfigure(2, weight=1)
             self.modal = None
             self.status_timer = None
+            self.preview_anchor = datetime.now().date()
             self.protocol("WM_DELETE_WINDOW", self.close_editor)
 
             header = ctk.CTkFrame(self, fg_color="transparent")
@@ -100,12 +102,47 @@ def _build_app(ctk, tk, filedialog, messagebox, session):
             self.tabs = ctk.CTkTabview(self, fg_color="white", segmented_button_selected_color=accent,
                                        segmented_button_selected_hover_color="#10645F")
             self.tabs.grid(row=2, column=0, sticky="nsew", padx=28)
+            overview = self.tabs.add("Visão geral")
             schedules = self.tabs.add("Horários")
             processes = self.tabs.add("Jogos / Apps")
             settings = self.tabs.add("Configuração")
+            settings.grid_columnconfigure(0, weight=1)
+            settings.grid_rowconfigure(0, weight=1)
+            settings_content = ctk.CTkScrollableFrame(settings, fg_color="transparent")
+            settings_content.grid(row=0, column=0, sticky="nsew")
+            settings = settings_content
             for tab in (schedules, processes):
                 tab.grid_columnconfigure(0, weight=1)
                 tab.grid_rowconfigure(2, weight=1)
+
+            overview.grid_columnconfigure(0, weight=1)
+            overview.grid_rowconfigure(3, weight=1)
+            self.preview_summary = ctk.CTkLabel(overview, text="", anchor="w", justify="left",
+                                               font=ctk.CTkFont(size=20, weight="bold"))
+            self.preview_summary.grid(row=0, column=0, sticky="ew", padx=14, pady=(10, 0))
+            self.preview_note = ctk.CTkLabel(overview, text="", anchor="w", justify="left",
+                                            text_color=muted, wraplength=760)
+            self.preview_note.grid(row=1, column=0, sticky="ew", padx=14, pady=8)
+            navigation = ctk.CTkFrame(overview, fg_color="transparent")
+            navigation.grid(row=2, column=0, sticky="ew", padx=14, pady=(0, 8))
+            for title, command in (
+                ("Semana anterior", lambda: self.change_week(-7)),
+                ("Esta semana", lambda: self.change_week(0)),
+                ("Próxima semana", lambda: self.change_week(7)),
+            ):
+                ctk.CTkButton(navigation, text=title, width=130, fg_color=accent,
+                              command=command).pack(side="left", padx=(0, 8))
+            self.preview_days = ctk.CTkScrollableFrame(overview, fg_color="#F3F6F5")
+            self.preview_days.grid(row=3, column=0, sticky="nsew", padx=14)
+            self.preview_days.grid_columnconfigure(0, weight=1)
+            self.orientation = ctk.CTkLabel(overview, text="", anchor="w", justify="left",
+                                            wraplength=760, text_color=muted)
+            self.orientation.grid(row=4, column=0, sticky="ew", padx=14, pady=8)
+            shortcuts = ctk.CTkFrame(overview, fg_color="transparent")
+            shortcuts.grid(row=5, column=0, sticky="w", padx=14, pady=(0, 14))
+            for title, tab in (("Ir para Horários", "Horários"), ("Ir para Jogos / Apps", "Jogos / Apps")):
+                ctk.CTkButton(shortcuts, text=title, fg_color=accent,
+                              command=lambda name=tab: self.tabs.set(name)).pack(side="left", padx=(0, 8))
 
             ctk.CTkLabel(schedules, text="Horários de foco", font=ctk.CTkFont(size=20, weight="bold"),
                          anchor="w").grid(row=0, column=0, sticky="w", padx=14, pady=(10, 0))
@@ -125,9 +162,17 @@ def _build_app(ctk, tk, filedialog, messagebox, session):
                           command=self.edit_rule).grid(row=0, column=1, padx=14, pady=(10, 0))
             self.rule_description = ctk.CTkLabel(processes, text="", text_color=muted, anchor="w", wraplength=760)
             self.rule_description.grid(row=1, column=0, columnspan=2, sticky="ew", padx=14, pady=10)
+            self.rule_search = ctk.StringVar(value="")
+            ctk.CTkLabel(processes, text="Buscar regras nesta categoria", anchor="w", text_color=muted
+                         ).grid(row=2, column=0, columnspan=2, sticky="ew", padx=14)
+            ctk.CTkEntry(processes, textvariable=self.rule_search).grid(
+                row=3, column=0, columnspan=2, sticky="ew", padx=14, pady=(0, 10))
             self.rules_list = ctk.CTkScrollableFrame(processes, fg_color="#F3F6F5")
-            self.rules_list.grid(row=2, column=0, columnspan=2, sticky="nsew", padx=14, pady=(0, 14))
+            processes.grid_rowconfigure(2, weight=0)
+            processes.grid_rowconfigure(4, weight=1)
+            self.rules_list.grid(row=4, column=0, columnspan=2, sticky="nsew", padx=14, pady=(0, 14))
             self.rules_list.grid_columnconfigure(0, weight=1)
+            self.rule_search.trace_add("write", lambda *_: self.render_rules())
 
             settings.grid_columnconfigure(0, weight=1)
             ctk.CTkLabel(settings, text="Arquivo de configuração", font=ctk.CTkFont(size=20, weight="bold"),
@@ -141,8 +186,15 @@ def _build_app(ctk, tk, filedialog, messagebox, session):
                 "Recarregar lê o arquivo novamente e descarta o rascunho. Se outro editor alterar "
                 "o arquivo, o Focus informa o conflito antes de salvar.\n\n"
                 "Um bloqueador iniciado separadamente pode ler os horários e regras salvos no próximo ciclo.\n\n"
-                "Bloqueio de sites, pausa, bandeja e estatísticas serão adicionados em etapas futuras."
+                "Importar JSON substitui apenas o rascunho, após confirmação. Clique em Salvar para aplicar ao arquivo ativo.\n\n"
+                "Exportar JSON grava o rascunho em um destino novo. Não salva a configuração ativa."
             )).grid(row=2, column=0, sticky="ew", padx=18, pady=18)
+            portability = ctk.CTkFrame(settings, fg_color="transparent")
+            portability.grid(row=3, column=0, sticky="w", padx=18)
+            ctk.CTkButton(portability, text="Importar JSON", fg_color=accent,
+                          command=self.import_config).pack(side="left", padx=(0, 8))
+            ctk.CTkButton(portability, text="Exportar JSON", fg_color=accent,
+                          command=self.export_config).pack(side="left")
 
             footer = ctk.CTkFrame(self, fg_color="transparent")
             footer.grid(row=3, column=0, sticky="ew", padx=28, pady=16)
@@ -162,27 +214,75 @@ def _build_app(ctk, tk, filedialog, messagebox, session):
             self.feedback.configure(text=text, text_color="#A33232" if error else muted)
 
         def render(self):
+            self.render_preview()
             self.render_windows()
             self.render_rules()
             self.dirty_label.configure(text="Alterações não salvas" if session.dirty else "Sem alterações pendentes")
+
+        @staticmethod
+        def planned_time(minutes):
+            hours, remainder = divmod(minutes, 60)
+            return f"{hours} h {remainder:02d} min"
+
+        def change_week(self, offset):
+            self.preview_anchor = (self.preview_anchor + timedelta(days=offset)
+                                   if offset else datetime.now().date())
+            self.render_preview()
+
+        def render_preview(self):
+            config = session.draft.config
+            preview = week_preview(config.windows, self.preview_anchor)
+            end = preview.start + timedelta(days=6)
+            self.preview_summary.configure(text=(
+                f"Semana {preview.start:%d/%m/%Y} a {end:%d/%m/%Y}\n"
+                f"Horas PLANEJADAS: {self.planned_time(preview.total_minutes)}"
+            ))
+            state = "Alterações não salvas" if session.dirty else "Sem alterações pendentes"
+            self.preview_note.configure(text=(
+                f"Prévia do rascunho · {state}\n"
+                "Horas planejadas pela agenda, não uma medição de foco. Sobreposições contam uma vez."
+            ))
+            self.clear(self.preview_days)
+            for index, day in enumerate(preview.days):
+                intervals = []
+                for interval in day.intervals:
+                    finish = "24:00" if interval.end.date() > day.date else interval.end.strftime("%H:%M")
+                    intervals.append(f"{interval.start:%H:%M} → {finish}")
+                text = (f"{days[index]} {day.date:%d/%m} · {self.planned_time(day.minutes)} planejados\n"
+                        + ("  |  ".join(intervals) or "Sem horário planejado"))
+                ctk.CTkLabel(self.preview_days, text=text, anchor="w", justify="left", wraplength=730
+                             ).grid(row=index, column=0, sticky="ew", padx=14, pady=8)
+            if not config.windows:
+                guidance = "Comece em Horários: adicione um horário e escolha os dias. Depois escolha Jogos / Apps e clique em Salvar."
+            elif not any(window.days for window in config.windows):
+                guidance = "Nenhum horário ativo. Em Horários, edite um horário e selecione os dias. Depois escolha os alvos em Jogos / Apps e clique em Salvar."
+            elif not any(getattr(config, field) for field in ("block_exes", "block_folders", "block_cmdline")):
+                guidance = "Escolha os jogos ou aplicativos em Jogos / Apps. Clique em Salvar para gravar horários e regras."
+            else:
+                guidance = "Revise horários e regras usando os atalhos abaixo. Clique em Salvar para gravar o rascunho."
+            self.orientation.configure(text=guidance)
 
         @staticmethod
         def clear(frame):
             for child in frame.winfo_children():
                 child.destroy()
 
-        def item_row(self, frame, index, title, detail, edit, remove):
+        def item_row(self, frame, index, title, detail, edit, remove, duplicate=None):
             row = ctk.CTkFrame(frame, fg_color="white", corner_radius=8)
             row.grid(row=index, column=0, sticky="ew", pady=(0, 8))
             row.grid_columnconfigure(0, weight=1)
-            ctk.CTkLabel(row, text=title, anchor="w", justify="left", wraplength=540,
+            wrap = 390 if duplicate is not None else 540
+            ctk.CTkLabel(row, text=title, anchor="w", justify="left", wraplength=wrap,
                          font=ctk.CTkFont(size=16, weight="bold")).grid(row=0, column=0, sticky="ew", padx=14, pady=(10, 0))
-            ctk.CTkLabel(row, text=detail, text_color=muted, anchor="w", justify="left", wraplength=540
+            ctk.CTkLabel(row, text=detail, text_color=muted, anchor="w", justify="left", wraplength=wrap
                          ).grid(row=1, column=0, sticky="ew", padx=14, pady=(0, 10))
             ctk.CTkButton(row, text="Editar", width=75, fg_color=accent,
                           command=edit).grid(row=0, column=1, rowspan=2, padx=6)
             ctk.CTkButton(row, text="Remover", width=85, fg_color="#E0E8E6", text_color="#263D3A",
                           hover_color="#CEDAD7", command=remove).grid(row=0, column=2, rowspan=2, padx=(0, 12))
+            if duplicate is not None:
+                ctk.CTkButton(row, text="Duplicar", width=85, fg_color=accent,
+                              command=duplicate).grid(row=0, column=3, rowspan=2, padx=(0, 12))
 
         def render_windows(self):
             self.clear(self.windows_list)
@@ -195,22 +295,44 @@ def _build_app(ctk, tk, filedialog, messagebox, session):
                 self.item_row(self.windows_list, index,
                               f"{window.start:%H:%M} → {window.end:%H:%M}", day_text,
                               lambda i=index: self.edit_window(i),
-                              lambda i=index: self.remove_item("windows", i))
+                              lambda i=index: self.remove_item("windows", i),
+                              lambda i=index: self.duplicate_window(i))
+
+        def duplicate_window(self, index):
+            if self.modal is not None:
+                return
+            try:
+                session.draft.duplicate_window(index)
+            except ConfigError as exc:
+                self.notify(f"Não foi possível duplicar: {exc}", error=True)
+                return
+            self.render()
+            self.notify("Horário duplicado no rascunho. Clique em Salvar para gravar.")
 
         def render_rules(self):
             self.clear(self.rules_list)
             field = rule_fields[self.rule_category.get()]
             self.rule_description.configure(text=descriptions[field])
             values = getattr(session.draft.config, field)
+            query = self.rule_search.get().strip().casefold()
             if not values:
                 ctk.CTkLabel(self.rules_list, text="Nenhuma regra nesta lista.", text_color=muted
                              ).grid(row=0, column=0, pady=45)
+                return
+            visible = 0
             for index, value in enumerate(values):
                 title = value.executable if field == "block_cmdline" else value
                 detail = f"Contém: {value.contains}" if field == "block_cmdline" else self.rule_category.get()
-                self.item_row(self.rules_list, index, title, detail,
-                              lambda i=index: self.edit_rule(i),
+                searchable = f"{title}\n{value.contains}" if field == "block_cmdline" else title
+                if query not in searchable.casefold():
+                    continue
+                self.item_row(self.rules_list, visible, title, detail,
+                              lambda i=index, f=field: self.edit_rule(i, f),
                               lambda i=index, f=field: self.remove_item(f, i))
+                visible += 1
+            if not visible:
+                ctk.CTkLabel(self.rules_list, text="Nenhuma regra corresponde à busca nesta categoria.",
+                             text_color=muted).grid(row=0, column=0, pady=45)
 
         def remove_item(self, field, index):
             if not messagebox.askyesno("Remover item", "Remover este item do rascunho?", parent=self):
@@ -298,8 +420,8 @@ def _build_app(ctk, tk, filedialog, messagebox, session):
                           command=lambda: self.finish_edit(apply, error, close)).pack(side="left")
             dialog.startup_timers.append(dialog.after(150, start.focus_set))
 
-        def edit_rule(self, index=None):
-            field = rule_fields[self.rule_category.get()]
+        def edit_rule(self, index=None, field=None):
+            field = field or rule_fields[self.rule_category.get()]
             dialog, form, error, actions, close = self.new_dialog("Adicionar regra" if index is None else "Editar regra")
             value = None if index is None else getattr(session.draft.config, field)[index]
             label = "Pasta absoluta" if field == "block_folders" else "Executável (.exe)"
@@ -338,6 +460,42 @@ def _build_app(ctk, tk, filedialog, messagebox, session):
             ctk.CTkButton(actions, text="Adicionar" if index is None else "Aplicar alteração", fg_color=accent,
                           command=lambda: self.finish_edit(apply, error, close)).pack(side="left")
             dialog.startup_timers.append(dialog.after(150, name.focus_set))
+
+        def import_config(self):
+            if self.modal is not None:
+                return
+            selected = filedialog.askopenfilename(parent=self, title="Importar configuração JSON",
+                                                  filetypes=[("Configuração JSON", "*.json"), ("Todos os arquivos", "*.*")])
+            if not selected:
+                return
+            if not messagebox.askyesno(
+                "Substituir rascunho", "Substituir todo o rascunho pelo JSON selecionado?\n"
+                "Alterações não salvas serão descartadas. O arquivo ativo só muda ao clicar em Salvar.", parent=self
+            ):
+                return
+            try:
+                session.import_config(selected)
+            except ConfigError as exc:
+                self.notify(f"Não foi possível importar: {exc}. Rascunho preservado.", error=True)
+                return
+            self.render()
+            self.notify("JSON importado no rascunho. Clique em Salvar para gravar a configuração ativa.")
+
+        def export_config(self):
+            if self.modal is not None:
+                return
+            selected = filedialog.asksaveasfilename(
+                parent=self, title="Exportar rascunho para um novo JSON", defaultextension=".json",
+                filetypes=[("Configuração JSON", "*.json")], confirmoverwrite=False
+            )
+            if not selected:
+                return
+            try:
+                session.export_config(selected)
+            except ConfigError as exc:
+                self.notify(f"Não foi possível exportar: {exc}. Escolha um destino novo.", error=True)
+                return
+            self.notify("Rascunho exportado. A exportação não salva a configuração ativa.")
 
         def save_config(self):
             try:

@@ -83,3 +83,22 @@ As listas são ponto de partida. Cobertura parcial deve ser relatada como limita
 Proposta: registrar cenário, requisito, ambiente, configuração relevante, resultado esperado, resultado observado e limitação. Evitar copiar dados pessoais ou cmdlines completas para relatórios sem política aprovada (D11).
 
 Testes acompanham o mesmo commit da implementação correspondente. Não criar commits exclusivos por adicionar, modificar ou executar testes. Documentos de planejamento não substituem a execução.
+
+## Painel e portabilidade — validação em 2026-10-11
+
+- Prévia semanal: união/clipping diário, domingo anterior, meia-noite,
+  adjacência/sobreposição, desativados e comparação independente por minuto.
+- Duplicação: cópia independente, índices inválidos e preservação do rascunho.
+- Importação/exportação: validação completa, extras/Unicode/cmdline, baseline
+  preservado, conflitos depois de importar, aliases, falhas e limpeza.
+  Corrida de publicação exercitada com `os.rename` real no Windows;
+  ramo hard link também exercitado no filesystem local, sem runtime POSIX.
+- GUI: prévia versus agenda salva, orientação para desativados/safelist sem
+  alvos, busca com índices originais, seletores cancelados, importação
+  confirmada, exportação sem salvar o ativo, modal e regressões de saída.
+- Suíte completa em Python 3.14.6: **359 descobertos, 353 aprovados e 6
+  ignorados**, 24,940 s. Cinco smoke tests gráficos sem CustomTkinter;
+  um teste de symlinks sem privilégio Windows (WinError 1314).
+  Sintaxe Python 3.12 conferida em 37 arquivos; runtime 3.12 pendente.
+- Inspeção visual/DPI/rolagem em 880×660, FAT/exFAT real e runtime POSIX
+  não executados. Testes não modificaram hosts nem encerraram aplicativos.

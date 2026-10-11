@@ -34,6 +34,12 @@ Continuidade em 2026-10-09: editor gráfico `--gui` implementado conforme [GUI_E
 
 ## Dependências entre agentes
 
+Unidade complementar em 2026-10-11: painel semanal, duplicação de horários,
+busca e portabilidade JSON, conforme [contrato](CONFIG_EVOLUTION_CONTRACT.md).
+Backend mantém cálculo puro/duplicação; Banco mantém importação/exportação
+de rascunho; Frontend integra quatro abas; Maestro revisa e valida a unidade.
+Resultados e pendências reais estão no log; esta unidade não conclui a fase 5.
+
 | Interface de trabalho | Alinhamento necessário antes de codificar |
 | --- | --- |
 | Backend ↔ Banco | Dias/horários, contrato de JSON, gravações, eventos de pausa/tentativa, tempo de foco e concorrência SQLite |
@@ -54,4 +60,4 @@ Maestro integra cada unidade; em trabalho compartilhado, evitar commits concorre
 
 ## Retomada
 
-Consultar `DEVELOPMENT_LOG.md` para resultados das fases 1/2 e dos editores complementares. Próximo aceite do editor: instalar dependências, executar os dois smoke tests nativos e conferir `--gui` no Windows, incluindo DPI. Próxima implementação de sites: ler `USER_ANSWERS.md` e fechar Q-HOSTS-01–05, consolidar decisões e definir contrato antes dos comportamentos dependentes. Validar primeiro com arquivos isolados. Manter ensaios Windows de processos como validação pendente, usando somente alvos dedicados. Para fase 6, fechar domínio ativo/lista de estudo Brave (D19); não atribuir foco a qualquer página.
+Consultar `DEVELOPMENT_LOG.md` para resultados das fases 1/2 e dos editores complementares. Próximo aceite do editor: instalar dependências, executar os cinco smoke tests nativos e conferir `--gui` no Windows, incluindo DPI e rolagem em 880×660. Próxima evolução independente: contrato do controlador gráfico de processos, com início/parada explícitos, estado efetivo, execução fora da thread Tk e encerramento ordenado; definir integração antes de codificar. Próxima implementação de sites: ler `USER_ANSWERS.md` e fechar Q-HOSTS-01–05, consolidar decisões e definir contrato antes dos comportamentos dependentes. Validar primeiro com arquivos isolados. Manter ensaios Windows de processos como validação pendente, usando somente alvos dedicados. Para fase 6, fechar domínio ativo/lista de estudo Brave (D19); não atribuir foco a qualquer página.

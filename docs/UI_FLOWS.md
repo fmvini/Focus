@@ -245,3 +245,13 @@ Antes de transformar propostas em critérios obrigatórios, consolidar respostas
 **D13 confirmado:** iniciar sem horários ativos, apresentar listas como sugestões, escolher/salvar horários e listas antes de ativar bloqueios. Não há wizard, layout ou texto aprovado; esses detalhes são propostas de UI a elaborar.
 
 **D19 confirmado para produto:** usuário adiciona domínios considerados estudo e personaliza quais sites bloquear. A UI deve permitir essas duas finalidades, sem promover domínio de estudo a liberação automática. Aba/controles, normalização, subdomínios e tratamento de conflitos ainda a definir. Não há lista inicial obrigatória aprovada. D05 exclui descanso dos totais; identificar domínio da aba ativa permanece decisão técnica.
+
+## 12. Evolução do editor independente — 2026-10-11
+
+O editor acrescenta **Visão geral** com semana/dias/horas planejadas do rascunho,
+navegação entre semanas e orientação para configurar horários/alvos. A consulta
+da agenda salva permanece separada da prévia. **Horários** permite duplicar;
+**Jogos / Apps** permite buscar sem perder a identidade dos itens na edição.
+**Configuração** oferece importação confirmada para o rascunho e exportação
+para JSON novo. Salvar permanece explícito; cancelamentos e falhas preservam
+a edição. Ver [contrato da evolução](CONFIG_EVOLUTION_CONTRACT.md).

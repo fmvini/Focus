@@ -1,3 +1,32 @@
+## 2026-10-11 — Painel semanal e portabilidade da configuração
+
+### Implementado
+- Aba inicial Visão geral com intervalos/horas planejadas por dia e semana, navegação entre semanas e orientação de primeiro uso. Prévia acompanha o rascunho; consulta da agenda continua usando baseline salvo, sem confundir planejamento com foco medido ou bloqueio efetivo.
+- Duplicação de horários validada, busca nas quatro categorias com índices originais de edição/remoção e mensagens distintas para lista vazia/filtro sem resultados. Orientação identifica horários desativados e proteção adicional sem alvos.
+- Importar JSON substitui somente o rascunho após confirmação/validação; Salvar permanece explícito e detecta conflitos. Exportar cria JSON novo com extras/Unicode/regras preservados, sem sobrescrever destinos ou alterar baseline/dirty. Configuração tem rolagem interna.
+- Coordenação dos agentes existentes no Maestri: Backend entregou prévia/duplicação; Banco, portabilidade/sessão; Frontend, GUI/testes; Maestro definiu contrato, revisou/refinou, integrou e validou.
+
+### Arquivos principais alterados
+- `core/agenda_preview.py`, `core/config_editor.py`, `core/config_session.py`, `core/config_portability.py`, `ui/config_gui.py`.
+- `tests/test_agenda_preview.py`, `tests/test_config_editor.py`, `tests/test_config_portability.py`, `tests/test_config_gui.py`, `tests/test_config_gui_native.py`.
+- `README.md`, `docs/CONFIG_EVOLUTION_CONTRACT.md`, `docs/GUI_EDITOR_CONTRACT.md`, `docs/ARCHITECTURE_BACKEND.md`, `docs/DATA_MODEL.md`, `docs/UI_FLOWS.md`, `docs/DELIVERY_PLAN.md`, `docs/TEST_PLAN.md`, `docs/README.md`, `docs/DEVELOPMENT_LOG.md`.
+
+### Decisões técnicas
+- Prévia pura reutiliza união do scheduler e recorta por dia civil de segunda a domingo; inclui cauda do domingo anterior, sem dupla contagem. Apenas minutos planejados, sem SQLite/coleta de foco, dependências novas ou alteração de schema.
+- Importação preserva baseline para manter conflito externo; exportação prepara temporário/flush/fsync no diretório destino e publica sem substituição: `os.rename` no Windows e hard link nos demais sistemas. Rename evita exigir hardlinks em discos Windows removíveis; FAT/exFAT real não foi ensaiado.
+- Exportação recusa ativo/aliases/destinos existentes. Limpeza remove só temporário; pode deixar temporário/diretórios preparados se houver falha de cleanup. No ramo hard link, erro de cleanup após publicação preserva destino novo completo. Não há durabilidade absoluta em crash nem proteção contra troca adversarial de diretórios/reparse points.
+- Respostas existentes em `docs/USER_ANSWERS.md` preservadas. Nenhuma decisão de hosts, pausa ou medição de foco foi antecipada; esta unidade complementa o editor independente.
+
+### Estado atual
+- Suíte completa do Maestro: **359 testes descobertos, 353 aprovados e 6 ignorados**, 24,940 s em Python 3.14.6. Cinco smoke tests gráficos ignorados por CustomTkinter ausente; um teste de symlinks por WinError 1314. Corrida com `os.rename` real, aliases/hardlinks, roundtrip e referência independente de minutos passaram. Sintaxe 3.12 válida nos 37 arquivos Python; UTF-8 e diff conferidos.
+- Instalação de `requirements.txt` novamente indisponível neste ambiente. GUI testada por fluxos com widgets simulados e arquivos reais; **renderização, DPI e rolagem nativa ainda não verificadas**. Runtime 3.12, FAT/exFAT real e runtime POSIX pendentes. Testes não tocaram hosts nem encerraram aplicativos.
+- Unidade revisada e validada. A primeira tentativa de staging foi impedida por `.git/index.lock` com `Permission denied`; na retomada, o usuário liberou a permissão e solicitou o commit local único dos 20 arquivos relacionados. Sem push. Fase 5 completa e MVP do escopo original permanecem pendentes, incluindo controle gráfico do bloqueador/bandeja e fases 3–7.
+
+### Próximos passos
+- Em Windows com dependências disponíveis: executar `tests.test_config_gui_native` e abrir `main.py --config .\data\config.json --gui`; conferir quatro abas, prévia, busca, seletores/modal, rolagem em 880×660 e DPI. Corrigir incompatibilidades observadas antes do aceite nativo.
+- Próxima evolução independente: definir contrato do controlador gráfico de processos (iniciar/parar explicitamente, snapshots de estado efetivo, worker fora de Tk, gate antes de efeitos, saída ordenada) e dividir Backend/Frontend/Banco antes da implementação; reutilizar o bloqueador existente.
+- Para sites, fechar Q-HOSTS-01–05 em `docs/USER_ANSWERS.md` e criar contrato da fase 3 antes de implementar comportamentos dependentes. Pausas/avisos, bandeja, coleta de foco/SQLite e instalador continuam etapas posteriores.
+
 ## 2026-10-09 — Editor gráfico de horários e aplicativos
 
 ### Implementado

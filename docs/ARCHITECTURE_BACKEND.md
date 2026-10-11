@@ -342,4 +342,14 @@ Estas perguntas são itens de coordenação para o Maestro, não solicitações 
 
 **Estado desta referência:** arquitetura explícita e respostas do usuário consolidadas; contratos conceituais rastreados; mecanismos não definidos permanecem propostas. Antes de converter em contratos de código, fechar os detalhes da fase correspondente e consultar `DECISIONS.md`, sem reabrir decisões já respondidas.
 
+### Evolução do editor — 2026-10-11
+
+`core/agenda_preview.py` calcula a união recortada por dia da semana local,
+reutilizando `effective_intervals`; o resultado imutável é apenas planejamento.
+`ConfigDraft.duplicate_window` publica uma cópia validada no rascunho.
+`ConfigSession.import_config` troca somente o rascunho depois da leitura/validação;
+`export_config` delega a cópia para destino novo a `core/config_portability.py`.
+Baseline, conflitos e aplicação dos bloqueadores seguem os contratos existentes.
+Ver [contrato da evolução](CONFIG_EVOLUTION_CONTRACT.md).
+
 Fontes externas consultadas em 2026-10-05 são documentação oficial de dependências/plataforma, usadas apenas para avaliar viabilidade e limites. Seus links acompanham as afirmações correspondentes; não substituem aprovação de requisitos.
