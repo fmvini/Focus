@@ -10,6 +10,11 @@ O editor gráfico de 2026-10-09 reutiliza os mesmos dados: `ConfigSession` em `c
 
 O controle gráfico acrescenta apenas dados transitórios: `RuntimeSnapshot` frozen guarda estado, última agenda avaliada/instante, último `ScanReport` e erro; `RuntimeView` apresenta esses dados. Parar/errar preserva a última avaliação, sem representar autorização atual de ação. Cada ciclo lê o JSON persistido; importar altera só rascunho e exportar não salva o ativo. Não há histórico, tabela de processos ou mudança de schema. Ver [PROCESS_GUI_CONTRACT.md](PROCESS_GUI_CONTRACT.md).
 
+Bandeja usa `TrayCommand` frozen e `TrayMailbox` de até cinco ações coalescidas,
+sem persistência. Mutex gráfico é recurso Windows, sem arquivo-lock ou campo
+JSON; não muda baseline/conflitos e não coordena outros escritores. Nenhum
+schema, tabela SQLite ou migração nesta evolução. Ver [TRAY_CONTRACT.md](TRAY_CONTRACT.md).
+
 `AppConfig` acrescenta `block_exes`, `block_folders`, `safelist_exes` e `block_cmdline`, mantendo `windows`/`extra`. Os quatro campos ausentes equivalem a listas vazias; gravação explícita emite as quatro listas. Nenhuma sugestão de bloqueio é ativada. Outros campos raiz continuam preservados e opacos. Colisões de `extra` com campos tipados são erro.
 
 Nomes exigem `.exe` completo sem diretório/wildcard/espaços externos. Pastas são absolutas Windows após expansão de `%VAR%` conhecida, conservando a entrada original no JSON; parsing não verifica instalação. O adaptador precisa resolver destinos antes de efeitos. Cmdline agora exige objetos com exatamente `executable` e `contains`, trecho não vazio/sem controles, e aplica conjunção literal sem caixa dentro de cada argumento. Strings legadas geram erro explícito e arquivo intacto; não são migradas por inferência.

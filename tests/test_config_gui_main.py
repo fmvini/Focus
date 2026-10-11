@@ -11,11 +11,85 @@ import unittest
 from unittest.mock import Mock, patch
 
 from core.config import ConfigError, default_config
+from core.instance_guard import InstanceGuardError
 import main
 from ui.config_gui import run_config_gui
 
 
 class ConfigGuiMainTests(unittest.TestCase):
+    def setUp(self):
+        self.guard = Mock()
+        self.guard.acquire.return_value = True
+        guard_patch = patch("ui.config_gui.InstanceGuard", return_value=self.guard)
+        guard_patch.start()
+        self.addCleanup(guard_patch.stop)
+
+    def test_second_instance_or_guard_failure_prevents_session_tk_and_workers(self):
+        for outcome in (False, InstanceGuardError("mutex indisponível")):
+            with self.subTest(outcome=outcome):
+                self.guard.reset_mock()
+                self.guard.acquire.side_effect = outcome if isinstance(outcome, Exception) else None
+                self.guard.acquire.return_value = outcome
+                with patch("ui.config_gui._run_guarded_config_gui", side_effect=AssertionError("sessão/Tk")):
+                    with patch("ui.config_gui.ProcessController", side_effect=AssertionError("motor")):
+                        with redirect_stderr(io.StringIO()) as output:
+                            self.assertEqual(run_config_gui("isolated.json"), 1)
+                self.assertIn("Erro", output.getvalue())
+                self.guard.release.assert_called_once_with()
+
+    def test_guard_acquired_before_session_and_released_after_both_workers_and_window(self):
+        import tkinter as tk
+
+        for failure in (None, tk.TclError("erro Tk"), KeyboardInterrupt(), RuntimeError("loop")):
+            with self.subTest(failure=type(failure).__name__):
+                order = []
+                self.guard.acquire.side_effect = lambda: order.append("acquire") or True
+                self.guard.release.side_effect = lambda: order.append("release")
+                controller, tray, mailbox = Mock(), Mock(), Mock()
+                for resource, name in ((controller, "motor"), (tray, "tray")):
+                    resource.stop.side_effect = lambda label=name: order.append(label + ".stop")
+                    resource.wait.side_effect = lambda label=name: order.append(label + ".wait")
+                mailbox.close.side_effect = lambda: order.append("mailbox.close")
+
+                def loop():
+                    order.append("mainloop")
+                    if failure is not None:
+                        raise failure
+
+                app = SimpleNamespace(mainloop=loop, finish_close=lambda: order.append("destroy"))
+                ctk = SimpleNamespace(set_appearance_mode=Mock(), set_default_color_theme=Mock())
+                with patch.dict(sys.modules, {"customtkinter": ctk}):
+                    with patch("ui.config_gui.ConfigSession", side_effect=lambda path: (
+                        order.append("session") or SimpleNamespace(path=Path(path))
+                    )):
+                        with patch("ui.config_gui.ProcessController", return_value=controller):
+                            with patch("ui.config_gui.WindowsTray", return_value=tray):
+                                with patch("ui.config_gui.TrayMailbox", return_value=mailbox):
+                                    with patch("ui.config_gui._build_app", return_value=app):
+                                        if isinstance(failure, (KeyboardInterrupt, RuntimeError)):
+                                            with self.assertRaises(type(failure)):
+                                                run_config_gui("isolated.json")
+                                        else:
+                                            with redirect_stderr(io.StringIO()):
+                                                self.assertEqual(run_config_gui("isolated.json"), 1 if failure else 0)
+                self.assertEqual(order, ["acquire", "session", "mainloop", "mailbox.close", "motor.stop",
+                                         "tray.stop", "motor.wait", "tray.wait", "destroy", "release"])
+                controller.start.assert_not_called()
+                tray.start.assert_not_called()
+
+    def test_guard_release_failure_is_reported_and_dependency_error_releases_guard(self):
+        self.guard.release.side_effect = InstanceGuardError("close handle")
+        with patch("ui.config_gui._run_guarded_config_gui", return_value=0):
+            with redirect_stderr(io.StringIO()) as output:
+                self.assertEqual(run_config_gui("isolated.json"), 1)
+        self.assertIn("close handle", output.getvalue())
+        self.guard.release.side_effect = None
+        self.guard.reset_mock()
+        with patch.dict(sys.modules, {"customtkinter": None}):
+            with redirect_stderr(io.StringIO()):
+                self.assertEqual(run_config_gui("isolated.json"), 1)
+        self.guard.release.assert_called_once_with()
+
     def test_dispatch_passes_path_and_propagates_result_without_process_loading(self):
         for result in (0, 1):
             with self.subTest(result=result):
@@ -53,7 +127,7 @@ class ConfigGuiMainTests(unittest.TestCase):
         original_import = builtins.__import__
 
         def guarded(name, *args, **kwargs):
-            if name.startswith(("customtkinter", "tkinter", "psutil")) or name == "core.proc_blocker":
+            if name.startswith(("customtkinter", "tkinter", "psutil", "pystray", "PIL")) or name == "core.proc_blocker":
                 raise AssertionError(f"importação antecipada: {name}")
             return original_import(name, *args, **kwargs)
 

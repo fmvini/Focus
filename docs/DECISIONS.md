@@ -96,6 +96,16 @@ Continuidade solicitada pelo usuário. Enquanto as decisões de sites seguem abe
 
 ## Contradições e limites que não podem ser ocultados
 
+Evoluções técnicas de 2026-10-11: quatro abas com painel semanal/portabilidade,
+controle explícito de processos e botão Enviar à bandeja. Motor inicia parado;
+X continua sair. Menu Mostrar/Parar/Sair usa fila drenada por Tk, sem iniciar
+sem confirmação. Guarda por caminho/sessão Windows impede segunda GUI, sem
+IPC ou mudança nos modos CLI. Essas escolhas complementam a autorização de
+continuar o desenvolvimento; não fecham hosts/pausa/foco nem a fase 5 inteira.
+Contratos [controle](PROCESS_GUI_CONTRACT.md) e [bandeja](TRAY_CONTRACT.md)
+prevalecem sobre limites históricos do editor acima. Inspeção visual/DPI continua
+pendente por timeout de captura, apesar dos smoke tests nativos executados.
+
 - **Recuperação, resolvida por D03:** um processo encerrado abruptamente não consegue executar a limpeza. O usuário escolheu limpar ao reabrir; não se exige mecanismo independente. Encerramento normal continua exigindo cleanup, sem pressupor que `atexit` cubra crash.
 - **Cobertura dos sites:** o escopo reconhece que hosts não aceita curingas. Os domínios são candidatos à validação, incluindo abreviações `www.`; não são garantia de bloquear toda reprodução ou tráfego existente. Proxy DNS permanece fora do escopo.
 - **Ciclo de 5 s:** esperar até 2 s por processo na mesma thread pode consumir o intervalo quando vários processos precisam ser encerrados. A estratégia de execução exige desenho e medição, preservando a proteção e o fluxo do escopo.

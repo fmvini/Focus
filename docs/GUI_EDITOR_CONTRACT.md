@@ -12,12 +12,15 @@ busca e Configuração ganha importação/exportação. APIs e comportamento no
 [contrato da evolução](CONFIG_EVOLUTION_CONTRACT.md). A janela também controla
 um motor de processos por início/parada explícitos, conforme
 [contrato do controle gráfico](PROCESS_GUI_CONTRACT.md).
+Botão Enviar à bandeja e guarda gráfica por configuração/sessão são definidos
+no [contrato de bandeja](TRAY_CONTRACT.md); fechar pelo X continua sair.
 
 - `--gui` abre um JSON existente, com o mesmo `--config`/APPDATA da CLI.
   Criação inicial continua explícita em `--init-config`; arquivo inválido
   não é substituído. A flag rejeita outros modos antes de IO/importações.
 - Quatro abas: Visão geral, Horários, Jogos / Apps e Configuração. Janela CustomTkinter na
-  thread principal; motor de processos em worker separado, sem bandeja.
+  thread principal; motor e ícone de bandeja em workers separados. Callbacks
+  da bandeja publicam fila limitada; somente polling Tk opera widgets/motor.
 - Horários: adicionar/editar/remover; sete checkboxes, todos selecionados por
   padrão. Dias vazios desativam. Mesma validação de horários noturnos,
   igualdade inválida, dias e união já existente no núcleo.
@@ -32,7 +35,7 @@ um motor de processos por início/parada explícitos, conforme
   pendente, pede confirmação de descarte. Recarga inválida preserva a sessão.
 - Fechar a janela com rascunho pendente oferece salvar/descartar/cancelar.
   Falha ao salvar mantém a janela aberta e o motor. Após decidir sair, a GUI
-  sinaliza parada e espera o worker por polling antes de destruir a janela.
+  sinaliza parada e espera motor/ícone por polling antes de destruir a janela.
 - Consulta da agenda por timer Tk usa exclusivamente a última versão
   carregada/salva. Não representa confirmação de bloqueio aplicado, nem
   observa automaticamente alterações externas; Recarregar atualiza a leitura.
@@ -70,10 +73,10 @@ a conferência final e o replace; não equivale a CAS/lock de escritores externo
 - `tests/test_config_gui.py`: callbacks de CRUD, validação e correção,
   categorias, salvamento, recarga e saída usando widgets simulados com JSON
   e repositório reais. Não valida renderização ou compatibilidade dos widgets.
-- `tests/test_config_gui_native.py`: oito smoke tests com CustomTkinter real
+- `tests/test_config_gui_native.py`: dez smoke tests com CustomTkinter real
   quando instalado, com janelas ocultas; não substituem inspeção visual.
 
-Na retomada de 2026-10-11, as dependências foram instaladas no `.venv` e os oito
+Na retomada de 2026-10-11, as dependências foram instaladas no `.venv` e os dez
 smoke tests nativos passaram sem erros de callbacks Tk. Controlador simulado,
 sem encerramentos reais. A janela de QA abriu com JSON isolado e alvos vazios,
 mas a captura falhou duas vezes por timeout; inspeção visual, DPI e rolagem em

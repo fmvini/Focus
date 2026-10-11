@@ -16,7 +16,8 @@ from uuid import uuid4
 from core.config import load_config
 from core.config_session import ConfigSession
 from ui.config_gui import _build_app
-from tests.test_config_gui import FakeController
+from tests.test_config_gui import FakeController, FakeTray
+from ui.tray_commands import TrayMailbox
 
 
 @unittest.skipUnless(importlib.util.find_spec("customtkinter"), "CustomTkinter não instalado")
@@ -37,6 +38,13 @@ class NativeConfigGuiTests(unittest.TestCase):
                 super().__init__()
                 self.withdraw()
 
+            def deiconify(self):
+                # Exercita a intenção de restaurar sem exibir a janela de QA.
+                self.restore_requested = True
+
+            def lift(self):
+                pass
+
         class Toolkit:
             CTk = HiddenRoot
 
@@ -50,8 +58,10 @@ class NativeConfigGuiTests(unittest.TestCase):
                                           asksaveasfilename=Mock(return_value=""))
         self.ctk = ctk
         self.controller = FakeController(self.path)
+        self.tray = FakeTray()
+        self.mailbox = TrayMailbox()
         self.app = _build_app(Toolkit(), tk, self.filedialog, self.messages, self.session,
-                              controller=self.controller)
+                              controller=self.controller, tray=self.tray, mailbox=self.mailbox)
         self.background_errors = []
         self.app.tk.createcommand("bgerror", self.background_errors.append)
         self.app.report_callback_exception = lambda *error: self.background_errors.append(str(error))
@@ -61,12 +71,15 @@ class NativeConfigGuiTests(unittest.TestCase):
         if self.app.modal is not None:
             self.button(self.app.modal, "Cancelar").invoke()
         self.controller.finish()
+        self.tray.alive = False
+        self.messages.askyesnocancel.return_value = False
         self.app.close_editor()
         self.assertTrue(self.app.closed)
         self.assertEqual(self.app.tk.splitlist(self.app.tk.call("after", "info")), ())
         self.app.tk.call("update")
         self.assertEqual(self.background_errors, [])
         self.controller.wait.assert_not_called()
+        self.tray.wait.assert_not_called()
 
     @staticmethod
     def descendants(widget):
@@ -224,6 +237,52 @@ class NativeConfigGuiTests(unittest.TestCase):
         orphaned_modal.assert_not_called()
         self.assertIsNotNone(self.app.status_timer)
         self.assertEqual(self.background_errors, [])
+
+    def test_tray_ready_show_and_cancel_exit_with_real_widgets(self):
+        self.messages.askyesno.return_value = True
+        self.button(self.app, "Iniciar").invoke()
+        self.session.draft.add_rule("block_exes", "pending.exe")
+        self.button(self.app, "Enviar à bandeja").invoke()
+        self.assertFalse(self.app.tray_hidden)
+        self.mailbox.post("ready")
+        self.app.refresh_status()
+        self.assertTrue(self.app.tray_hidden)
+        self.assertEqual(self.app.state(), "withdrawn")
+        self.mailbox.post("show")
+        self.app.refresh_status()
+        self.assertTrue(self.app.restore_requested)
+        self.assertFalse(self.app.tray_hidden)
+        self.button(self.app, "Enviar à bandeja").invoke()
+        self.messages.askyesnocancel.return_value = None
+        self.mailbox.post("close")
+        self.app.refresh_status()
+        self.assertFalse(self.app.closing)
+        self.assertFalse(self.app.tray_hidden)
+        self.assertTrue(self.controller.alive)
+        self.assertTrue(self.tray.alive)
+        self.assertEqual(self.controller.stops, 0)
+        self.assertEqual(self.tray.stops, 0)
+
+    def test_close_waits_for_tray_and_motor_and_cancels_all_native_timers(self):
+        self.messages.askyesno.return_value = True
+        self.button(self.app, "Iniciar").invoke()
+        self.button(self.app, "Enviar à bandeja").invoke()
+        self.mailbox.post("ready")
+        self.app.refresh_status()
+        self.app.close_editor()
+        self.assertFalse(self.app.closed)
+        self.assertTrue(self.app.restore_requested)
+        self.controller.finish()
+        self.app.poll_close()
+        self.assertFalse(self.app.closed)
+        self.app.after(50, lambda: setattr(self.tray, "alive", False))
+        self.app.mainloop()
+        self.assertTrue(self.app.closed)
+        self.assertEqual(self.app.tk.splitlist(self.app.tk.call("after", "info")), ())
+        self.app.tk.call("update")
+        self.assertEqual(self.background_errors, [])
+        self.controller.wait.assert_not_called()
+        self.tray.wait.assert_not_called()
 
 
 if __name__ == "__main__":

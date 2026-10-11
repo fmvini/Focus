@@ -1,6 +1,6 @@
 # Documentação de desenvolvimento — Focus Blocker
 
-Status: fases 1/2, editor CLI, painel/configuração gráfica e controle explícito do motor de processos. Oito smoke tests nativos passaram; inspeção visual/DPI e encerramentos reais permanecem pendentes. Etapas restantes e limites no log. Ver [instruções de execução](../README.md).
+Status: fases 1/2, editor CLI, painel/configuração gráfica, controle explícito do motor, bandeja e guarda de instância gráfica. Evidências e limites atuais no log; fase 5 completa e MVP original ainda pendentes. Ver [instruções de execução](../README.md).
 
 ## Fonte e autoridade
 
@@ -29,6 +29,7 @@ Status: fases 1/2, editor CLI, painel/configuração gráfica e controle explíc
 | [GUI_EDITOR_CONTRACT.md](GUI_EDITOR_CONTRACT.md) | Editor gráfico, sessão de edição, consulta da agenda e limites de validação nativa |
 | [CONFIG_EVOLUTION_CONTRACT.md](CONFIG_EVOLUTION_CONTRACT.md) | Painel semanal, duplicação, busca e importação/exportação do rascunho |
 | [PROCESS_GUI_CONTRACT.md](PROCESS_GUI_CONTRACT.md) | Motor gráfico: início/parada, worker, snapshots, recarga e saída ordenada |
+| [TRAY_CONTRACT.md](TRAY_CONTRACT.md) | Bandeja explícita, fila de comandos Tk e uma GUI por configuração/sessão |
 
 ## Coordenação da equipe
 
@@ -42,4 +43,4 @@ A pedido do usuário, novas perguntas ficam em USER_ANSWERS, sem formulários/me
 
 ## Limites desta documentação
 
-O projeto possui núcleo de agenda/configuração, editores de terminal/gráfico e aplicação de regras de processos por CLI e GUI. A suíte integrada inclui widgets nativos com controlador simulado; não substitui inspeção visual/DPI ou encerramentos Windows reais. Não há bloqueador de sites, avisos/pausa, bandeja, schema SQLite ou instalador. Testes/resultados ficam em TEST_PLAN/DEVELOPMENT_LOG; catálogo de proteção não comprova reconhecimento universal de aplicativos. Versões Windows alvo, sites/Brave, desempenho e recuperação do hosts exigem validação própria.
+O projeto possui núcleo de agenda/configuração, editores de terminal/gráfico, aplicação de regras de processos por CLI e GUI, bandeja explícita e guarda gráfica. A suíte integrada inclui widgets nativos com controlador simulado; não substitui inspeção visual/DPI. Não há bloqueador de sites, avisos/pausa, schema SQLite ou instalador. Testes/resultados ficam em TEST_PLAN/DEVELOPMENT_LOG; catálogo de proteção não comprova reconhecimento universal de aplicativos. Versões Windows alvo, sites/Brave, desempenho e recuperação do hosts exigem validação própria.

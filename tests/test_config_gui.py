@@ -16,6 +16,7 @@ from uuid import uuid4
 from core.config import load_config
 from core.config_session import ConfigSession
 from core.process_controller import RuntimeSnapshot
+from ui.tray_commands import TrayMailbox
 from ui.config_gui import _build_app
 
 
@@ -63,6 +64,13 @@ class Widget:
     transient = lambda *args, **kwargs: None
     grab_set = lambda *args, **kwargs: None
     focus_set = lambda *args, **kwargs: None
+    lift = lambda *args, **kwargs: None
+
+    def withdraw(self):
+        self.options["hidden"] = True
+
+    def deiconify(self):
+        self.options["hidden"] = False
 
     def bind(self, name, callback):
         self.callbacks[name] = callback
@@ -163,6 +171,23 @@ class FakeController:
         self.value = replace(self.value, state="idle", **values)
 
 
+class FakeTray:
+    def __init__(self):
+        self.alive = False
+        self.starts = self.stops = 0
+        self.wait = Mock(side_effect=AssertionError("wait bandeja em callback Tk"))
+
+    def start(self):
+        self.starts += 1
+        self.alive = True
+
+    def stop(self):
+        self.stops += 1
+
+    def is_alive(self):
+        return self.alive
+
+
 class ConfigGuiFlowTests(unittest.TestCase):
     def setUp(self):
         self.root = Path(__file__).resolve().parents[1] / f".editor-integration-{uuid4().hex}"
@@ -177,8 +202,11 @@ class ConfigGuiFlowTests(unittest.TestCase):
                                           askopenfilename=Mock(return_value=""),
                                           asksaveasfilename=Mock(return_value=""))
         self.controller = FakeController(self.path)
+        self.mailbox = TrayMailbox()
+        self.tray = FakeTray()
         self.app = _build_app(fake_ctk(), SimpleNamespace(IntVar=Variable), self.filedialog,
-                              self.messages, self.session, controller=self.controller)
+                              self.messages, self.session, controller=self.controller,
+                              tray=self.tray, mailbox=self.mailbox)
 
     def entries(self):
         return [widget for widget in descendants(self.app.modal)
@@ -204,6 +232,131 @@ class ConfigGuiFlowTests(unittest.TestCase):
     def fire_timer(self, token):
         callback = self.app.timers.pop(token)
         callback()
+
+    def test_tray_hides_only_after_ready_and_keeps_draft_and_motor(self):
+        button(self.app, "Iniciar").invoke()
+        self.session.draft.add_rule("block_exes", "pending.exe")
+        draft = self.session.draft.config
+        button(self.app, "Enviar à bandeja").invoke()
+        self.assertEqual(self.tray.starts, 1)
+        self.assertTrue(self.app.tray_pending)
+        self.assertFalse(self.app.options.get("hidden", False))
+        button(self.app, "Enviar à bandeja").invoke()
+        self.assertEqual(self.tray.starts, 1)
+        self.mailbox.post("ready")
+        self.fire_timer(self.app.status_timer)
+        self.assertTrue(self.app.tray_hidden)
+        self.assertTrue(self.app.options["hidden"])
+        self.assertTrue(self.controller.alive)
+        self.assertEqual(self.session.draft.config, draft)
+        self.controller.wait.assert_not_called()
+        self.tray.wait.assert_not_called()
+        self.mailbox.post("show")
+        self.fire_timer(self.app.status_timer)
+        self.assertFalse(self.app.options["hidden"])
+        button(self.app, "Enviar à bandeja").invoke()
+        self.assertTrue(self.app.options["hidden"])
+        self.assertEqual(self.tray.starts, 1)
+
+    def test_tray_error_timeout_and_unexpected_exit_keep_or_restore_visibility(self):
+        button(self.app, "Enviar à bandeja").invoke()
+        self.mailbox.post("error", "startup falhou")
+        self.fire_timer(self.app.status_timer)
+        self.assertFalse(self.app.options["hidden"])
+        self.assertFalse(self.app.tray_pending)
+        self.assertIn("startup falhou", self.app.feedback.options["text"])
+        self.mailbox.post("ready")
+        self.fire_timer(self.app.status_timer)
+        self.assertFalse(self.app.options["hidden"])
+        self.tray.alive = False
+        button(self.app, "Enviar à bandeja").invoke()
+        self.app.tray_deadline = 0
+        self.fire_timer(self.app.status_timer)
+        self.assertIn("10 segundos", self.app.feedback.options["text"])
+        self.assertFalse(self.app.options["hidden"])
+        self.tray.alive = False
+        button(self.app, "Enviar à bandeja").invoke()
+        self.mailbox.post("ready")
+        self.fire_timer(self.app.status_timer)
+        self.assertTrue(self.app.options["hidden"])
+        self.tray.alive = False
+        self.fire_timer(self.app.status_timer)
+        self.assertFalse(self.app.options["hidden"])
+        self.assertIn("inesperadamente", self.app.feedback.options["text"])
+
+    def test_tray_menu_commands_execute_only_on_tk_poll_and_close_cancel_restores(self):
+        button(self.app, "Iniciar").invoke()
+        button(self.app, "Enviar à bandeja").invoke()
+        self.mailbox.post("ready")
+        self.fire_timer(self.app.status_timer)
+        self.session.draft.add_rule("block_exes", "pending.exe")
+        self.messages.askyesnocancel.side_effect = lambda *args, **kwargs: (
+            self.assertFalse(self.app.options["hidden"]) or None
+        )
+        self.mailbox.post("close")
+        self.assertEqual(self.controller.stops, 0)
+        self.assertTrue(self.app.options["hidden"])
+        self.fire_timer(self.app.status_timer)
+        self.assertFalse(self.app.options["hidden"])
+        self.assertTrue(self.controller.alive)
+        self.assertTrue(self.tray.alive)
+        self.assertFalse(self.app.closing)
+        self.mailbox.post("stop")
+        self.assertEqual(self.controller.stops, 0)
+        self.fire_timer(self.app.status_timer)
+        self.assertEqual(self.controller.stops, 1)
+        self.assertFalse(self.app.closing)
+
+    def test_late_native_add_error_restores_hidden_window_while_tray_worker_is_alive(self):
+        button(self.app, "Iniciar").invoke()
+        button(self.app, "Enviar à bandeja").invoke()
+        self.mailbox.post("ready")
+        self.fire_timer(self.app.status_timer)
+        self.assertTrue(self.app.options["hidden"])
+        self.mailbox.post("error", "O Windows recusou criar o ícone da bandeja (NIM_ADD)")
+        self.assertTrue(self.app.options["hidden"])
+        self.fire_timer(self.app.status_timer)
+        self.assertFalse(self.app.options["hidden"])
+        self.assertTrue(self.tray.alive)
+        self.assertEqual(self.tray.stops, 1)
+        self.assertTrue(self.controller.alive)
+        self.assertEqual(self.controller.stops, 0)
+        self.assertIn("NIM_ADD", self.app.feedback.options["text"])
+
+    def test_ready_during_modal_does_not_hide_or_discard_form(self):
+        button(self.app, "Enviar à bandeja").invoke()
+        button(self.app, "Adicionar horário").invoke()
+        modal = self.app.modal
+        self.entries()[0].insert(0, "09:00")
+        self.mailbox.post("ready")
+        self.mailbox.post("show")
+        self.fire_timer(self.app.status_timer)
+        self.assertFalse(self.app.options["hidden"])
+        self.assertIs(self.app.modal, modal)
+        self.assertEqual(self.entries()[0].get(), "09:00")
+        self.assertFalse(self.app.tray_pending)
+        button(modal, "Cancelar").invoke()
+
+    def test_close_waits_for_both_workers_and_late_mailbox_posts_have_no_effect(self):
+        button(self.app, "Iniciar").invoke()
+        button(self.app, "Enviar à bandeja").invoke()
+        self.mailbox.post("ready")
+        self.fire_timer(self.app.status_timer)
+        self.app.callbacks["WM_DELETE_WINDOW"]()
+        self.assertTrue(self.app.closing)
+        self.assertFalse(self.app.options["hidden"])
+        self.assertEqual(self.tray.stops, 1)
+        self.controller.finish()
+        self.fire_timer(self.app.close_timer)
+        self.assertFalse(self.app.destroyed)
+        self.mailbox.post("ready")
+        self.mailbox.post("show")
+        self.assertEqual(self.mailbox.drain(), ())
+        self.tray.alive = False
+        self.fire_timer(self.app.close_timer)
+        self.assertTrue(self.app.destroyed)
+        self.controller.wait.assert_not_called()
+        self.tray.wait.assert_not_called()
 
     def test_default_controller_is_constructed_for_saved_path_without_start(self):
         controller = FakeController()

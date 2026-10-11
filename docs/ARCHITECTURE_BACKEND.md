@@ -1,12 +1,20 @@
 # Arquitetura do backend — Focus Blocker
 
-**Implementação atual:** agenda/configuração e `core/proc_blocker.py` com adaptador psutil, guardas e eventos de confirmação em memória; CLI aplica processos por flag explícito e GUI por Iniciar confirmado. Contratos [fase 1](PHASE1_CONTRACT.md), [fase 2](PHASE2_CONTRACT.md) e [controle gráfico](PROCESS_GUI_CONTRACT.md) prevalecem sobre propostas históricas abaixo. D14/D15 fecharam política/correspondência; proteção por catálogo não certifica classificação universal. Sites, avisos/pausa, bandeja, mutex/elevação e SQLite ainda são entregas futuras. Evidências em TEST_PLAN/DEVELOPMENT_LOG.
+**Implementação atual:** agenda/configuração e `core/proc_blocker.py` com adaptador psutil, guardas e eventos de confirmação em memória; CLI aplica processos por flag explícito e GUI por Iniciar confirmado. Contratos [fase 1](PHASE1_CONTRACT.md), [fase 2](PHASE2_CONTRACT.md), [controle gráfico](PROCESS_GUI_CONTRACT.md) e [bandeja](TRAY_CONTRACT.md) prevalecem sobre propostas históricas abaixo. D14/D15 fecharam política/correspondência; proteção por catálogo não certifica classificação universal. Sites, avisos/pausa, instância elevada global e SQLite ainda são entregas futuras. Evidências em TEST_PLAN/DEVELOPMENT_LOG.
 
 Complemento de configuração: `core/config_editor.py` mantém rascunho puro validado; `core/config_repository.py` captura leitura única e detecta conflito por bytes; `ui/config_cli.py` oferece o menu `--edit-config`, importado sob demanda por `main.py`. Parsing/serialização/gravação são reutilizados de `core/config.py`, sem mudar as APIs de carga/save existentes. O editor não instancia bloqueadores. Um watcher existente pode consumir o JSON salvo no próximo ciclo; a comparação externa não elimina a corrida imediatamente anterior ao replace. Ver [contrato do editor](CONFIG_EDITOR_CONTRACT.md).
 
 Complemento gráfico: `core/config_session.py` mantém baseline/rascunho, alterações pendentes e consulta da agenda carregada; `ui/config_gui.py` abre `--gui` com importações gráficas sob demanda, na thread principal. `core/process_controller.py` mantém um worker não daemon, Event por execução, recarga do JSON por ciclo e snapshots frozen. Cadência monotônica pula slots perdidos; gates conferem parada e agenda antes de efeitos. `active` registra a última avaliação e é preservado ao parar/errar, separado do Event. `ui/runtime_presenter.py` traduz snapshots sem IO ou widgets. A GUI consulta por timer, fecha por polling e espera fora de callbacks na saída excepcional do mainloop. Widgets nativos passaram; inspeção visual/DPI continua pendente por timeout de captura. Ver [contrato gráfico](GUI_EDITOR_CONTRACT.md) e [controle](PROCESS_GUI_CONTRACT.md).
 
 Referência arquitetural, com a fase 1 implementada conforme contrato específico. Fontes: [Focus Blocker: escopo do projeto](<Focus Blocker_ escopo do projeto.md>) e [decisões registradas pelo Maestro](DECISIONS.md), com respostas explícitas em 2026-10-05. Referências a seção/RF apontam para o escopo; IDs D para respostas/detalhes pendentes. O original foi preservado; mecanismos futuros continuam propostas.
+
+`core/instance_guard.py` mantém handle de mutex Local Windows por hash do path
+resolve/normcase; aquisição rejeita nome existente e liberação fecha o handle,
+sem ownership/espera/arquivo-lock. Guarda somente GUI, até cleanup dos workers.
+`ui/tray_commands.py` fornece caixa limitada/coalescida por ação e `ui/windows_tray.py`
+adapta pystray com imports lazy. Menu só publica comandos; polling Tk executa
+Mostrar/Parar/Sair. Janela só oculta após ready e restaura em erro/saída. Não há
+IPC ou garantia de instância entre CLI, hardlinks e sessões Windows diferentes.
 
 ## 1. Classificação e alcance
 

@@ -2,7 +2,33 @@
 
 Fonte: [escopo](Focus%20Blocker_%20escopo%20do%20projeto.md), [requisitos](REQUIREMENTS.md) e [decisões](DECISIONS.md). Fases 1/2: 206 testes OK em Python 3.14.6/psutil 7.2.2 por `.venv/Scripts/python.exe -B -m unittest discover -s tests` (10,542 s). Sintaxe 3.12 dos 18 arquivos Python conferida; runtime 3.12 ainda não executado. Encerramentos reais e fases posteriores continuam pendentes.
 
+## Evidência de bandeja e instância — 2026-10-11
+
+- Suíte final fora do sandbox: `.venv/Scripts/python.exe -B -m unittest discover -s tests`, **503 descobertos, 502 aprovados e um ignorado**, 30,474 s. Python 3.14.6/Windows 10 build 19045; psutil 7.2.2, CustomTkinter 6.0.0, pystray 0.19.5 e Pillow 12.3.0. Skip conhecido: symlink/WinError 1314.
+- `tests/test_instance_guard.py`: 33 testes de lifecycle, aliases, concorrência, ctypes/last-error/HANDLE e quatro mutexes reais. `tests/test_instance_guard_integration.py`: seis subprocessos reais, incluindo recuperação após saída abrupta. `tests/test_tray_commands.py`: 13 testes de mailbox, coalescência e corridas. Fixtures UUID e bytes de configuração preservados.
+- `tests/test_windows_tray.py`: 14 testes, incluindo startup/stop concorrentes, callbacks tardios, falhas de fábrica/threads, setup interrompido antes de ready, BOOL ADD false sem ready e recriação após Explorer via API falsa. Smoke real passou com ADD aceito, ready/stop e ambas as threads encerradas; não abre menu nem inicia motor. No desktop isolado do sandbox, o Shell recusou ADD: falha explícita, cleanup completo, sem skip. O smoke precisa de desktop Windows que aceite o ícone.
+- GUI atual: 41 fluxos simulados, 13 mainGUI e dez smoke tests CustomTkinter reais com motor/bandeja falsos. Cobrem ocultar somente após ready, timeout de 10 s/erro/restauração, cancelamento preservando execução e saída esperando ambos os workers. after info vazio e bgerrors assertados vazios; nenhum wait/join em callback.
+- Entrada real `main.py --gui` recusou guarda concorrente da mesma configuração com retorno 1, sem criar janela/motor nem alterar JSON. Testes não encerram aplicativos do usuário; o aceite adicional de processos dedicados está descrito abaixo.
+- Sintaxe Python 3.12/UTF-8 validada nos 49 arquivos Python, links locais e diff conferidos. Runtime Python 3.12, menu por interação, visual/DPI e reinício real do Explorer não executados. Nova tentativa de captura falhou duas vezes; smoke nativo não substitui inspeção visual.
+- APIs, implementação dependente de internals pystray e limites em [TRAY_CONTRACT.md](TRAY_CONTRACT.md).
+
 ## Evidência do controle gráfico — 2026-10-11
+
+Aceite nativo adicional na retomada: Python 3.14.6, Windows 10 build 19045,
+ProcessController e adaptador psutil padrão, JSON isolado. Duas instâncias
+descartáveis de uma cópia de `System32/ping.exe` com nome UUID no workspace,
+somente localhost, launcher já encerrado antes do scan e somente esse nome
+na lista de bloqueio (sem pastas/cmdline). Dentro da janela, alvo encerrou com
+evento confirmado; fora dela permaneceu vivo/sem eventos. Salvar agenda ativa
+e solicitar stop antes do próximo ciclo preservou o segundo alvo. Cleanup
+conferiu PID/create_time/exe e removeu apenas fixtures. Nenhum aplicativo do
+usuário ou hosts alterado. Esse ensaio não comprova jogos, Windows 11, GUI
+Iniciar por interação, catálogo universal ou todas as condições de timing.
+
+Captura visual novamente tentada pelo Computer Use com janela visível e JSON
+isolado, regras vazias/motor parado. Duas tentativas com reseleção falharam em
+`window capture timed out: timed out waiting on channel`. Sem interação visual;
+execução QA encerrada pelo caminho exclusivo da fixture.
 
 - Suíte completa no `.venv`: **426 descobertos, 425 aprovados e 1 ignorado**,
   37,077 s, Python 3.14.6/Windows, psutil 7.2.2 e CustomTkinter 6.0.0. Skip:

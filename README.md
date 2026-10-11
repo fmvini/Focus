@@ -1,6 +1,6 @@
 # Focus Blocker
 
-Aplicativo em desenvolvimento para Windows 10/11. Configuração JSON com editores de terminal e gráfico, avaliação de horários e bloqueador de processos com controle pela janela ou CLI. Sites, avisos/pausa, bandeja, estatísticas e instalador continuam nas próximas fases. Widgets nativos foram testados; inspeção visual, DPI e encerramentos reais ainda exigem aceite dedicado.
+Aplicativo em desenvolvimento para Windows 10/11. Configuração JSON com editores de terminal e gráfico, avaliação de horários, bloqueador de processos e bandeja com controle pela janela. Sites, avisos/pausa, estatísticas e instalador continuam nas próximas fases. Widgets nativos foram testados; inspeção visual/DPI ainda exige aceite dedicado.
 
 ## Preparar e executar
 
@@ -54,7 +54,11 @@ Em **Horários**, **Duplicar** copia uma janela para ajustar outra faixa rapidam
 
 `--gui` combina somente com `--config` e abre com o motor parado. **Iniciar** exige um rascunho sem alterações pendentes e confirmação: aplicativos elegíveis podem ser encerrados sem salvar seu estado. O motor lê o JSON salvo a cada ciclo; edições externas também são observadas. **Parar** impede novas ações, aguarda a chamada em andamento e não reabre aplicativos. Ao fechar, a janela aguarda seu motor terminar; cancelar a saída mantém a execução.
 
-O cabeçalho mostra o estado do motor, a última avaliação da agenda, o último ciclo e encerramentos confirmados, pendências e falhas. Esses dados ficam separados da agenda carregada pelo editor e da prévia do rascunho. JSON inválido/ausente ou erro global interrompe novas ações; corrija a causa e clique em Iniciar novamente quando o worker anterior terminar. Um bloqueador CLI iniciado separadamente continua independente da janela. Sites, pausa, bandeja e estatísticas não fazem parte desta unidade. Ver [contrato do controle gráfico](docs/PROCESS_GUI_CONTRACT.md).
+O cabeçalho mostra o estado do motor, a última avaliação da agenda, o último ciclo e encerramentos confirmados, pendências e falhas. Esses dados ficam separados da agenda carregada pelo editor e da prévia do rascunho. JSON inválido/ausente ou erro global interrompe novas ações; corrija a causa e clique em Iniciar novamente quando o worker anterior terminar. Um bloqueador CLI iniciado separadamente continua independente da janela. Sites, pausa e estatísticas não fazem parte desta unidade. Ver [contrato do controle gráfico](docs/PROCESS_GUI_CONTRACT.md).
+
+**Enviar à bandeja** oculta a janela após preparar o ícone, mantendo o rascunho e o motor. O menu oferece **Mostrar Focus**, **Parar motor** e **Sair**; iniciar continua exigindo confirmação na janela. Sair restaura a janela para resolver alterações pendentes; cancelar mantém a execução. Fechar pelo X continua saindo, com parada ordenada. Se a bandeja falhar, a janela permanece visível ou é restaurada.
+
+Uma segunda GUI para o mesmo caminho de configuração informa que já existe uma instância, sem iniciar outro motor. A guarda vale por sessão Windows e caminho resolvido; não coordena CLI, hardlinks ou sessões diferentes. Não há ativação automática da primeira janela. Ver [contrato da bandeja e instância](docs/TRAY_CONTRACT.md).
 
 ### Editor de terminal
 
@@ -66,7 +70,7 @@ O editor combina somente com `--config` e não inicia bloqueadores. Um `--watch 
 
 ## Aplicar bloqueio de processos
 
-Escolha horários e listas por um dos editores ou pelo JSON antes de executar. Use Iniciar na janela ou o comando abaixo. Os campos opcionais `block_exes`, `block_folders`, `safelist_exes` e `block_cmdline` são listas; quando ausentes, ficam vazios. Bandeja continua pendente. Exemplo de regra conjunta, para adicionar ao objeto de configuração somente se você quiser bloquear Minecraft Java:
+Escolha horários e listas por um dos editores ou pelo JSON antes de executar. Use Iniciar na janela ou o comando abaixo. Os campos opcionais `block_exes`, `block_folders`, `safelist_exes` e `block_cmdline` são listas; quando ausentes, ficam vazios. Exemplo de regra conjunta, para adicionar ao objeto de configuração somente se você quiser bloquear Minecraft Java:
 
 ```json
 "block_cmdline": [{"executable": "javaw.exe", "contains": ".minecraft"}]
@@ -92,4 +96,4 @@ Somente saída confirmada após solicitação aceita gera evento de tentativa; p
 
 Testes usam relógios/adaptadores controlados e diretórios isolados; não alteram hosts nem encerram aplicativos do usuário. Ver [documentação de desenvolvimento](docs/README.md), [contratos da fase 1](docs/PHASE1_CONTRACT.md), [fase 2](docs/PHASE2_CONTRACT.md) e [registro de desenvolvimento](docs/DEVELOPMENT_LOG.md).
 
-Os oito smoke tests com widgets nativos são executados quando CustomTkinter está instalado, com janelas ocultas e controlador simulado. Cobrem formulários, busca, importação/exportação, início/parada e limpeza de callbacks. Sem essa dependência, são marcados como ignorados. As dependências foram instaladas e os oito testes passaram neste ambiente; a captura da janela de QA falhou por timeout. A inspeção visual e de DPI deve ser feita abrindo `--gui` no Windows, incluindo a rolagem em 880×660.
+Os dez smoke tests com widgets nativos são executados quando CustomTkinter está instalado, com janelas ocultas e controlador/bandeja simulados. Cobrem formulários, busca, importação/exportação, início/parada, retorno da bandeja e limpeza de callbacks. Sem essa dependência, são marcados como ignorados. A suíte final no Windows teve 503 testes: 502 aprovados e um skip de symlink por permissão. O smoke de ícone real passou no desktop fora do sandbox; se o Shell recusar NIM_ADD, o teste falha explicitamente. Ver [evidências e limites](docs/TEST_PLAN.md). A captura da janela de QA falhou por timeout; inspeção visual e de DPI permanece pendente, incluindo a rolagem em 880×660.

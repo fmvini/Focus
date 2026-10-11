@@ -4,16 +4,42 @@ from datetime import datetime, timedelta
 from dataclasses import replace
 from pathlib import Path
 import sys
+from time import monotonic
 
 from core.config import ConfigError
 from core.config_repository import ConfigConflictError
 from core.config_session import ConfigSession
 from core.agenda_preview import week_preview
 from core.process_controller import ProcessController
+from core.instance_guard import InstanceGuard, InstanceGuardError
 from ui.runtime_presenter import format_runtime
+from ui.tray_commands import TrayMailbox
+from ui.windows_tray import WindowsTray
 
 
 def run_config_gui(path: str | Path) -> int:
+    guard = InstanceGuard(path)
+    result = 1
+    try:
+        try:
+            acquired = guard.acquire()
+        except InstanceGuardError as exc:
+            print(f"Erro ao adquirir guarda da interface: {exc}", file=sys.stderr)
+        else:
+            if acquired:
+                result = _run_guarded_config_gui(path)
+            else:
+                print("Erro: já existe uma interface Focus para este arquivo de configuração.", file=sys.stderr)
+    finally:
+        try:
+            guard.release()
+        except InstanceGuardError as exc:
+            print(f"Erro ao liberar guarda da interface: {exc}", file=sys.stderr)
+            result = 1
+    return result
+
+
+def _run_guarded_config_gui(path: str | Path) -> int:
     """Importação gráfica opcional: os demais modos funcionam sem Tk/CTk."""
     try:
         import customtkinter as ctk
@@ -39,27 +65,37 @@ def run_config_gui(path: str | Path) -> int:
         return 1
 
     controller = ProcessController(session.path)
+    mailbox = TrayMailbox()
+    tray = WindowsTray(mailbox)
     app = None
     try:
         ctk.set_appearance_mode("light")
         ctk.set_default_color_theme("blue")
-        app = _build_app(ctk, tk, filedialog, messagebox, session, controller=controller)
+        app = _build_app(ctk, tk, filedialog, messagebox, session, controller=controller,
+                         tray=tray, mailbox=mailbox)
         app.mainloop()
         return 0
     except tk.TclError as exc:
         print(f"Erro ao iniciar interface gráfica: {exc}", file=sys.stderr)
         return 1
     finally:
+        mailbox.close()
         controller.stop()
-        controller.wait()
-        if app is not None:
-            app.finish_close()
+        tray.stop()
+        try:
+            controller.wait()
+        finally:
+            tray.wait()
+            if app is not None:
+                app.finish_close()
 
 
-def _build_app(ctk, tk, filedialog, messagebox, session, controller=None):
+def _build_app(ctk, tk, filedialog, messagebox, session, controller=None, tray=None, mailbox=None):
     """Constrói widgets somente quando a GUI é solicitada."""
     accent = "#167D77"
     controller = ProcessController(session.path) if controller is None else controller
+    mailbox = TrayMailbox() if mailbox is None else mailbox
+    tray = WindowsTray(mailbox) if tray is None else tray
     muted = "#52656A"
     days = ("Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom")
     rule_fields = {
@@ -91,6 +127,11 @@ def _build_app(ctk, tk, filedialog, messagebox, session, controller=None):
             self.closed = False
             self.controller = controller
             self.stop_requested = False
+            self.tray = tray
+            self.mailbox = mailbox
+            self.tray_pending = self.tray_ready = self.tray_hidden = False
+            self.tray_stopping = False
+            self.tray_deadline = None
             self.preview_anchor = datetime.now().date()
             self.protocol("WM_DELETE_WINDOW", self.close_editor)
 
@@ -223,7 +264,8 @@ def _build_app(ctk, tk, filedialog, messagebox, session, controller=None):
                 "o arquivo, o Focus informa o conflito antes de salvar.\n\n"
                 "Iniciar exige confirmação e usa o JSON salvo. O motor pode ler alterações salvas no próximo ciclo. "
                 "Parar impede novas ações; uma chamada já iniciada pode terminar e aplicativos não são reabertos. "
-                "Fechar aguarda a parada deste motor; uma CLI separada continua independente.\n\n"
+                "Enviar à bandeja mantém motor e rascunho. O X continua saindo; fechar aguarda motor e bandeja. "
+                "Uma CLI separada continua independente.\n\n"
                 "Importar JSON substitui apenas o rascunho, após confirmação. Clique em Salvar para aplicar ao arquivo ativo.\n\n"
                 "Exportar JSON grava o rascunho em um destino novo. Não salva a configuração ativa."
             )).grid(row=2, column=0, sticky="ew", padx=18, pady=18)
@@ -237,12 +279,15 @@ def _build_app(ctk, tk, filedialog, messagebox, session, controller=None):
             footer = ctk.CTkFrame(self, fg_color="transparent")
             footer.grid(row=3, column=0, sticky="ew", padx=28, pady=16)
             footer.grid_columnconfigure(0, weight=1)
-            self.feedback = ctk.CTkLabel(footer, text="", anchor="w", justify="left", wraplength=560, text_color=muted)
+            self.feedback = ctk.CTkLabel(footer, text="", anchor="w", justify="left", wraplength=350, text_color=muted)
             self.feedback.grid(row=0, column=0, sticky="ew", padx=(0, 12))
+            self.tray_button = ctk.CTkButton(footer, text="Enviar à bandeja", width=145, fg_color=accent,
+                                             command=self.send_to_tray)
+            self.tray_button.grid(row=0, column=1, padx=(0, 8))
             ctk.CTkButton(footer, text="Recarregar", width=110, fg_color="#E0E8E6", text_color="#263D3A",
-                          hover_color="#CEDAD7", command=self.reload_config).grid(row=0, column=1, padx=(0, 8))
+                          hover_color="#CEDAD7", command=self.reload_config).grid(row=0, column=2, padx=(0, 8))
             ctk.CTkButton(footer, text="Salvar", width=110, fg_color=accent,
-                          command=self.save_config).grid(row=0, column=2)
+                          command=self.save_config).grid(row=0, column=3)
             self.bind("<Control-s>", lambda _: self.save_config() if self.modal is None else None)
             self.bind("<Control-r>", lambda _: self.reload_config() if self.modal is None else None)
             self.render()
@@ -263,6 +308,73 @@ def _build_app(ctk, tk, filedialog, messagebox, session, controller=None):
         def select_tab(self, name):
             if not self.closing and not self.closed:
                 self.tabs.set(name)
+
+        def restore_window(self):
+            self.tray_pending = self.tray_hidden = False
+            self.tray_deadline = None
+            self.deiconify()
+            self.lift()
+            if self.modal is not None:
+                self.modal.deiconify()
+                self.modal.lift()
+
+        def send_to_tray(self):
+            if self.closing or self.closed or self.modal is not None or self.tray_pending:
+                return
+            if self.tray_stopping and tray.is_alive():
+                self.notify("Aguarde a bandeja terminar antes de tentar novamente.", error=True)
+                return
+            self.tray_stopping = False
+            self.tray_pending = True
+            self.tray_deadline = monotonic() + 10.0
+            if self.tray_ready and tray.is_alive():
+                self.hide_to_tray()
+            else:
+                self.tray_ready = False
+                tray.start()
+                self.notify("Preparando a bandeja. A janela permanece visível até o ícone estar pronto.")
+
+        def hide_to_tray(self):
+            if not self.tray_pending or not self.tray_ready or self.tray_stopping or self.closing:
+                return
+            if self.modal is not None:
+                self.restore_window()
+                self.notify("Feche o formulário antes de enviar à bandeja.")
+                return
+            self.withdraw()
+            self.tray_hidden = True
+            self.tray_pending = False
+            self.tray_deadline = None
+
+        def tray_error(self, detail):
+            self.tray_ready = False
+            self.tray_stopping = True
+            tray.stop()
+            self.restore_window()
+            self.notify(f"Bandeja indisponível: {detail}", error=True)
+
+        def drain_tray(self):
+            for command in mailbox.drain():
+                if self.closing or self.closed:
+                    break
+                if command.action == "ready":
+                    if not self.tray_stopping and tray.is_alive():
+                        self.tray_ready = True
+                        self.hide_to_tray()
+                elif command.action == "error":
+                    self.tray_error(command.detail or "falha ao preparar o ícone")
+                elif command.action == "show":
+                    self.restore_window()
+                elif command.action == "stop":
+                    self.stop_runtime()
+                elif command.action == "close":
+                    self.close_editor()
+            if self.closing or self.closed:
+                return
+            if self.tray_pending and self.tray_deadline is not None and monotonic() >= self.tray_deadline:
+                self.tray_error("O ícone não ficou pronto em 10 segundos. Tente novamente após a parada.")
+            elif self.tray_ready and not tray.is_alive():
+                self.tray_error("A bandeja encerrou inesperadamente.")
 
         def update_runtime(self):
             snapshot = controller.snapshot()
@@ -672,6 +784,9 @@ def _build_app(ctk, tk, filedialog, messagebox, session, controller=None):
         def refresh_status(self, *, schedule=True):
             if self.closing or self.closed:
                 return
+            self.drain_tray()
+            if self.closing or self.closed:
+                return
             status = session.agenda_status(datetime.now())
             self.agenda_label.configure(text="Agenda carregada: dentro da janela" if status.active else "Agenda carregada: fora da janela")
             self.next_label.configure(text="Próximo início: " + (status.next_start.strftime("%d/%m/%Y às %H:%M") if status.next_start else "nenhum horário ativo"))
@@ -686,19 +801,22 @@ def _build_app(ctk, tk, filedialog, messagebox, session, controller=None):
         def close_editor(self):
             if self.closing or self.closed:
                 return
+            self.restore_window()
             if session.dirty:
                 answer = messagebox.askyesnocancel("Alterações não salvas", "Salvar as alterações antes de sair?", parent=self)
                 if answer is None or (answer and not self.save_config()):
                     return
             self.closing = True
             self.stop_requested = True
+            mailbox.close()
             controller.stop()
+            tray.stop()
             if self.status_timer is not None:
                 self.after_cancel(self.status_timer)
                 self.status_timer = None
             self.dismiss_modal()
             self.disable_actions(self)
-            self.notify("Fechando: aguardando o motor parar…")
+            self.notify("Fechando: aguardando motor e bandeja pararem…")
             self.poll_close()
 
         def disable_actions(self, frame):
@@ -709,7 +827,7 @@ def _build_app(ctk, tk, filedialog, messagebox, session, controller=None):
 
         def poll_close(self):
             self.close_timer = None
-            if controller.is_alive():
+            if controller.is_alive() or tray.is_alive():
                 self.update_runtime()
                 self.close_timer = self.after(100, self.poll_close)
             else:
@@ -718,9 +836,10 @@ def _build_app(ctk, tk, filedialog, messagebox, session, controller=None):
         def finish_close(self):
             if self.closed:
                 return
-            if controller.is_alive():
+            if controller.is_alive() or tray.is_alive():
                 return
             self.closing = True
+            mailbox.close()
             for timer in (self.status_timer, self.close_timer):
                 if timer is not None:
                     self.after_cancel(timer)

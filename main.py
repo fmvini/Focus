@@ -53,6 +53,7 @@ def _parser() -> argparse.ArgumentParser:
             "--config; alterações ficam no rascunho até Salvar. "
             "--gui abre o editor gráfico com controle explícito de processos "
             "e também combina somente com --config; a janela inicia com o motor parado. "
+            "Enviar à bandeja é explícito; fechar a janela solicita saída ordenada. "
             "Códigos: 0 sucesso/Ctrl+C; 1 erro global/configuração/IO; "
             "2 argumentos inválidos. A criação inicial é exclusiva; falha "
             "durante a escrita pode deixar o arquivo novo incompleto."

@@ -30,7 +30,7 @@ A definição de eventos de pausa/tentativas deve ocorrer antes da fase 4, embor
 
 Enquanto Q-HOSTS-01–05 permanecem sem resposta, foi concluído o editor CLI independente de horários/processos conforme [CONFIG_EDITOR_CONTRACT.md](CONFIG_EDITOR_CONTRACT.md). Complementa as fases 1/2 sem depender de hosts, pausa ou medição de foco. Backend: rascunho validado; Banco: snapshots e conflitos; Frontend: `--edit-config`; Maestro: integração, docs e commit.
 
-Continuidade: editor gráfico `--gui` implementado conforme [GUI_EDITOR_CONTRACT.md](GUI_EDITOR_CONTRACT.md), reutilizando rascunho/repositório e acrescentando sessão com baseline/alterações pendentes. Em 2026-10-11, dependências foram instaladas e oito smoke tests nativos passaram; inspeção visual/DPI ainda pendente. Controle do bloqueador integrado conforme [PROCESS_GUI_CONTRACT.md](PROCESS_GUI_CONTRACT.md). Bandeja e edição dos campos futuros continuam na fase 5; a fase completa não está concluída.
+Continuidade: editor gráfico `--gui` implementado conforme [GUI_EDITOR_CONTRACT.md](GUI_EDITOR_CONTRACT.md), reutilizando rascunho/repositório e acrescentando sessão com baseline/alterações pendentes. Controle do bloqueador integrado conforme [PROCESS_GUI_CONTRACT.md](PROCESS_GUI_CONTRACT.md), seguido de bandeja explícita Mostrar/Parar/Sair e guarda gráfica conforme [TRAY_CONTRACT.md](TRAY_CONTRACT.md). Pausa, estados completos da bandeja e campos futuros continuam na fase 5; a fase completa não está concluída. Inspeção visual/DPI ainda pendente; smoke tests/resultados atuais no log.
 
 ## Dependências entre agentes
 
@@ -44,6 +44,10 @@ Unidade seguinte concluída: controle gráfico de processos. Backend manteve
 worker/snapshots/gates; Banco presenter puro e testes com JSON real; Frontend
 comandos/polling/saída e lifecycle de callbacks; Maestro contrato, integração,
 documentação e commit. Motor começa parado e não aplica rascunhos pendentes.
+
+Continuação bandeja/instância: Backend mantém guarda Windows de handles;
+Banco mantém mailbox limitada e ensaios entre subprocessos; Frontend adapta
+pystray e lifecycle Tk; Maestro dependências, revisão, aceites e commit.
 
 | Interface de trabalho | Alinhamento necessário antes de codificar |
 | --- | --- |
@@ -65,4 +69,4 @@ Maestro integra cada unidade; em trabalho compartilhado, evitar commits concorre
 
 ## Retomada
 
-Consultar `DEVELOPMENT_LOG.md` para resultados atuais. Próximo aceite: conferir `--gui` no Windows, incluindo DPI, rolagem em 880×660 e diagnóstico do motor; captura automatizada falhou por timeout apesar de a janela abrir. Executar bloqueio/parada com aplicativo descartável dedicado, nunca apps do usuário; ensaios reais e runtime Python 3.12 permanecem pendentes. Próxima evolução: contrato da bandeja/instância única e política de ocultar versus sair, preservando início explícito e saída ordenada. Para sites, ler `USER_ANSWERS.md` e fechar Q-HOSTS-01–05 antes dos comportamentos dependentes; validar primeiro com arquivos isolados. Para fase 6, fechar domínio ativo/lista de estudo Brave (D19); não atribuir foco a qualquer página.
+Consultar `DEVELOPMENT_LOG.md` para resultados atuais. Próximo aceite: conferir `--gui` e menu/retorno da bandeja no Windows, incluindo DPI, rolagem em 880×660 e diagnósticos; captura automatizada voltou a falhar por timeout. Encerramento real de alvo descartável e preservação fora da janela foram ensaiados, sem comprovar jogos reais, todas as versões Windows ou catálogo universal. Runtime Python 3.12 permanece pendente. Próxima evolução: contrato de avisos/pausa e perguntas complementares de D09/D10 antes de comportamentos dependentes; manter motor explicitamente iniciado e shutdown ordenado. Para sites, ler `USER_ANSWERS.md` e fechar Q-HOSTS-01–05; validar primeiro com arquivos isolados. Para fase 6, fechar domínio ativo/lista de estudo Brave (D19); não atribuir foco a qualquer página.

@@ -1,3 +1,35 @@
+## 2026-10-11 — Bandeja explícita e guarda da interface
+
+### Implementado
+- Botão Enviar à bandeja mantém rascunho/motor e só oculta após ready. Menu Mostrar Focus/Parar motor/Sair publica comandos para polling Tk; iniciar permanece confirmado na janela. X continua sair; cancelar saída preserva execução.
+- Guarda de uma GUI por caminho resolvido/normalizado na sessão Windows, mantida até finalizar motor/ícone/janela. Segunda abertura retorna erro sem criar outro motor. Mutex lazy, sem ownership/espera/arquivo-lock, com handle preservado para retry se fechamento falhar.
+- Caixa de até cinco ações coalescidas, thread-safe e frozen; fechamento descarta pendências/ignora callbacks tardios. Ícone lazy em worker, stop sinaliza Event sem bloquear Tk e shutdown aguarda os workers por polling/finally externo.
+- Dependências de bandeja fixadas/instaladas no `.venv`: pystray 0.19.5 e Pillow 12.3.0. Fonte oficial e limites em `docs/TRAY_CONTRACT.md`. Não há mudança de JSON/SQLite nem novas regras/defaults de bloqueio.
+
+### Arquivos principais alterados
+- `core/instance_guard.py`, `ui/tray_commands.py`, `ui/windows_tray.py`, `ui/config_gui.py`, `main.py`, `requirements.txt`.
+- `tests/test_instance_guard.py`, `tests/test_instance_guard_integration.py`, `tests/test_tray_commands.py`, `tests/test_windows_tray.py`, `tests/test_config_gui.py`, `tests/test_config_gui_main.py`, `tests/test_config_gui_native.py`.
+- `docs/TRAY_CONTRACT.md`, `README.md`, `docs/ARCHITECTURE_BACKEND.md`, `docs/DATA_MODEL.md`, `docs/DECISIONS.md`, `docs/DELIVERY_PLAN.md`, `docs/GUI_EDITOR_CONTRACT.md`, `docs/README.md`, `docs/REQUIREMENTS.md`, `docs/TEST_PLAN.md`, `docs/UI_FLOWS.md`, `docs/DEVELOPMENT_LOG.md`.
+
+### Decisões técnicas
+- Ocultar é explícito e não altera política do X. Startup lento/falha mantém/restaura janela; timeout da GUI impede esconder sem ready e retry aguarda worker antigo. Callback da bandeja não chama widgets nem controlador.
+- pystray pode bloquear em stop aguardando setup; adapter faz essa espera fora de Tk. Setup original pode ficar preso se run falhar antes de ready; adapter gerenciado acorda/aguarda sua thread também nesse caso. Versão fixada e fronteiras internas documentadas/testadas. Adapter verifica BOOL de Shell_NotifyIconW/NIM_ADD, ignorado pela biblioteca, antes de ready/ocultação; não prova que usuário viu ícone, que pode estar no overflow.
+- Mutex Local com SHA256 do path resolve/normcase, sem ReleaseMutex; não coordena CLI, hardlinks, sessões diferentes nem ativa primeira janela por IPC. Import/construção sem IO/workers/WinDLL/psutil/Tk/pystray.
+- Backend entregou guard/tests; Banco mailbox/integração real entre processos; Frontend adapter/GUI/lifecycle/tests; Maestro contrato, revisão, dependências, aceites e integração. Respostas em `docs/USER_ANSWERS.md` preservadas; hosts/pausa/foco não antecipados.
+
+### Estado atual
+- Suíte integrada final fora do sandbox: **503 testes descobertos, 502 aprovados e 1 ignorado**, 30,474 s em Python 3.14.6/Windows. Único skip: symlink/WinError 1314. Passaram dez smoke tests com widgets reais, o ícone real e mutexes entre processos; bgerrors/after de teardown conferidos. Bloqueadores injetados na suíte, sem encerramento de aplicativos do usuário.
+- Backend/Banco: 52 testes de guarda/mailbox. Frontend: 41 fluxos GUI simulados, 13 mainGUI, dez nativeGUI e 14 de bandeja incluindo o smoke real. Sintaxe Python 3.12/UTF-8 validada nos 49 arquivos Python; links locais e diff conferidos. Runtime executado permanece 3.14.6.
+- Entrada `main.py --gui` real em subprocesso recusou guarda concorrente da mesma fixture com retorno 1/mensagem explícita, sem criar janela/motor ou alterar JSON.
+- Smoke de ícone real revelou recusa NIM_ADD no desktop isolado do sandbox, sem ocultação/threads restantes. Execução fora do sandbox passou: NIM_ADD aceito, ready e stop completos em 0,306 s; sem abrir menu ou iniciar motor. A suíte final também passou nesse desktop Windows; a recusa no sandbox não é suprimida ou convertida em skip. Recriação após reinício do Explorer e fallback da janela testados com API nativa falsa; Explorer não foi reiniciado no aceite real.
+- Aceite ProcessController/psutil padrão em Windows 10 build 19045: encerramento confirmado de alvo UUID descartável, preservação fora de janela e stop antes do ciclo após salvar regra ativa. Somente cópias temporárias de ping.exe para localhost; fixtures/processos próprios removidos. Não comprova jogos reais ou cobertura Windows 11/catálogo universal.
+- Captura visual novamente falhou duas vezes com `window capture timed out: timed out waiting on channel`, após reseleção. Janela abriu com JSON isolado/alvos vazios e motor parado; nenhuma interação visual realizada. Execução/fixture de QA removidas. Visual/DPI/rolagem/menu por interação seguem pendentes; runtime Python 3.12 não disponível (somente 3.14).
+- Lotes anteriores nos commits locais `7ed71d4` e `3844ad1`; sem push. Unidade atual integrada e validada para commit local conjunto, sem declarar fase 5 completa ou MVP original.
+
+### Próximos passos
+- Conferir `--gui` e menu/retorno da bandeja em Windows, minsize 880×660, DPI, diagnóstico/rolagem e seletores/modal. Investigar helper de captura antes de retomar aceite visual automatizado; smoke nativo não substitui esse aceite.
+- Definir contrato de avisos/pausa e esclarecer detalhes de D09/D10 antes de comportamentos dependentes. Sites aguardam Q-HOSTS-01–05; medição de foco/Brave, SQLite, instalador/auto-start e instância elevada global permanecem etapas posteriores.
+
 ## 2026-10-11 — Controle gráfico do motor de processos
 
 ### Implementado
