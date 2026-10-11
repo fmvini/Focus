@@ -58,6 +58,7 @@ class NativeConfigGuiTests(unittest.TestCase):
                                         askyesnocancel=Mock(return_value=False), showerror=Mock())
         self.filedialog = SimpleNamespace(askdirectory=Mock(return_value=""),
                                           askopenfilename=Mock(return_value=""),
+                                          askopenfilenames=Mock(return_value=()),
                                           asksaveasfilename=Mock(return_value=""))
         self.ctk = ctk
         self.controller = FakeController(self.path)
@@ -160,6 +161,27 @@ class NativeConfigGuiTests(unittest.TestCase):
         self.assertEqual(self.background_errors, [])
         self.controller.wait.assert_not_called()
         self.tray.wait.assert_not_called()
+
+    def test_executable_selection_with_real_widgets_is_draft_only_then_saves(self):
+        self.app.geometry("880x660")
+        self.app.tabs.set("Jogos / Apps")
+        self.app.update_idletasks()
+        original = self.path.read_bytes()
+        self.filedialog.askopenfilenames.return_value = (r"C:\Games\game.exe", r"D:\Games\GAME.EXE")
+        self.button(self.app, "Selecionar .exe…").invoke()
+        self.assertEqual(self.session.draft.config.block_exes, ("game.exe",))
+        self.assertEqual(self.path.read_bytes(), original)
+        self.assertEqual(self.controller.starts, 0)
+        self.app.rule_category.set("Linha de comando")
+        self.app.render_rules()
+        self.assertEqual(self.app.executable_picker.cget("state"), "disabled")
+        self.app.rule_category.set("Proteção adicional")
+        self.app.render_rules()
+        self.filedialog.askopenfilenames.return_value = (r"C:\Tools\Code.exe",)
+        self.button(self.app, "Selecionar .exe…").invoke()
+        self.button(self.app, "Salvar").invoke()
+        self.assertEqual(load_config(self.path).safelist_exes, ("Code.exe",))
+        self.assertEqual(load_config(self.path).block_exes, ("game.exe",))
 
     def test_modal_validation_and_window_edit_roundtrip(self):
         self.button(self.app, "Adicionar horário").invoke()

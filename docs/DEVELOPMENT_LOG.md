@@ -1,3 +1,27 @@
+## 2026-10-11 — Seleção múltipla de executáveis
+
+### Implementado
+- Selecionar .exe nas categorias Executáveis e Proteção adicional adiciona vários nomes ao rascunho, sem digitação manual. Regra por nome em qualquer pasta é explicada antes da escolha; caminhos não são persistidos.
+- Inclusão atômica validada, ordem da seleção e dedup casefold de novas regras, preservando regras/extras/duplicatas anteriores. Cancelamento não altera feedback/rascunho; falha preserva lote anterior. Salvar continua explícito, sem executar arquivos ou iniciar motor.
+- Guardas de modal/reentrância/saída, categoria capturada antes do diálogo e Iniciar indisponível durante seletor. Maestro implementou diretamente após confirmar os três agentes parados por limite de uso.
+
+### Arquivos principais alterados
+- `core/config_editor.py`, `ui/config_gui.py`, `tests/test_executable_selection.py`, `tests/test_config_gui.py`, `tests/test_config_gui_native.py`.
+- `README.md`, `docs/GUI_EDITOR_CONTRACT.md`, `docs/TEST_PLAN.md`, `docs/DEVELOPMENT_LOG.md`.
+
+### Decisões técnicas
+- Reutiliza matcher e schema por nome existentes; não cria regra por caminho do arquivo. `ConfigDraft.add_executable_paths(field, paths) -> int` aceita lote de str/PathLike textuais, usa basename Windows e valida completamente antes da publicação. Sem stat, leitura, resolução, descoberta ou execução.
+- Seletor opera na thread Tk; processamento de nomes é somente em memória. Fechamento durante diálogo descarta retorno tardio sem acessar widgets destruídos; nenhuma espera de worker em callback.
+
+### Estado atual
+- Suíte completa fora do sandbox: **564 descobertos, 563 aprovados e 1 skip conhecido**, 39,227 s em Python 3.14.6/Windows. Treze nativeGUI e ícone real passaram; after vazio e bgerrors vazios no teardown. Seleção relevante anterior: 90 testes aprovados, 17,429 s.
+- Sete novos testes core de lote/pureza/atomicidade e cinco fluxos GUI: cancelamento, categorias, falhas, reentrância/start/saída e categoria capturada; um nativeGUI em 880×660 com diálogo simulado/JSON real. AST Python 3.12/UTF-8 nos 53 arquivos, links locais e diff conferidos. Unidade integrada para commit local conjunto, sem push.
+- Nenhum hosts, executável ou processo do usuário modificado/executado. Interação com o seletor nativo por usuário não foi automatizada; widgets foram testados com retorno do diálogo simulado.
+- Visual/DPI e runtime Python 3.12 permanecem pendentes. Base anterior `471a92b`; nenhum novo default, dependência ou decisão de sites/pausa/avisos.
+
+### Próximos passos
+- Conferir seletor nativo por interação/visual quando captura estiver disponível. Avisos/pausa aguardam Q-PAUSE/Q-WARN; sites Q-HOSTS em USER_ANSWERS.
+
 ## 2026-10-11 — Primeira configuração gráfica
 
 ### Implementado

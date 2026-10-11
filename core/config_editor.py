@@ -1,6 +1,8 @@
 """Rascunho de configuração em memória, sem gravação ou aplicação de regras."""
 
 from copy import deepcopy
+import ntpath
+import os
 
 from core.config import ConfigError, config_to_dict, parse_config
 from core.models import AppConfig
@@ -78,6 +80,38 @@ class ConfigDraft:
         candidate = config_to_dict(self._config)
         candidate[field].append(value)
         self._accept(candidate)
+
+    def add_executable_paths(self, field: str, paths) -> int:
+        """Inclui nomes de arquivos selecionados em um lote validado, sem IO.
+
+        Regras por nome abrangem qualquer instalação com o mesmo executável.
+        Não lê, resolve ou executa os arquivos; caminhos não são persistidos.
+        Preserva duplicatas anteriores e evita novas equivalentes por casefold.
+        """
+        field = self._field(field)
+        if field not in ("block_exes", "safelist_exes"):
+            raise ConfigError("seleção de executáveis: escolha Executáveis ou Proteção adicional")
+        if isinstance(paths, (str, bytes, bytearray, os.PathLike)):
+            raise ConfigError("seleção de executáveis: esperada uma coleção de caminhos")
+        candidate = config_to_dict(self._config)
+        known = {name.casefold() for name in candidate[field]}
+        added = 0
+        try:
+            for path in paths:
+                selected = os.fspath(path)
+                if not isinstance(selected, str) or "\x00" in selected:
+                    raise ConfigError("seleção de executáveis: esperado caminho textual sem NUL")
+                name = ntpath.basename(selected)
+                if name.casefold() not in known:
+                    candidate[field].append(name)
+                    known.add(name.casefold())
+                    added += 1
+        except ConfigError:
+            raise
+        except Exception as exc:
+            raise ConfigError("Não foi possível ler a seleção de executáveis") from exc
+        self._accept(candidate)
+        return added
 
     def update_rule(self, field: str, index, value) -> None:
         field = self._field(field)

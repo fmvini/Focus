@@ -201,17 +201,105 @@ class ConfigGuiFlowTests(unittest.TestCase):
                                         askyesnocancel=Mock(return_value=None), showerror=Mock())
         self.filedialog = SimpleNamespace(askdirectory=Mock(return_value="C:\\Games"),
                                           askopenfilename=Mock(return_value=""),
+                                          askopenfilenames=Mock(return_value=()),
                                           asksaveasfilename=Mock(return_value=""))
         self.controller = FakeController(self.path)
         self.mailbox = TrayMailbox()
         self.tray = FakeTray()
-        self.app = _build_app(fake_ctk(), SimpleNamespace(IntVar=Variable), self.filedialog,
+        self.tk = SimpleNamespace(IntVar=Variable, TclError=type("DialogError", (Exception,), {}))
+        self.app = _build_app(fake_ctk(), self.tk, self.filedialog,
                               self.messages, self.session, controller=self.controller,
                               tray=self.tray, mailbox=self.mailbox)
 
     def entries(self):
         return [widget for widget in descendants(self.app.modal)
                 if widget.__class__.__name__ == "CTkEntry"]
+
+    def test_executable_picker_batch_draft_only_dedup_and_save(self):
+        original = self.path.read_bytes()
+        self.filedialog.askopenfilenames.return_value = (
+            r"C:\Games\Game.exe", r"D:\Another\GAME.EXE", r"C:\Games\Second.exe",
+        )
+        button(self.app, "Selecionar .exe…").invoke()
+        self.assertEqual(self.session.draft.config.block_exes, ("Game.exe", "Second.exe"))
+        self.assertEqual(self.path.read_bytes(), original)
+        self.assertTrue(self.session.dirty)
+        self.assertIn("2 executáveis adicionados", self.app.feedback.options["text"])
+        self.assertIn("qualquer pasta", self.app.rule_description.options["text"])
+        self.assertEqual(self.session.draft.config.extra, {"future": {"keep": "ação"}})
+        self.assertEqual(self.controller.starts, 0)
+        button(self.app, "Salvar").invoke()
+        self.assertEqual(load_config(self.path).block_exes, ("Game.exe", "Second.exe"))
+
+    def test_executable_picker_category_cancel_and_existing_names(self):
+        self.app.notify("previous feedback")
+        before = self.session.draft.config
+        self.app.select_executables()
+        self.assertEqual(self.session.draft.config, before)
+        self.assertEqual(self.app.feedback.options["text"], "previous feedback")
+        self.app.rule_category.set("Proteção adicional")
+        self.app.render_rules()
+        self.filedialog.askopenfilenames.return_value = (r"C:\Tools\Code.exe",)
+        self.app.select_executables()
+        self.assertEqual(self.session.draft.config.safelist_exes, ("Code.exe",))
+        self.assertEqual(self.session.draft.config.block_exes, ())
+        self.assertIn("proteção adicional", self.app.feedback.options["text"])
+        self.filedialog.askopenfilenames.return_value = (r"D:\Tools\CODE.EXE",)
+        self.app.select_executables()
+        self.assertEqual(self.session.draft.config.safelist_exes, ("Code.exe",))
+        self.assertIn("já estão", self.app.feedback.options["text"])
+        for category in ("Pastas", "Linha de comando"):
+            self.app.rule_category.set(category)
+            self.app.render_rules()
+            self.assertEqual(self.app.executable_picker.options["state"], "disabled")
+            self.filedialog.askopenfilenames.reset_mock()
+            self.app.select_executables()
+            self.filedialog.askopenfilenames.assert_not_called()
+
+    def test_executable_picker_invalid_batch_and_dialog_failure_preserve_draft(self):
+        self.session.draft.add_rule("block_exes", "keep.exe")
+        before = self.session.draft.config
+        self.filedialog.askopenfilenames.return_value = (r"C:\Games\valid.exe", r"C:\Games\invalid.txt")
+        self.app.select_executables()
+        self.assertEqual(self.session.draft.config, before)
+        self.assertIn("Rascunho preservado", self.app.feedback.options["text"])
+        self.filedialog.askopenfilenames.side_effect = self.tk.TclError("dialog unavailable")
+        self.app.select_executables()
+        self.assertEqual(self.session.draft.config, before)
+        self.assertFalse(self.app.selecting_executables)
+        self.assertEqual(self.app.executable_picker.options["state"], "normal")
+        self.assertIn("Não foi possível abrir o seletor", self.app.feedback.options["text"])
+
+    def test_executable_picker_modal_reentrancy_and_close_guards(self):
+        button(self.app, "Adicionar regra").invoke()
+        self.app.select_executables()
+        self.filedialog.askopenfilenames.assert_not_called()
+        button(self.app.modal, "Cancelar").invoke()
+        def nested_dialog(**kwargs):
+            self.assertTrue(self.app.selecting_executables)
+            self.assertEqual(self.app.start_button.options["state"], "disabled")
+            self.app.start_runtime()
+            self.app.select_executables()
+            self.assertEqual(self.controller.starts, 0)
+            self.messages.askyesnocancel.return_value = False
+            self.app.close_editor()
+            return (r"C:\Games\late.exe",)
+        self.filedialog.askopenfilenames.side_effect = nested_dialog
+        self.app.select_executables()
+        self.assertEqual(self.filedialog.askopenfilenames.call_count, 1)
+        self.assertTrue(self.app.closed)
+        self.assertFalse(self.app.selecting_executables)
+        self.assertEqual(self.session.draft.config.block_exes, ())
+
+    def test_executable_picker_keeps_category_captured_before_nested_events(self):
+        def nested_dialog(**kwargs):
+            self.app.rule_category.set("Proteção adicional")
+            return (r"C:\Games\chosen.exe",)
+        self.filedialog.askopenfilenames.side_effect = nested_dialog
+        self.app.select_executables()
+        self.assertEqual(self.session.draft.config.block_exes, ("chosen.exe",))
+        self.assertEqual(self.session.draft.config.safelist_exes, ())
+        self.assertIn("rascunho de bloqueio", self.app.feedback.options["text"])
 
     def add_window(self, start="22:00", end="02:00"):
         button(self.app, "Adicionar horário").invoke()

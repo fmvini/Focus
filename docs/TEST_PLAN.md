@@ -2,6 +2,14 @@
 
 Fonte: [escopo](Focus%20Blocker_%20escopo%20do%20projeto.md), [requisitos](REQUIREMENTS.md) e [decisões](DECISIONS.md). Fases 1/2: 206 testes OK em Python 3.14.6/psutil 7.2.2 por `.venv/Scripts/python.exe -B -m unittest discover -s tests` (10,542 s). Sintaxe 3.12 dos 18 arquivos Python conferida; runtime 3.12 ainda não executado. Encerramentos reais e fases posteriores continuam pendentes.
 
+## Evidência da seleção de executáveis — 2026-10-11
+
+- Suíte completa escalada no desktop Windows: **564 descobertos, 563 aprovados e um skip** symlink/WinError 1314, 39,227 s, Python 3.14.6. Treze nativeGUI e ícone real passaram.
+- `tests/test_executable_selection.py`: sete testes de lote/ordem, extras/regras/duplicatas preservados, dedup casefold entre pastas, proteção independente, inválidos e campos/tipos rejeitados atomicamente, iterable one-shot/falha com causa e ausência de IO/resolução/execução.
+- Cinco fluxos novos em `tests/test_config_gui.py`: multisseleção só draft até Save, cancelamento sem alteração de feedback, categorias suportadas/duplicatas, lote inválido/erro de diálogo, modal/reentrância/Iniciar/saída e categoria capturada antes de eventos internos.
+- NativeGUI adicional usa CTk real em 880×660, retorno de diálogo simulado e sessão/JSON reais: inclusão sem gravação, botão desabilitado em cmdline, proteção adicional e Save. Teardown after vazio/bgerrors vazios. Interação real com o diálogo do Windows e visual/DPI não automatizados.
+- Sintaxe Python 3.12/UTF-8 nos 53 arquivos Python, links locais e diff conferidos. Runtime 3.12 pendente. Nenhum executável selecionado foi lido ou executado, nenhum processo/hosts do usuário afetado.
+
 ## Evidência da primeira configuração — 2026-10-11
 
 - Suíte completa fora do sandbox: `.venv/Scripts/python.exe -B -m unittest discover -s tests`, **551 descobertos, 550 aprovados e um skip conhecido** de symlink/WinError 1314, 38,140 s. Python 3.14.6/Windows 10; doze nativeGUI e smoke de bandeja real passaram.

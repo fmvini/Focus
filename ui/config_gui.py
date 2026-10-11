@@ -110,9 +110,11 @@ def _build_app(ctk, tk, filedialog, messagebox, session, controller=None, tray=N
         "Linha de comando": "block_cmdline",
     }
     descriptions = {
-        "block_exes": "Nomes completos, como jogo.exe. A comparação ignora maiúsculas e minúsculas.",
+        "block_exes": "Nomes completos, como jogo.exe. A comparação ignora maiúsculas e minúsculas. "
+                      "Selecionar arquivos adiciona apenas nomes, válidos em qualquer pasta.",
         "block_folders": "Pastas absolutas do Windows. As regras incluem subpastas.",
-        "safelist_exes": "Aplicativos que devem ser preservados. As proteções obrigatórias continuam valendo.",
+        "safelist_exes": "Aplicativos que devem ser preservados, por nome em qualquer pasta. "
+                         "As proteções obrigatórias continuam valendo.",
         "block_cmdline": "O executável e o trecho literal precisam corresponder juntos, dentro de um argumento.",
     }
 
@@ -132,6 +134,7 @@ def _build_app(ctk, tk, filedialog, messagebox, session, controller=None, tray=N
             self.closed = False
             self.controller = controller
             self.stop_requested = False
+            self.selecting_executables = False
             self.tray = tray
             self.mailbox = mailbox
             self.tray_pending = self.tray_ready = self.tray_hidden = False
@@ -246,8 +249,13 @@ def _build_app(ctk, tk, filedialog, messagebox, session, controller=None, tray=N
             ctk.CTkOptionMenu(processes, variable=self.rule_category, values=list(rule_fields),
                               width=220, fg_color=accent, button_color=accent,
                               command=lambda _: self.render_rules()).grid(row=0, column=0, sticky="w", padx=14, pady=(10, 0))
-            ctk.CTkButton(processes, text="Adicionar regra", fg_color=accent,
-                          command=self.edit_rule).grid(row=0, column=1, padx=14, pady=(10, 0))
+            rule_actions = ctk.CTkFrame(processes, fg_color="transparent")
+            rule_actions.grid(row=0, column=1, padx=14, pady=(10, 0))
+            ctk.CTkButton(rule_actions, text="Adicionar regra", width=130, fg_color=accent,
+                          command=self.edit_rule).pack(side="left", padx=(0, 8))
+            self.executable_picker = ctk.CTkButton(rule_actions, text="Selecionar .exe…", width=145,
+                                                   fg_color=accent, command=self.select_executables)
+            self.executable_picker.pack(side="left")
             self.rule_description = ctk.CTkLabel(processes, text="", text_color=muted, anchor="w", wraplength=760)
             self.rule_description.grid(row=1, column=0, columnspan=2, sticky="ew", padx=14, pady=10)
             self.rule_search = ctk.StringVar(value="")
@@ -453,12 +461,14 @@ def _build_app(ctk, tk, filedialog, messagebox, session, controller=None, tray=N
                 self.runtime_detail.configure(state="disabled")
                 self.runtime_detail_text = view.detail
             self.start_button.configure(state="normal" if (
-                view.start_enabled and not alive and self.modal is None and not self.closing and not session.is_new
+                view.start_enabled and not alive and self.modal is None and not self.closing
+                and not session.is_new and not self.selecting_executables
             ) else "disabled")
             self.stop_button.configure(state="normal" if view.stop_enabled and not self.closing else "disabled")
 
         def start_runtime(self):
-            if self.closing or self.closed or self.modal is not None or controller.is_alive():
+            if (self.closing or self.closed or self.modal is not None or controller.is_alive()
+                    or self.selecting_executables):
                 return
             if session.is_new:
                 self.notify("Crie a configuração clicando em Salvar antes de iniciar.", error=True)
@@ -613,6 +623,9 @@ def _build_app(ctk, tk, filedialog, messagebox, session, controller=None, tray=N
             self.clear(self.rules_list)
             field = rule_fields[self.rule_category.get()]
             self.rule_description.configure(text=descriptions[field])
+            self.executable_picker.configure(state="normal" if (
+                field in {"block_exes", "safelist_exes"} and self.modal is None and not self.selecting_executables
+            ) else "disabled")
             values = getattr(session.draft.config, field)
             query = self.rule_search.get().strip().casefold()
             if not values:
@@ -633,6 +646,47 @@ def _build_app(ctk, tk, filedialog, messagebox, session, controller=None, tray=N
             if not visible:
                 ctk.CTkLabel(self.rules_list, text="Nenhuma regra corresponde à busca nesta categoria.",
                              text_color=muted).grid(row=0, column=0, pady=45)
+
+        def select_executables(self):
+            if self.closing or self.closed or self.modal is not None or self.selecting_executables:
+                return
+            field = rule_fields[self.rule_category.get()]
+            if field not in {"block_exes", "safelist_exes"}:
+                return
+            self.selecting_executables = True
+            self.executable_picker.configure(state="disabled")
+            self.update_runtime()
+            try:
+                selected = filedialog.askopenfilenames(
+                    parent=self,
+                    title=("Selecionar executáveis para bloquear por nome" if field == "block_exes"
+                           else "Selecionar executáveis para proteção adicional"),
+                    filetypes=[("Executáveis Windows", "*.exe")],
+                )
+            except tk.TclError as exc:
+                if not self.closing and not self.closed:
+                    self.notify(f"Não foi possível abrir o seletor: {exc}", error=True)
+                return
+            finally:
+                self.selecting_executables = False
+                if not self.closing and not self.closed:
+                    self.update_runtime()
+                    self.render_rules()
+            if not selected or self.closing or self.closed or self.modal is not None:
+                return
+            try:
+                added = session.draft.add_executable_paths(field, selected)
+            except ConfigError as exc:
+                self.notify(f"Não foi possível adicionar executáveis: {exc}. Rascunho preservado.", error=True)
+                return
+            if not added:
+                self.notify("Os executáveis selecionados já estão nesta lista.")
+                return
+            self.render()
+            category = "bloqueio" if field == "block_exes" else "proteção adicional"
+            label = "executável adicionado" if added == 1 else "executáveis adicionados"
+            self.notify(f"{added} {label} ao rascunho de {category}, por nome em qualquer pasta. "
+                        "Clique em Salvar para gravar.")
 
         def remove_item(self, field, index):
             if self.closing or self.closed or self.modal is not None:

@@ -23,6 +23,15 @@ no [contrato de bandeja](TRAY_CONTRACT.md); fechar pelo X continua sair.
 - Quatro abas: Visão geral, Horários, Jogos / Apps e Configuração. Janela CustomTkinter na
   thread principal; motor e ícone de bandeja em workers separados. Callbacks
   da bandeja publicam fila limitada; somente polling Tk opera widgets/motor.
+- Selecionar .exe permite inclusão múltipla nas categorias Executáveis e
+  Proteção adicional. `ConfigDraft.add_executable_paths(field, paths) -> int`
+  extrai nomes textuais sem ler/resolver/executar arquivos e publica lote
+  validado atomicamente. Dedup casefold apenas de novas regras; duplicatas
+  preexistentes permanecem. Nomes valem em qualquer pasta, explicado antes
+  da seleção. Arquivos inválidos/falha de iterable deixam draft intacto.
+  Cancelar não altera feedback/draft; modal/reentrância/saída impedem a ação,
+  Iniciar fica indisponível durante o seletor. Categoria capturada antes do
+  diálogo; retorno tardio depois de sair é descartado. Salvar permanece explícito.
 - Horários: adicionar/editar/remover; sete checkboxes, todos selecionados por
   padrão. Dias vazios desativam. Mesma validação de horários noturnos,
   igualdade inválida, dias e união já existente no núcleo.
@@ -75,10 +84,10 @@ a conferência final e o replace; não equivale a CAS/lock de escritores externo
 - `tests/test_config_gui.py`: callbacks de CRUD, validação e correção,
   categorias, salvamento, recarga e saída usando widgets simulados com JSON
   e repositório reais. Não valida renderização ou compatibilidade dos widgets.
-- `tests/test_config_gui_native.py`: doze smoke tests com CustomTkinter real
+- `tests/test_config_gui_native.py`: treze smoke tests com CustomTkinter real
   quando instalado, com janelas ocultas; não substituem inspeção visual.
 
-Na retomada de 2026-10-11, as dependências foram instaladas no `.venv` e os doze
+Na retomada de 2026-10-11, as dependências foram instaladas no `.venv` e os treze
 smoke tests nativos passaram sem erros de callbacks Tk. Controlador simulado,
 sem encerramentos reais. A janela de QA abriu com JSON isolado e alvos vazios,
 mas a captura falhou duas vezes por timeout; inspeção visual, DPI e rolagem em
