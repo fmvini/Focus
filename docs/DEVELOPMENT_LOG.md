@@ -1,3 +1,34 @@
+## 2026-10-11 — Controle gráfico do motor de processos
+
+### Implementado
+- Iniciar/Parar na janela, com motor inicialmente parado, confirmação de encerramento sem salvar estado e recusa de rascunho pendente/modal/worker vivo. Monitoramento usa JSON salvo recarregado por ciclo; importação permanece no rascunho até Salvar.
+- Worker não daemon, cadência monotônica de 5 s sem sobreposição, parada por Event e gates antes de efeitos. Erro global/configuração interrompe novas ações sem configuração antiga; nova tentativa só após worker anterior terminar.
+- Cabeçalho separa estado do motor, última agenda avaliada e relatório do último ciclo da consulta do editor/prévia. Presenter puro mostra encerramentos confirmados, pendências, falhas e diagnósticos limitados; detalhe integral somente leitura/rolável.
+- Fechar resolve salvar/descartar/cancelar, sinaliza parada e aguarda por polling antes de destruir. Cancelamento/conflito mantém execução. Finally garante stop/wait fora de callbacks na saída do mainloop. Limpeza de callbacks CustomTkinter em modais/linhas/raiz evita comandos Tcl órfãos.
+- Maestro coordenou os três agentes existentes: Backend controlador, Banco presenter/integração JSON, Frontend GUI/lifecycle, Maestro revisão/contratos/docs/validação. Lote anterior já registrado no commit local `7ed71d4`.
+
+### Arquivos principais alterados
+- `core/process_controller.py`, `ui/runtime_presenter.py`, `ui/config_gui.py`, `main.py`.
+- `tests/test_process_controller.py`, `tests/test_process_controller_config.py`, `tests/test_runtime_presenter.py`, `tests/test_config_gui.py`, `tests/test_config_gui_main.py`, `tests/test_config_gui_native.py`.
+- `docs/PROCESS_GUI_CONTRACT.md`, `README.md`, `docs/GUI_EDITOR_CONTRACT.md`, `docs/ARCHITECTURE_BACKEND.md`, `docs/DATA_MODEL.md`, `docs/UI_FLOWS.md`, `docs/DELIVERY_PLAN.md`, `docs/TEST_PLAN.md`, `docs/README.md`, `docs/DEVELOPMENT_LOG.md`.
+
+### Decisões técnicas
+- Construção/importação não faz IO, cria thread ou importa psutil; fábrica padrão lazy somente no worker. Widgets permanecem na thread Tk, snapshots são frozen e fronteiras são injetáveis.
+- `active` registra a última avaliação da agenda e é preservado ao parar/errar; não representa gate aberto. Avaliação/instante são publicados juntos e avaliações atrasadas após stop não alteram snapshot. Events por execução mantêm gates antigos fechados após retry.
+- Parada cooperativa não cancela chamada de SO já iniciada; factory/IO/scan que não retorna pode prolongar a saída. Botões e polling consideram is_alive, inclusive entre publicação de idle/error e término real da thread. CLI independente não é controlada pela janela.
+- Sem novo schema, SQLite, histórico de processos, pausa, hosts ou bandeja. Respostas existentes em `docs/USER_ANSWERS.md` preservadas. Dependências já fixadas foram instaladas no `.venv`, sem alteração de requisitos.
+
+### Estado atual
+- Suíte integrada: **426 testes descobertos, 425 aprovados e 1 ignorado**, 37,077 s em Python 3.14.6/Windows. Único skip: symlink/WinError 1314. Oito smoke tests nativos passaram, com bgerrors vazios e sem callbacks after restantes na saída. Nenhum bloqueador real foi iniciado nos testes e nenhum aplicativo do usuário foi encerrado.
+- Sintaxe Python 3.12/UTF-8 validada nos 42 arquivos Python; links locais e diff conferidos. Runtime executado permanece 3.14.6.
+- Janela de QA abriu fora do sandbox, com JSON isolado/alvos vazios e motor parado. Captura falhou com `FrameArrived timed out` e novamente `window capture timed out` após reseleção; nenhuma interação visual foi executada. Execuções temporárias de QA foram encerradas pelo caminho exclusivo da fixture. Inspeção visual/DPI/rolagem e encerramentos reais permanecem pendentes.
+- Unidade completa e validada para commit local conjunto, sem push. Fase 5 completa e MVP do escopo original continuam pendentes; painel planejado não mede foco.
+
+### Próximos passos
+- Abrir `.venv/Scripts/python.exe main.py --config ./data/config.json --gui` em Windows; conferir quatro abas, minsize 880×660, DPI, scroll de diagnósticos e seletores/modal. Investigar indisponibilidade da captura antes de retomar aceite automatizado.
+- Validar iniciar/parar/fim de janela com aplicativo descartável dedicado e JSON isolado, nunca aplicativos do usuário. Executar runtime Python 3.12; sintaxe compatível não substitui esse ensaio.
+- Próxima evolução independente: definir contrato da bandeja/instância única e ocultar versus sair, preservando início explícito e shutdown ordenado. Para sites, fechar Q-HOSTS-01–05 em USER_ANSWERS antes de implementar comportamentos dependentes. Pausas/avisos, foco/SQLite e instalador permanecem etapas posteriores.
+
 ## 2026-10-11 — Painel semanal e portabilidade da configuração
 
 ### Implementado

@@ -9,14 +9,15 @@ gráfica de RF01 e parte de RF24; a fase 5 completa permanece pendente.
 Evolução em 2026-10-11: a quarta aba **Visão geral** acrescenta painel semanal
 do rascunho e orientação inicial; horários ganham duplicação, regras ganham
 busca e Configuração ganha importação/exportação. APIs e comportamento no
-[contrato da evolução](CONFIG_EVOLUTION_CONTRACT.md). Os limites do editor
-independente descritos abaixo continuam vigentes.
+[contrato da evolução](CONFIG_EVOLUTION_CONTRACT.md). A janela também controla
+um motor de processos por início/parada explícitos, conforme
+[contrato do controle gráfico](PROCESS_GUI_CONTRACT.md).
 
 - `--gui` abre um JSON existente, com o mesmo `--config`/APPDATA da CLI.
   Criação inicial continua explícita em `--init-config`; arquivo inválido
   não é substituído. A flag rejeita outros modos antes de IO/importações.
 - Quatro abas: Visão geral, Horários, Jogos / Apps e Configuração. Janela CustomTkinter na
-  thread principal, sem threads de bloqueadores ou bandeja.
+  thread principal; motor de processos em worker separado, sem bandeja.
 - Horários: adicionar/editar/remover; sete checkboxes, todos selecionados por
   padrão. Dias vazios desativam. Mesma validação de horários noturnos,
   igualdade inválida, dias e união já existente no núcleo.
@@ -30,8 +31,9 @@ independente descritos abaixo continuam vigentes.
   rascunho e baseline. Recarregar/Ctrl+R lê a versão atual; se houver edição
   pendente, pede confirmação de descarte. Recarga inválida preserva a sessão.
 - Fechar a janela com rascunho pendente oferece salvar/descartar/cancelar.
-  Falha ao salvar mantém a janela aberta. Sem bandeja, fechar termina o editor.
-- Consulta da agenda a cada segundo usa exclusivamente a última versão
+  Falha ao salvar mantém a janela aberta e o motor. Após decidir sair, a GUI
+  sinaliza parada e espera o worker por polling antes de destruir a janela.
+- Consulta da agenda por timer Tk usa exclusivamente a última versão
   carregada/salva. Não representa confirmação de bloqueio aplicado, nem
   observa automaticamente alterações externas; Recarregar atualiza a leitura.
 - Um watcher separado poderá ler o arquivo salvo no próximo ciclo. O editor
@@ -46,9 +48,11 @@ sessão após leitura/validação completas. `agenda_status(now)` retorna estado
 e próximo início do baseline, sem efeitos de sistema.
 
 `ui/config_gui.py` importa CustomTkinter/Tk somente na execução de `--gui`.
-A fábrica `_build_app` recebe toolkit, diálogos e sessão para testar os
-callbacks com arquivos reais sem dependência gráfica. Diagnóstico, editor
-CLI e bloqueador continuam com importações independentes.
+A fábrica `_build_app` recebe toolkit, diálogos, sessão e controlador opcional
+para testar os callbacks com arquivos reais sem dependência gráfica. Abertura
+não inicia worker nem importa psutil; Iniciar é explícito. Diagnóstico e editor
+CLI continuam com importações independentes. O presenter puro separa estado do
+motor, última agenda observada e relatório de encerramentos.
 
 CustomTkinter 6.0.0 é fixado em `requirements.txt`, conforme a versão publicada
 no [PyPI](https://pypi.org/project/customtkinter/6.0.0/); widgets seguem a
@@ -61,16 +65,16 @@ a conferência final e o replace; não equivale a CAS/lock de escritores externo
 
 - `tests/test_config_session.py`: persistência real, rascunho/baseline,
   consulta de agenda salva, dias vazios, conflitos, remoção, falhas e retry.
-- `tests/test_config_gui_main.py`: flag, importações sob demanda, ausência
-  de bloqueadores e erros de configuração/dependência.
+- `tests/test_config_gui_main.py`: flag, importações sob demanda, abertura
+  sem bloqueadores, erros e parada/espera garantidas na saída do mainloop.
 - `tests/test_config_gui.py`: callbacks de CRUD, validação e correção,
   categorias, salvamento, recarga e saída usando widgets simulados com JSON
   e repositório reais. Não valida renderização ou compatibilidade dos widgets.
-- `tests/test_config_gui_native.py`: cinco smoke tests com CustomTkinter real
+- `tests/test_config_gui_native.py`: oito smoke tests com CustomTkinter real
   quando instalado, com janelas ocultas; não substituem inspeção visual.
 
-A dependência não pôde ser instalada neste ambiente: downloads do PyPI são
-bloqueados. O helper de controle de janelas também estava indisponível. Os
-testes nativos foram ignorados; renderização e comportamento nativo ainda
-precisam ser verificados no Windows com as dependências instaladas, incluindo
-DPI e tamanhos mínimos. Não considerar a fase 5 entregue por esta unidade.
+Na retomada de 2026-10-11, as dependências foram instaladas no `.venv` e os oito
+smoke tests nativos passaram sem erros de callbacks Tk. Controlador simulado,
+sem encerramentos reais. A janela de QA abriu com JSON isolado e alvos vazios,
+mas a captura falhou duas vezes por timeout; inspeção visual, DPI e rolagem em
+tamanho mínimo continuam pendentes. Não considerar a fase 5 completa entregue.

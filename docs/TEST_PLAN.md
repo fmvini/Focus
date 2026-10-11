@@ -2,6 +2,34 @@
 
 Fonte: [escopo](Focus%20Blocker_%20escopo%20do%20projeto.md), [requisitos](REQUIREMENTS.md) e [decisões](DECISIONS.md). Fases 1/2: 206 testes OK em Python 3.14.6/psutil 7.2.2 por `.venv/Scripts/python.exe -B -m unittest discover -s tests` (10,542 s). Sintaxe 3.12 dos 18 arquivos Python conferida; runtime 3.12 ainda não executado. Encerramentos reais e fases posteriores continuam pendentes.
 
+## Evidência do controle gráfico — 2026-10-11
+
+- Suíte completa no `.venv`: **426 descobertos, 425 aprovados e 1 ignorado**,
+  37,077 s, Python 3.14.6/Windows, psutil 7.2.2 e CustomTkinter 6.0.0. Skip:
+  symlink por WinError 1314. Oito smoke tests nativos passaram sem bgerrors.
+- `tests/test_process_controller.py`: 27 testes de import/construção lazy,
+  concorrência de start, snapshots, parada nas fronteiras, gates antigos,
+  cadência/slots, retry, falhas e relatório parcial. ProcessBlocker real com
+  adaptador falso verifica gates antes de terminate e kill.
+- `tests/test_process_controller_config.py`: nove testes com load_config padrão
+  e arquivos isolados; recarga válida/inválida/removida, rascunho versus save,
+  conflito externo e retry sem reabrir gates anteriores.
+- `tests/test_runtime_presenter.py`: 16 testes puros de estados/botões,
+  contagem de eventos/status, erro/relatório parcial, última agenda preservada,
+  diagnósticos ausentes/longos/multilinha, truncamento e import sem IO/widgets.
+- GUI: 35 fluxos simulados com JSON real, dez testes de dispatch/saída de
+  mainloop e oito smoke tests reais. Cobrem confirmação/dirty/modal, início,
+  parar sem join, retry só depois de worker morto, saída/cancelamento/conflito,
+  detail rolável e teardown. Callbacks de modal/linhas são cancelados sem
+  remover polling da raiz; after info vazio na saída e bgerrors assertados vazios.
+- Nenhum hosts ou processo do usuário alterado pelos testes; bloqueadores
+  injetados. QA abriu janela com configuração isolada, regras vazias e motor
+  parado; captura falhou duas vezes por timeout. Inspeção visual/DPI/rolagem,
+  encerramentos Windows reais e runtime 3.12 permanecem pendentes.
+- Comando, APIs e limites em [PROCESS_GUI_CONTRACT.md](PROCESS_GUI_CONTRACT.md).
+- Sintaxe Python 3.12/UTF-8 válida nos 42 arquivos Python; links locais e diff
+  conferidos. Runtime executado permanece 3.14.6.
+
 ## Evidência do editor gráfico — 2026-10-09
 
 - Suíte final: **306 testes descobertos, 304 aprovados e 2 ignorados**, 11,390 s em Python 3.14.6. Os dois ignorados são smoke tests nativos, pois CustomTkinter não está instalado no ambiente de validação.

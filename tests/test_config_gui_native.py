@@ -16,6 +16,7 @@ from uuid import uuid4
 from core.config import load_config
 from core.config_session import ConfigSession
 from ui.config_gui import _build_app
+from tests.test_config_gui import FakeController
 
 
 @unittest.skipUnless(importlib.util.find_spec("customtkinter"), "CustomTkinter não instalado")
@@ -48,13 +49,24 @@ class NativeConfigGuiTests(unittest.TestCase):
                                           askopenfilename=Mock(return_value=""),
                                           asksaveasfilename=Mock(return_value=""))
         self.ctk = ctk
-        self.app = _build_app(Toolkit(), tk, self.filedialog, self.messages, self.session)
+        self.controller = FakeController(self.path)
+        self.app = _build_app(Toolkit(), tk, self.filedialog, self.messages, self.session,
+                              controller=self.controller)
+        self.background_errors = []
+        self.app.tk.createcommand("bgerror", self.background_errors.append)
+        self.app.report_callback_exception = lambda *error: self.background_errors.append(str(error))
         self.addCleanup(self.cleanup_app)
 
     def cleanup_app(self):
         if self.app.modal is not None:
             self.button(self.app.modal, "Cancelar").invoke()
+        self.controller.finish()
         self.app.close_editor()
+        self.assertTrue(self.app.closed)
+        self.assertEqual(self.app.tk.splitlist(self.app.tk.call("after", "info")), ())
+        self.app.tk.call("update")
+        self.assertEqual(self.background_errors, [])
+        self.controller.wait.assert_not_called()
 
     @staticmethod
     def descendants(widget):
@@ -154,6 +166,64 @@ class NativeConfigGuiTests(unittest.TestCase):
         self.assertTrue(self.session.dirty)
         self.button(self.app, "Salvar").invoke()
         self.assertFalse(self.session.dirty)
+
+    def test_runtime_start_stop_and_close_poll_with_real_widgets(self):
+        self.assertEqual(self.controller.starts, 0)
+        self.assertEqual(self.app.runtime_title.cget("text"), "Motor parado")
+        self.messages.askyesno.return_value = True
+        self.button(self.app, "Iniciar").invoke()
+        self.assertEqual(self.controller.starts, 1)
+        self.assertEqual(self.app.start_button.cget("state"), "disabled")
+        self.assertEqual(self.app.stop_button.cget("state"), "normal")
+        self.button(self.app, "Parar").invoke()
+        self.assertEqual(self.app.runtime_title.cget("text"), "Motor parando")
+        self.assertTrue(self.controller.alive)
+        self.app.close_editor()
+        self.assertFalse(self.app.closed)
+        self.app.after(50, self.controller.finish)
+        self.app.mainloop()
+        self.assertTrue(self.app.closed)
+        self.controller.wait.assert_not_called()
+
+    def test_cancel_dirty_close_keeps_fake_worker_and_modal_alive(self):
+        self.messages.askyesno.return_value = True
+        self.button(self.app, "Iniciar").invoke()
+        self.session.draft.add_rule("block_exes", "pending.exe")
+        self.button(self.app, "Adicionar horário").invoke()
+        modal = self.app.modal
+        self.messages.askyesnocancel.return_value = None
+        self.app.close_editor()
+        self.assertEqual(self.controller.stops, 0)
+        self.assertTrue(self.controller.alive)
+        self.assertFalse(self.app.closing)
+        self.assertIs(self.app.modal, modal)
+        self.messages.askyesnocancel.return_value = False
+        self.app.close_editor()
+        self.assertIsNone(self.app.modal)
+        self.assertFalse(self.app.closed)
+        self.app.after(50, self.controller.finish)
+        self.app.mainloop()
+        self.assertTrue(self.app.closed)
+
+    def test_modal_and_filtered_rows_cancel_owned_callbacks_preserving_root_poll(self):
+        self.session.draft.add_rule("block_exes", "game.exe")
+        self.app.render()
+        orphaned_row = Mock()
+        self.button(self.app.rules_list, "Editar").after(30, orphaned_row)
+        self.app.rule_search.set("no results")
+        self.button(self.app, "Adicionar horário").invoke()
+        orphaned_modal = Mock()
+        self.app.modal.after(30, orphaned_modal)
+        self.button(self.app.modal, "Cancelar").invoke()
+        root_callback = Mock()
+        self.app.after(30, root_callback)
+        self.app.after(300, self.app.quit)
+        self.app.mainloop()
+        root_callback.assert_called_once_with()
+        orphaned_row.assert_not_called()
+        orphaned_modal.assert_not_called()
+        self.assertIsNotNone(self.app.status_timer)
+        self.assertEqual(self.background_errors, [])
 
 
 if __name__ == "__main__":

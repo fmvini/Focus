@@ -1,6 +1,7 @@
-"""Editor gráfico independente; não importa nem inicia bloqueadores."""
+"""Editor e controle explícito de processos; widgets usados somente por Tk."""
 
 from datetime import datetime, timedelta
+from dataclasses import replace
 from pathlib import Path
 import sys
 
@@ -8,6 +9,8 @@ from core.config import ConfigError
 from core.config_repository import ConfigConflictError
 from core.config_session import ConfigSession
 from core.agenda_preview import week_preview
+from core.process_controller import ProcessController
+from ui.runtime_presenter import format_runtime
 
 
 def run_config_gui(path: str | Path) -> int:
@@ -35,20 +38,28 @@ def run_config_gui(path: str | Path) -> int:
         )
         return 1
 
-    ctk.set_appearance_mode("light")
-    ctk.set_default_color_theme("blue")
+    controller = ProcessController(session.path)
+    app = None
     try:
-        app = _build_app(ctk, tk, filedialog, messagebox, session)
+        ctk.set_appearance_mode("light")
+        ctk.set_default_color_theme("blue")
+        app = _build_app(ctk, tk, filedialog, messagebox, session, controller=controller)
         app.mainloop()
         return 0
     except tk.TclError as exc:
         print(f"Erro ao iniciar interface gráfica: {exc}", file=sys.stderr)
         return 1
+    finally:
+        controller.stop()
+        controller.wait()
+        if app is not None:
+            app.finish_close()
 
 
-def _build_app(ctk, tk, filedialog, messagebox, session):
+def _build_app(ctk, tk, filedialog, messagebox, session, controller=None):
     """Constrói widgets somente quando a GUI é solicitada."""
     accent = "#167D77"
+    controller = ProcessController(session.path) if controller is None else controller
     muted = "#52656A"
     days = ("Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom")
     rule_fields = {
@@ -75,6 +86,11 @@ def _build_app(ctk, tk, filedialog, messagebox, session):
             self.grid_rowconfigure(2, weight=1)
             self.modal = None
             self.status_timer = None
+            self.close_timer = None
+            self.closing = False
+            self.closed = False
+            self.controller = controller
+            self.stop_requested = False
             self.preview_anchor = datetime.now().date()
             self.protocol("WM_DELETE_WINDOW", self.close_editor)
 
@@ -87,6 +103,21 @@ def _build_app(ctk, tk, filedialog, messagebox, session):
                          font=ctk.CTkFont(size=15)).grid(row=1, column=0, sticky="w")
             self.dirty_label = ctk.CTkLabel(header, text="", text_color=muted)
             self.dirty_label.grid(row=0, column=1, rowspan=2)
+            self.runtime_title = ctk.CTkLabel(header, text="", anchor="w",
+                                              font=ctk.CTkFont(size=17, weight="bold"))
+            self.runtime_title.grid(row=2, column=0, sticky="ew", pady=(10, 0))
+            runtime_actions = ctk.CTkFrame(header, fg_color="transparent")
+            runtime_actions.grid(row=2, column=1, sticky="e", pady=(10, 0))
+            self.start_button = ctk.CTkButton(runtime_actions, text="Iniciar", width=95,
+                                              fg_color=accent, command=self.start_runtime)
+            self.start_button.pack(side="left", padx=(0, 8))
+            self.stop_button = ctk.CTkButton(runtime_actions, text="Parar", width=95,
+                                             fg_color=accent, command=self.stop_runtime)
+            self.stop_button.pack(side="left")
+            self.runtime_detail = ctk.CTkTextbox(header, height=62, wrap="word", fg_color="white")
+            self.runtime_detail.grid(row=3, column=0, columnspan=2, sticky="ew", pady=(6, 0))
+            self.runtime_detail.configure(state="disabled")
+            self.runtime_detail_text = None
 
             summary = ctk.CTkFrame(self, fg_color="white", corner_radius=12)
             summary.grid(row=1, column=0, sticky="ew", padx=28, pady=(0, 12))
@@ -96,7 +127,7 @@ def _build_app(ctk, tk, filedialog, messagebox, session):
             self.agenda_label.grid(row=0, column=0, sticky="ew", padx=18, pady=(12, 0))
             self.next_label = ctk.CTkLabel(summary, text="", anchor="w", text_color=muted)
             self.next_label.grid(row=1, column=0, sticky="ew", padx=18)
-            ctk.CTkLabel(summary, text="Consulta da agenda carregada. Este editor não inicia bloqueios.",
+            ctk.CTkLabel(summary, text="Consulta da agenda carregada; o estado do motor aparece acima.",
                          text_color=muted, anchor="w").grid(row=2, column=0, sticky="ew", padx=18, pady=(0, 12))
 
             self.tabs = ctk.CTkTabview(self, fg_color="white", segmented_button_selected_color=accent,
@@ -111,6 +142,11 @@ def _build_app(ctk, tk, filedialog, messagebox, session):
             settings_content = ctk.CTkScrollableFrame(settings, fg_color="transparent")
             settings_content.grid(row=0, column=0, sticky="nsew")
             settings = settings_content
+            overview.grid_columnconfigure(0, weight=1)
+            overview.grid_rowconfigure(0, weight=1)
+            overview_content = ctk.CTkScrollableFrame(overview, fg_color="transparent")
+            overview_content.grid(row=0, column=0, sticky="nsew")
+            overview = overview_content
             for tab in (schedules, processes):
                 tab.grid_columnconfigure(0, weight=1)
                 tab.grid_rowconfigure(2, weight=1)
@@ -142,7 +178,7 @@ def _build_app(ctk, tk, filedialog, messagebox, session):
             shortcuts.grid(row=5, column=0, sticky="w", padx=14, pady=(0, 14))
             for title, tab in (("Ir para Horários", "Horários"), ("Ir para Jogos / Apps", "Jogos / Apps")):
                 ctk.CTkButton(shortcuts, text=title, fg_color=accent,
-                              command=lambda name=tab: self.tabs.set(name)).pack(side="left", padx=(0, 8))
+                              command=lambda name=tab: self.select_tab(name)).pack(side="left", padx=(0, 8))
 
             ctk.CTkLabel(schedules, text="Horários de foco", font=ctk.CTkFont(size=20, weight="bold"),
                          anchor="w").grid(row=0, column=0, sticky="w", padx=14, pady=(10, 0))
@@ -185,7 +221,9 @@ def _build_app(ctk, tk, filedialog, messagebox, session):
                 "As alterações ficam em um rascunho até você clicar em Salvar.\n\n"
                 "Recarregar lê o arquivo novamente e descarta o rascunho. Se outro editor alterar "
                 "o arquivo, o Focus informa o conflito antes de salvar.\n\n"
-                "Um bloqueador iniciado separadamente pode ler os horários e regras salvos no próximo ciclo.\n\n"
+                "Iniciar exige confirmação e usa o JSON salvo. O motor pode ler alterações salvas no próximo ciclo. "
+                "Parar impede novas ações; uma chamada já iniciada pode terminar e aplicativos não são reabertos. "
+                "Fechar aguarda a parada deste motor; uma CLI separada continua independente.\n\n"
                 "Importar JSON substitui apenas o rascunho, após confirmação. Clique em Salvar para aplicar ao arquivo ativo.\n\n"
                 "Exportar JSON grava o rascunho em um destino novo. Não salva a configuração ativa."
             )).grid(row=2, column=0, sticky="ew", padx=18, pady=18)
@@ -214,10 +252,64 @@ def _build_app(ctk, tk, filedialog, messagebox, session):
             self.feedback.configure(text=text, text_color="#A33232" if error else muted)
 
         def render(self):
+            if self.closing or self.closed:
+                return
             self.render_preview()
             self.render_windows()
             self.render_rules()
             self.dirty_label.configure(text="Alterações não salvas" if session.dirty else "Sem alterações pendentes")
+            self.update_runtime()
+
+        def select_tab(self, name):
+            if not self.closing and not self.closed:
+                self.tabs.set(name)
+
+        def update_runtime(self):
+            snapshot = controller.snapshot()
+            alive = controller.is_alive()
+            if self.stop_requested and alive and snapshot.state != "error":
+                snapshot = replace(snapshot, state="stopping")
+            if not alive:
+                self.stop_requested = False
+            view = format_runtime(snapshot)
+            self.runtime_title.configure(text=view.title)
+            if view.detail != self.runtime_detail_text:
+                self.runtime_detail.configure(state="normal")
+                self.runtime_detail.delete("1.0", "end")
+                self.runtime_detail.insert("1.0", view.detail)
+                self.runtime_detail.configure(state="disabled")
+                self.runtime_detail_text = view.detail
+            self.start_button.configure(state="normal" if (
+                view.start_enabled and not alive and self.modal is None and not self.closing
+            ) else "disabled")
+            self.stop_button.configure(state="normal" if view.stop_enabled and not self.closing else "disabled")
+
+        def start_runtime(self):
+            if self.closing or self.closed or self.modal is not None or controller.is_alive():
+                return
+            if session.dirty:
+                self.notify("Salve as alterações ou descarte o rascunho com Recarregar antes de iniciar.", error=True)
+                return
+            if not messagebox.askyesno(
+                "Iniciar bloqueador de processos",
+                "Aplicativos elegíveis podem ser encerrados sem salvar seu estado.\n"
+                "O motor usará exclusivamente o JSON salvo, incluindo alterações externas.\n\nIniciar agora?", parent=self
+            ):
+                return
+            if self.closing or self.closed or session.dirty:
+                return
+            if controller.start():
+                self.stop_requested = False
+                self.notify("Motor iniciado com a configuração salva. Confira o resultado do último ciclo acima.")
+            self.update_runtime()
+
+        def stop_runtime(self):
+            if self.closing or self.closed:
+                return
+            self.stop_requested = True
+            controller.stop()
+            self.update_runtime()
+            self.notify("Parada solicitada. Uma chamada já iniciada pode terminar; aplicativos não são reabertos.")
 
         @staticmethod
         def planned_time(minutes):
@@ -225,6 +317,8 @@ def _build_app(ctk, tk, filedialog, messagebox, session):
             return f"{hours} h {remainder:02d} min"
 
         def change_week(self, offset):
+            if self.closing or self.closed:
+                return
             self.preview_anchor = (self.preview_anchor + timedelta(days=offset)
                                    if offset else datetime.now().date())
             self.render_preview()
@@ -262,10 +356,37 @@ def _build_app(ctk, tk, filedialog, messagebox, session):
                 guidance = "Revise horários e regras usando os atalhos abaixo. Clique em Salvar para gravar o rascunho."
             self.orientation.configure(text=guidance)
 
-        @staticmethod
-        def clear(frame):
+        def cancel_widget_callbacks(self, widget):
+            if not hasattr(widget, "tk"):
+                return
+            commands = set()
+
+            def collect(owner):
+                commands.update(getattr(owner, "_tclCommands", None) or ())
+                for child in owner.winfo_children():
+                    collect(child)
+
+            collect(widget)
+            for timer in widget.tk.splitlist(widget.tk.call("after", "info")):
+                script = widget.tk.call("after", "info", timer)[0]
+                parts = widget.tk.splitlist(script)
+                if parts and parts[0] in commands:
+                    widget.tk.call("after", "cancel", timer)
+
+        def clear(self, frame):
             for child in frame.winfo_children():
+                self.cancel_widget_callbacks(child)
                 child.destroy()
+
+        def dismiss_modal(self):
+            if self.modal is None:
+                return
+            dialog = self.modal
+            for timer in dialog.startup_timers:
+                dialog.after_cancel(timer)
+            self.cancel_widget_callbacks(dialog)
+            self.modal = None
+            dialog.destroy()
 
         def item_row(self, frame, index, title, detail, edit, remove, duplicate=None):
             row = ctk.CTkFrame(frame, fg_color="white", corner_radius=8)
@@ -299,7 +420,7 @@ def _build_app(ctk, tk, filedialog, messagebox, session):
                               lambda i=index: self.duplicate_window(i))
 
         def duplicate_window(self, index):
-            if self.modal is not None:
+            if self.closing or self.closed or self.modal is not None:
                 return
             try:
                 session.draft.duplicate_window(index)
@@ -310,6 +431,8 @@ def _build_app(ctk, tk, filedialog, messagebox, session):
             self.notify("Horário duplicado no rascunho. Clique em Salvar para gravar.")
 
         def render_rules(self):
+            if self.closing or self.closed:
+                return
             self.clear(self.rules_list)
             field = rule_fields[self.rule_category.get()]
             self.rule_description.configure(text=descriptions[field])
@@ -335,7 +458,11 @@ def _build_app(ctk, tk, filedialog, messagebox, session):
                              text_color=muted).grid(row=0, column=0, pady=45)
 
         def remove_item(self, field, index):
+            if self.closing or self.closed or self.modal is not None:
+                return
             if not messagebox.askyesno("Remover item", "Remover este item do rascunho?", parent=self):
+                return
+            if self.closing or self.closed:
                 return
             if field == "windows":
                 session.draft.remove_window(index)
@@ -355,10 +482,9 @@ def _build_app(ctk, tk, filedialog, messagebox, session):
             dialog.startup_timers = []
 
             def close():
-                for timer in dialog.startup_timers:
-                    dialog.after_cancel(timer)
-                self.modal = None
-                dialog.destroy()
+                if self.modal is dialog:
+                    self.dismiss_modal()
+                    self.update_runtime()
 
             dialog.protocol("WM_DELETE_WINDOW", close)
             dialog.bind("<Escape>", lambda _: close())
@@ -374,9 +500,12 @@ def _build_app(ctk, tk, filedialog, messagebox, session):
             ctk.CTkButton(actions, text="Cancelar", fg_color="#E0E8E6", text_color="#263D3A",
                           command=close).pack(side="left", padx=(0, 8))
             dialog.startup_timers.append(dialog.after(100, dialog.grab_set))
+            self.update_runtime()
             return dialog, form, error_label, actions, close
 
         def finish_edit(self, operation, error_label, close):
+            if self.closing or self.closed:
+                return
             try:
                 operation()
             except ConfigError as exc:
@@ -387,6 +516,8 @@ def _build_app(ctk, tk, filedialog, messagebox, session):
             self.notify("Rascunho atualizado. Clique em Salvar para gravar.")
 
         def edit_window(self, index=None):
+            if self.closing or self.closed or self.modal is not None:
+                return
             dialog, form, error, actions, close = self.new_dialog("Adicionar horário" if index is None else "Editar horário")
             value = None if index is None else session.draft.config.windows[index]
             ctk.CTkLabel(form, text="Início (HH:MM)", anchor="w").grid(row=0, column=0, sticky="w")
@@ -421,6 +552,8 @@ def _build_app(ctk, tk, filedialog, messagebox, session):
             dialog.startup_timers.append(dialog.after(150, start.focus_set))
 
         def edit_rule(self, index=None, field=None):
+            if self.closing or self.closed or self.modal is not None:
+                return
             field = field or rule_fields[self.rule_category.get()]
             dialog, form, error, actions, close = self.new_dialog("Adicionar regra" if index is None else "Editar regra")
             value = None if index is None else getattr(session.draft.config, field)[index]
@@ -439,6 +572,8 @@ def _build_app(ctk, tk, filedialog, messagebox, session):
                     contains.insert(0, value.contains)
             elif field == "block_folders":
                 def choose_folder():
+                    if self.closing or self.closed:
+                        return
                     chosen = filedialog.askdirectory(parent=dialog, title="Selecionar pasta")
                     if chosen:
                         name.delete(0, "end")
@@ -462,16 +597,18 @@ def _build_app(ctk, tk, filedialog, messagebox, session):
             dialog.startup_timers.append(dialog.after(150, name.focus_set))
 
         def import_config(self):
-            if self.modal is not None:
+            if self.closing or self.closed or self.modal is not None:
                 return
             selected = filedialog.askopenfilename(parent=self, title="Importar configuração JSON",
                                                   filetypes=[("Configuração JSON", "*.json"), ("Todos os arquivos", "*.*")])
-            if not selected:
+            if not selected or self.closing or self.closed:
                 return
             if not messagebox.askyesno(
                 "Substituir rascunho", "Substituir todo o rascunho pelo JSON selecionado?\n"
                 "Alterações não salvas serão descartadas. O arquivo ativo só muda ao clicar em Salvar.", parent=self
             ):
+                return
+            if self.closing or self.closed:
                 return
             try:
                 session.import_config(selected)
@@ -482,13 +619,13 @@ def _build_app(ctk, tk, filedialog, messagebox, session):
             self.notify("JSON importado no rascunho. Clique em Salvar para gravar a configuração ativa.")
 
         def export_config(self):
-            if self.modal is not None:
+            if self.closing or self.closed or self.modal is not None:
                 return
             selected = filedialog.asksaveasfilename(
                 parent=self, title="Exportar rascunho para um novo JSON", defaultextension=".json",
                 filetypes=[("Configuração JSON", "*.json")], confirmoverwrite=False
             )
-            if not selected:
+            if not selected or self.closing or self.closed:
                 return
             try:
                 session.export_config(selected)
@@ -498,6 +635,8 @@ def _build_app(ctk, tk, filedialog, messagebox, session):
             self.notify("Rascunho exportado. A exportação não salva a configuração ativa.")
 
         def save_config(self):
+            if self.closing or self.closed:
+                return False
             try:
                 session.save()
             except ConfigConflictError as exc:
@@ -513,9 +652,13 @@ def _build_app(ctk, tk, filedialog, messagebox, session):
             return True
 
         def reload_config(self):
+            if self.closing or self.closed:
+                return
             if session.dirty and not messagebox.askyesno(
                 "Recarregar configuração", "Descartar as alterações não salvas e recarregar o arquivo?", parent=self
             ):
+                return
+            if self.closing or self.closed:
                 return
             try:
                 session.reload()
@@ -527,24 +670,70 @@ def _build_app(ctk, tk, filedialog, messagebox, session):
             self.notify("Configuração recarregada.")
 
         def refresh_status(self, *, schedule=True):
+            if self.closing or self.closed:
+                return
             status = session.agenda_status(datetime.now())
             self.agenda_label.configure(text="Agenda carregada: dentro da janela" if status.active else "Agenda carregada: fora da janela")
             self.next_label.configure(text="Próximo início: " + (status.next_start.strftime("%d/%m/%Y às %H:%M") if status.next_start else "nenhum horário ativo"))
-            if schedule:
-                self.status_timer = self.after(1000, self.refresh_status)
+            self.update_runtime()
+            if schedule and self.status_timer is None:
+                self.status_timer = self.after(250, self.poll_status)
+
+        def poll_status(self):
+            self.status_timer = None
+            self.refresh_status()
 
         def close_editor(self):
+            if self.closing or self.closed:
+                return
             if session.dirty:
                 answer = messagebox.askyesnocancel("Alterações não salvas", "Salvar as alterações antes de sair?", parent=self)
                 if answer is None or (answer and not self.save_config()):
                     return
+            self.closing = True
+            self.stop_requested = True
+            controller.stop()
             if self.status_timer is not None:
                 self.after_cancel(self.status_timer)
-            if self.modal is not None:
-                for timer in self.modal.startup_timers:
-                    self.modal.after_cancel(timer)
-                self.modal.destroy()
-                self.modal = None
+                self.status_timer = None
+            self.dismiss_modal()
+            self.disable_actions(self)
+            self.notify("Fechando: aguardando o motor parar…")
+            self.poll_close()
+
+        def disable_actions(self, frame):
+            for child in frame.winfo_children():
+                if isinstance(child, (ctk.CTkButton, ctk.CTkEntry, ctk.CTkCheckBox, ctk.CTkOptionMenu)):
+                    child.configure(state="disabled")
+                self.disable_actions(child)
+
+        def poll_close(self):
+            self.close_timer = None
+            if controller.is_alive():
+                self.update_runtime()
+                self.close_timer = self.after(100, self.poll_close)
+            else:
+                self.finish_close()
+
+        def finish_close(self):
+            if self.closed:
+                return
+            if controller.is_alive():
+                return
+            self.closing = True
+            for timer in (self.status_timer, self.close_timer):
+                if timer is not None:
+                    self.after_cancel(timer)
+            self.status_timer = self.close_timer = None
+            self.dismiss_modal()
+            # A raiz possui seu próprio interpretador. Inclui callbacks CTk
+            # (DPI/aparência/scrollbars), que não podem sobreviver à sua saída.
+            if hasattr(self, "tk"):
+                for timer in self.tk.splitlist(self.tk.call("after", "info")):
+                    # Cancelar no Tcl mantém a propriedade dos comandos Python:
+                    # cada widget os remove uma única vez no seu destroy().
+                    self.tk.call("after", "cancel", timer)
+            self.closed = True
             self.destroy()
 
     return Editor()

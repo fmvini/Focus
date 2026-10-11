@@ -30,7 +30,7 @@ A definição de eventos de pausa/tentativas deve ocorrer antes da fase 4, embor
 
 Enquanto Q-HOSTS-01–05 permanecem sem resposta, foi concluído o editor CLI independente de horários/processos conforme [CONFIG_EDITOR_CONTRACT.md](CONFIG_EDITOR_CONTRACT.md). Complementa as fases 1/2 sem depender de hosts, pausa ou medição de foco. Backend: rascunho validado; Banco: snapshots e conflitos; Frontend: `--edit-config`; Maestro: integração, docs e commit.
 
-Continuidade em 2026-10-09: editor gráfico `--gui` implementado conforme [GUI_EDITOR_CONTRACT.md](GUI_EDITOR_CONTRACT.md), reutilizando rascunho/repositório e acrescentando sessão com baseline/alterações pendentes. Renderização nativa e smoke tests reais continuam pendentes de instalação da dependência em ambiente com rede. Bandeja, integração ao bloqueador e edição dos campos futuros continuam na fase 5; a fase completa não está concluída.
+Continuidade: editor gráfico `--gui` implementado conforme [GUI_EDITOR_CONTRACT.md](GUI_EDITOR_CONTRACT.md), reutilizando rascunho/repositório e acrescentando sessão com baseline/alterações pendentes. Em 2026-10-11, dependências foram instaladas e oito smoke tests nativos passaram; inspeção visual/DPI ainda pendente. Controle do bloqueador integrado conforme [PROCESS_GUI_CONTRACT.md](PROCESS_GUI_CONTRACT.md). Bandeja e edição dos campos futuros continuam na fase 5; a fase completa não está concluída.
 
 ## Dependências entre agentes
 
@@ -39,6 +39,11 @@ busca e portabilidade JSON, conforme [contrato](CONFIG_EVOLUTION_CONTRACT.md).
 Backend mantém cálculo puro/duplicação; Banco mantém importação/exportação
 de rascunho; Frontend integra quatro abas; Maestro revisa e valida a unidade.
 Resultados e pendências reais estão no log; esta unidade não conclui a fase 5.
+
+Unidade seguinte concluída: controle gráfico de processos. Backend manteve
+worker/snapshots/gates; Banco presenter puro e testes com JSON real; Frontend
+comandos/polling/saída e lifecycle de callbacks; Maestro contrato, integração,
+documentação e commit. Motor começa parado e não aplica rascunhos pendentes.
 
 | Interface de trabalho | Alinhamento necessário antes de codificar |
 | --- | --- |
@@ -60,4 +65,4 @@ Maestro integra cada unidade; em trabalho compartilhado, evitar commits concorre
 
 ## Retomada
 
-Consultar `DEVELOPMENT_LOG.md` para resultados das fases 1/2 e dos editores complementares. Próximo aceite do editor: instalar dependências, executar os cinco smoke tests nativos e conferir `--gui` no Windows, incluindo DPI e rolagem em 880×660. Próxima evolução independente: contrato do controlador gráfico de processos, com início/parada explícitos, estado efetivo, execução fora da thread Tk e encerramento ordenado; definir integração antes de codificar. Próxima implementação de sites: ler `USER_ANSWERS.md` e fechar Q-HOSTS-01–05, consolidar decisões e definir contrato antes dos comportamentos dependentes. Validar primeiro com arquivos isolados. Manter ensaios Windows de processos como validação pendente, usando somente alvos dedicados. Para fase 6, fechar domínio ativo/lista de estudo Brave (D19); não atribuir foco a qualquer página.
+Consultar `DEVELOPMENT_LOG.md` para resultados atuais. Próximo aceite: conferir `--gui` no Windows, incluindo DPI, rolagem em 880×660 e diagnóstico do motor; captura automatizada falhou por timeout apesar de a janela abrir. Executar bloqueio/parada com aplicativo descartável dedicado, nunca apps do usuário; ensaios reais e runtime Python 3.12 permanecem pendentes. Próxima evolução: contrato da bandeja/instância única e política de ocultar versus sair, preservando início explícito e saída ordenada. Para sites, ler `USER_ANSWERS.md` e fechar Q-HOSTS-01–05 antes dos comportamentos dependentes; validar primeiro com arquivos isolados. Para fase 6, fechar domínio ativo/lista de estudo Brave (D19); não atribuir foco a qualquer página.

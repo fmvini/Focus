@@ -8,7 +8,7 @@ from pathlib import Path
 import sys
 from types import ModuleType, SimpleNamespace
 import unittest
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 from core.config import ConfigError, default_config
 import main
@@ -103,6 +103,57 @@ class ConfigGuiMainTests(unittest.TestCase):
             with redirect_stdout(io.StringIO()) as output:
                 self.assertEqual(main.main(["--gui"]), 0)
         self.assertIn("Editor encerrado", output.getvalue())
+
+    def test_gui_finally_stops_and_waits_outside_mainloop_on_every_exit(self):
+        import tkinter as tk
+
+        for failure in (None, tk.TclError("Tk indisponível"), KeyboardInterrupt(), RuntimeError("mainloop falhou")):
+            with self.subTest(failure=type(failure).__name__):
+                order = []
+                controller = Mock()
+                controller.stop.side_effect = lambda: order.append("stop")
+                controller.wait.side_effect = lambda: order.append("wait")
+
+                def mainloop():
+                    order.append("mainloop")
+                    if failure is not None:
+                        raise failure
+
+                app = SimpleNamespace(mainloop=mainloop,
+                                      finish_close=lambda: order.append("destroy"))
+                ctk = SimpleNamespace(set_appearance_mode=Mock(), set_default_color_theme=Mock())
+                session = SimpleNamespace(path=Path("saved.json"))
+                with patch.dict(sys.modules, {"customtkinter": ctk}):
+                    with patch("ui.config_gui.ConfigSession", return_value=session):
+                        with patch("ui.config_gui.ProcessController", return_value=controller) as constructor:
+                            with patch("ui.config_gui._build_app", return_value=app) as build:
+                                if isinstance(failure, (KeyboardInterrupt, RuntimeError)):
+                                    with self.assertRaises(type(failure)):
+                                        run_config_gui("saved.json")
+                                else:
+                                    with redirect_stderr(io.StringIO()):
+                                        self.assertEqual(run_config_gui("saved.json"), 1 if failure else 0)
+                constructor.assert_called_once_with(session.path)
+                self.assertIs(build.call_args.kwargs["controller"], controller)
+                controller.start.assert_not_called()
+                controller.stop.assert_called_once_with()
+                controller.wait.assert_called_once_with()
+                self.assertEqual(order, ["mainloop", "stop", "wait", "destroy"])
+
+    def test_gui_construction_error_still_signals_stop_and_waits(self):
+        import tkinter as tk
+
+        controller = Mock()
+        ctk = SimpleNamespace(set_appearance_mode=Mock(), set_default_color_theme=Mock())
+        with patch.dict(sys.modules, {"customtkinter": ctk}):
+            with patch("ui.config_gui.ConfigSession", return_value=SimpleNamespace(path=Path("saved.json"))):
+                with patch("ui.config_gui.ProcessController", return_value=controller):
+                    with patch("ui.config_gui._build_app", side_effect=tk.TclError("falha de criação")):
+                        with redirect_stderr(io.StringIO()):
+                            self.assertEqual(run_config_gui("saved.json"), 1)
+        controller.start.assert_not_called()
+        controller.stop.assert_called_once_with()
+        controller.wait.assert_called_once_with()
 
 
 if __name__ == "__main__":

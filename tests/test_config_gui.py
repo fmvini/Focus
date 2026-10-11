@@ -4,6 +4,7 @@ Não comprova renderização, DPI ou interação nativa do CustomTkinter.
 """
 
 import json
+from dataclasses import replace
 from datetime import date, datetime as real_datetime
 from pathlib import Path
 import shutil
@@ -14,6 +15,7 @@ from uuid import uuid4
 
 from core.config import load_config
 from core.config_session import ConfigSession
+from core.process_controller import RuntimeSnapshot
 from ui.config_gui import _build_app
 
 
@@ -124,6 +126,43 @@ def button(widget, text):
     return matches[0]
 
 
+class FakeController:
+    """Worker controlado pelo teste; nunca cria thread ou bloqueador."""
+
+    def __init__(self, path=None):
+        self.path = path
+        self.value = RuntimeSnapshot()
+        self.alive = False
+        self.starts = 0
+        self.stops = 0
+        self.started_config = None
+        self.wait = Mock(side_effect=AssertionError("wait em callback Tk"))
+
+    def start(self):
+        self.starts += 1
+        if self.alive:
+            return False
+        self.started_config = load_config(self.path) if self.path is not None else None
+        self.alive = True
+        self.value = RuntimeSnapshot(state="running")
+        return True
+
+    def stop(self):
+        self.stops += 1
+        if self.alive and self.value.state != "error":
+            self.value = replace(self.value, state="stopping")
+
+    def snapshot(self):
+        return self.value
+
+    def is_alive(self):
+        return self.alive
+
+    def finish(self, **values):
+        self.alive = False
+        self.value = replace(self.value, state="idle", **values)
+
+
 class ConfigGuiFlowTests(unittest.TestCase):
     def setUp(self):
         self.root = Path(__file__).resolve().parents[1] / f".editor-integration-{uuid4().hex}"
@@ -137,8 +176,9 @@ class ConfigGuiFlowTests(unittest.TestCase):
         self.filedialog = SimpleNamespace(askdirectory=Mock(return_value="C:\\Games"),
                                           askopenfilename=Mock(return_value=""),
                                           asksaveasfilename=Mock(return_value=""))
+        self.controller = FakeController(self.path)
         self.app = _build_app(fake_ctk(), SimpleNamespace(IntVar=Variable), self.filedialog,
-                              self.messages, self.session)
+                              self.messages, self.session, controller=self.controller)
 
     def entries(self):
         return [widget for widget in descendants(self.app.modal)
@@ -160,6 +200,221 @@ class ConfigGuiFlowTests(unittest.TestCase):
         source.write_text(json.dumps({"windows": [], **config}), encoding="utf-8")
         self.filedialog.askopenfilename.return_value = str(source)
         return source
+
+    def fire_timer(self, token):
+        callback = self.app.timers.pop(token)
+        callback()
+
+    def test_default_controller_is_constructed_for_saved_path_without_start(self):
+        controller = FakeController()
+        with patch("ui.config_gui.ProcessController", return_value=controller) as constructor:
+            app = _build_app(fake_ctk(), SimpleNamespace(IntVar=Variable), self.filedialog,
+                             self.messages, self.session)
+        constructor.assert_called_once_with(self.path)
+        self.assertIs(app.controller, controller)
+        self.assertEqual(controller.starts, 0)
+        self.assertEqual(controller.stops, 0)
+        controller.wait.assert_not_called()
+        self.assertIn("Motor parado", app.runtime_title.options["text"])
+
+    def test_runtime_requires_clean_draft_and_explicit_risk_confirmation(self):
+        self.session.draft.add_rule("block_exes", "pending.exe")
+        self.app.render()
+        button(self.app, "Iniciar").invoke()
+        self.assertEqual(self.controller.starts, 0)
+        self.messages.askyesno.assert_not_called()
+        self.assertIn("Salve", self.app.feedback.options["text"])
+        self.assertIn("Recarregar", self.app.feedback.options["text"])
+        self.app.save_config()
+        self.messages.askyesno.return_value = False
+        button(self.app, "Iniciar").invoke()
+        self.assertEqual(self.controller.starts, 0)
+        prompt = self.messages.askyesno.call_args.args[1]
+        self.assertIn("sem salvar seu estado", prompt)
+        self.assertIn("JSON salvo", prompt)
+        self.messages.askyesno.return_value = True
+        button(self.app, "Iniciar").invoke()
+        self.assertEqual(self.controller.starts, 1)
+        self.assertEqual(self.controller.started_config.block_exes, ("pending.exe",))
+        self.assertIn("Motor em execução", self.app.runtime_title.options["text"])
+        self.assertEqual(self.app.start_button.options["state"], "disabled")
+        self.assertEqual(self.app.stop_button.options["state"], "normal")
+        button(self.app, "Iniciar").invoke()
+        self.assertEqual(self.controller.starts, 1)
+        self.controller.wait.assert_not_called()
+
+    def test_runtime_uses_persisted_external_json_not_session_baseline_or_import(self):
+        self.path.write_text(json.dumps({"windows": [], "block_exes": ["external.exe"]}), encoding="utf-8")
+        button(self.app, "Iniciar").invoke()
+        self.assertEqual(self.controller.started_config.block_exes, ("external.exe",))
+        self.assertEqual(self.session.snapshot.config.block_exes, ())
+        self.controller.stop()
+        self.controller.finish()
+        self.import_source(block_exes=["draft-only.exe"])
+        button(self.app, "Importar JSON").invoke()
+        button(self.app, "Iniciar").invoke()
+        self.assertEqual(self.controller.starts, 1)
+        self.assertEqual(load_config(self.path).block_exes, ("external.exe",))
+
+    def test_stop_polling_preserves_last_agenda_and_is_nonblocking(self):
+        button(self.app, "Iniciar").invoke()
+        self.controller.value = RuntimeSnapshot(state="running", active=True,
+                                                last_scan=real_datetime(2026, 10, 11, 9))
+        agenda = self.app.agenda_label.options["text"]
+        preview = self.app.preview_summary.options["text"]
+        button(self.app, "Parar").invoke()
+        self.assertTrue(self.controller.is_alive())
+        self.assertIn("Motor parando", self.app.runtime_title.options["text"])
+        self.assertIn("dentro da janela", self.app.runtime_detail.get())
+        self.assertEqual(self.app.agenda_label.options["text"], agenda)
+        self.assertEqual(self.app.preview_summary.options["text"], preview)
+        self.assertEqual(self.app.start_button.options["state"], "disabled")
+        self.assertEqual(self.app.stop_button.options["state"], "disabled")
+        self.controller.wait.assert_not_called()
+        # O snapshot pode ser publicado no finally antes do retorno da thread.
+        self.controller.value = replace(self.controller.value, state="idle")
+        self.app.refresh_status(schedule=False)
+        self.assertIn("Motor parando", self.app.runtime_title.options["text"])
+        self.controller.finish()
+        self.fire_timer(self.app.status_timer)
+        self.assertIn("Motor parado", self.app.runtime_title.options["text"])
+        self.assertIn("dentro da janela", self.app.runtime_detail.get())
+        self.assertEqual(self.app.start_button.options["state"], "normal")
+        self.assertEqual(len(self.app.timers), 1)
+        self.app.refresh_status(schedule=False)
+        self.assertEqual(len(self.app.timers), 1)
+
+    def test_error_retry_waits_for_worker_exit_and_requires_new_confirmation(self):
+        button(self.app, "Iniciar").invoke()
+        self.controller.value = RuntimeSnapshot(state="error", error="JSON inválido", active=True)
+        self.fire_timer(self.app.status_timer)
+        self.assertIn("Motor com erro", self.app.runtime_title.options["text"])
+        self.assertIn("JSON inválido", self.app.runtime_detail.get())
+        self.assertIn("dentro da janela", self.app.runtime_detail.get())
+        self.assertEqual(self.app.start_button.options["state"], "disabled")
+        button(self.app, "Iniciar").invoke()
+        self.assertEqual(self.controller.starts, 1)
+        self.controller.alive = False
+        self.fire_timer(self.app.status_timer)
+        self.assertEqual(self.app.start_button.options["state"], "normal")
+        self.messages.askyesno.reset_mock()
+        button(self.app, "Iniciar").invoke()
+        self.messages.askyesno.assert_called_once()
+        self.assertEqual(self.controller.starts, 2)
+        self.controller.wait.assert_not_called()
+
+    def test_runtime_presenter_detail_stays_readonly_and_scrollable(self):
+        detail = "diagnóstico longo\n" * 20
+        view = SimpleNamespace(title="Motor com erro", detail=detail, start_enabled=True, stop_enabled=False)
+        with patch("ui.config_gui.format_runtime", return_value=view) as presenter:
+            self.app.refresh_status(schedule=False)
+        presenter.assert_called_once_with(self.controller.snapshot())
+        self.assertEqual(self.app.runtime_detail.get(), detail)
+        self.assertEqual(self.app.runtime_detail.options["state"], "disabled")
+        self.assertEqual(self.app.runtime_detail.options["height"], 62)
+
+    def test_modal_blocks_start_but_stop_does_not_discard_form(self):
+        button(self.app, "Iniciar").invoke()
+        button(self.app, "Adicionar horário").invoke()
+        dialog = self.app.modal
+        self.entries()[0].insert(0, "09:00")
+        self.app.start_runtime()
+        self.assertEqual(self.controller.starts, 1)
+        self.app.stop_runtime()
+        self.assertIs(self.app.modal, dialog)
+        self.assertEqual(self.entries()[0].get(), "09:00")
+        self.assertIn("Motor parando", self.app.runtime_title.options["text"])
+        button(dialog, "Cancelar").invoke()
+        self.assertFalse(self.session.dirty)
+
+    def test_cancel_close_keeps_worker_modal_and_timers_running(self):
+        button(self.app, "Iniciar").invoke()
+        self.session.draft.add_rule("block_exes", "pending.exe")
+        button(self.app, "Adicionar horário").invoke()
+        modal = self.app.modal
+        timer = self.app.status_timer
+        self.messages.askyesnocancel.return_value = None
+        self.app.close_editor()
+        self.assertEqual(self.controller.stops, 0)
+        self.assertTrue(self.controller.alive)
+        self.assertFalse(self.app.closing)
+        self.assertFalse(self.app.destroyed)
+        self.assertIs(self.app.modal, modal)
+        self.assertEqual(self.app.status_timer, timer)
+        self.controller.wait.assert_not_called()
+
+    def test_save_conflict_on_close_keeps_worker_then_success_stops_before_destroy(self):
+        button(self.app, "Iniciar").invoke()
+        baseline = self.path.read_bytes()
+        self.session.draft.add_rule("block_exes", "pending.exe")
+        self.path.write_bytes(b'{"windows":[],"external":true}')
+        self.messages.askyesnocancel.return_value = True
+        self.app.close_editor()
+        self.assertEqual(self.controller.stops, 0)
+        self.assertFalse(self.app.closing)
+        self.assertTrue(self.controller.alive)
+        self.path.write_bytes(baseline)
+        self.app.close_editor()
+        self.assertEqual(self.controller.stops, 1)
+        self.assertFalse(self.session.dirty)
+        self.assertEqual(load_config(self.path).block_exes, ("pending.exe",))
+        self.assertFalse(self.app.destroyed)
+        self.assertIsNone(self.app.status_timer)
+        self.assertIsNotNone(self.app.close_timer)
+        self.controller.finish()
+        self.fire_timer(self.app.close_timer)
+        self.assertTrue(self.app.destroyed)
+        self.assertEqual(self.app.timers, {})
+        self.controller.wait.assert_not_called()
+
+    def test_discard_close_waits_and_prevents_all_new_actions_and_stale_form_apply(self):
+        button(self.app, "Iniciar").invoke()
+        self.session.draft.add_window("09:00", "10:00", [0])
+        self.app.render()
+        original = self.path.read_bytes()
+        draft = self.session.draft.config
+        button(self.app, "Adicionar regra").invoke()
+        dialog = self.app.modal
+        apply = button(dialog, "Adicionar").options["command"]
+        self.messages.askyesnocancel.return_value = False
+        self.app.close_editor()
+        self.assertTrue(self.app.closing)
+        self.assertFalse(self.app.destroyed)
+        self.assertTrue(dialog.destroyed)
+        self.assertEqual(dialog.timers, {})
+        for child in descendants(self.app):
+            if child.__class__.__name__ in ("CTkButton", "CTkEntry", "CTkCheckBox", "CTkOptionMenu"):
+                self.assertEqual(child.options["state"], "disabled")
+        self.messages.askyesno.reset_mock()
+        self.app.start_runtime()
+        self.app.stop_runtime()
+        self.app.close_editor()
+        self.app.edit_window()
+        self.app.edit_rule()
+        self.app.duplicate_window(0)
+        self.app.remove_item("windows", 0)
+        self.app.import_config()
+        self.app.export_config()
+        self.app.change_week(7)
+        self.app.callbacks["<Control-s>"](None)
+        self.app.callbacks["<Control-r>"](None)
+        apply()
+        self.assertIsNone(self.app.modal)
+        self.assertEqual(self.path.read_bytes(), original)
+        self.assertEqual(self.session.draft.config, draft)
+        self.assertEqual(self.controller.starts, 1)
+        self.assertEqual(self.controller.stops, 1)
+        self.messages.askyesno.assert_not_called()
+        self.filedialog.askopenfilename.assert_not_called()
+        self.filedialog.asksaveasfilename.assert_not_called()
+        self.fire_timer(self.app.close_timer)
+        self.assertFalse(self.app.destroyed)
+        self.assertEqual(len(self.app.timers), 1)
+        self.controller.finish()
+        self.fire_timer(self.app.close_timer)
+        self.assertTrue(self.app.destroyed)
+        self.assertEqual(self.app.timers, {})
+        self.controller.wait.assert_not_called()
 
     def test_overview_is_initial_tab_with_orientation_and_shortcuts(self):
         self.assertEqual(self.app.tabs.options["tabs"][0], "Visão geral")

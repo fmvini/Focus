@@ -1,6 +1,6 @@
 # Focus Blocker
 
-Aplicativo em desenvolvimento para Windows 10/11. Configuração JSON com editores de terminal e gráfico, avaliação de horários e bloqueador de processos por CLI. Sites, avisos/pausa, bandeja, estatísticas e instalador continuam nas próximas fases. O editor gráfico foi implementado; a renderização nativa ainda precisa ser validada no Windows com as dependências instaladas.
+Aplicativo em desenvolvimento para Windows 10/11. Configuração JSON com editores de terminal e gráfico, avaliação de horários e bloqueador de processos com controle pela janela ou CLI. Sites, avisos/pausa, bandeja, estatísticas e instalador continuam nas próximas fases. Widgets nativos foram testados; inspeção visual, DPI e encerramentos reais ainda exigem aceite dedicado.
 
 ## Preparar e executar
 
@@ -52,7 +52,9 @@ Em **Horários**, **Duplicar** copia uma janela para ajustar outra faixa rapidam
 
 **Adicionar/Aplicar alteração** atualiza apenas o rascunho. **Salvar** (Ctrl+S) grava o JSON. **Recarregar** (Ctrl+R) descarta a edição após confirmação. Ao fechar com alterações pendentes, você pode salvar, descartar ou cancelar a saída. Erros preservam o rascunho; conflito externo exige recarga. A consulta da agenda usa a última versão carregada/salva, sem incluir mudanças pendentes e sem reler automaticamente edições externas.
 
-`--gui` combina somente com `--config` e configura o aplicativo; o bloqueio continua sendo iniciado pelo comando `--watch --apply-processes` da seção abaixo. Outro bloqueador já em execução poderá consumir o JSON salvo no próximo ciclo. Sites, pausa, bandeja e estatísticas não fazem parte deste editor. Ver [contrato gráfico](docs/GUI_EDITOR_CONTRACT.md).
+`--gui` combina somente com `--config` e abre com o motor parado. **Iniciar** exige um rascunho sem alterações pendentes e confirmação: aplicativos elegíveis podem ser encerrados sem salvar seu estado. O motor lê o JSON salvo a cada ciclo; edições externas também são observadas. **Parar** impede novas ações, aguarda a chamada em andamento e não reabre aplicativos. Ao fechar, a janela aguarda seu motor terminar; cancelar a saída mantém a execução.
+
+O cabeçalho mostra o estado do motor, a última avaliação da agenda, o último ciclo e encerramentos confirmados, pendências e falhas. Esses dados ficam separados da agenda carregada pelo editor e da prévia do rascunho. JSON inválido/ausente ou erro global interrompe novas ações; corrija a causa e clique em Iniciar novamente quando o worker anterior terminar. Um bloqueador CLI iniciado separadamente continua independente da janela. Sites, pausa, bandeja e estatísticas não fazem parte desta unidade. Ver [contrato do controle gráfico](docs/PROCESS_GUI_CONTRACT.md).
 
 ### Editor de terminal
 
@@ -64,7 +66,7 @@ O editor combina somente com `--config` e não inicia bloqueadores. Um `--watch 
 
 ## Aplicar bloqueio de processos
 
-Escolha horários e listas por um dos editores ou pelo JSON antes de executar. Os campos opcionais `block_exes`, `block_folders`, `safelist_exes` e `block_cmdline` são listas; quando ausentes, ficam vazios. Bandeja e integração gráfica com o bloqueador continuam na fase 5. Exemplo de regra conjunta, para adicionar ao objeto de configuração somente se você quiser bloquear Minecraft Java:
+Escolha horários e listas por um dos editores ou pelo JSON antes de executar. Use Iniciar na janela ou o comando abaixo. Os campos opcionais `block_exes`, `block_folders`, `safelist_exes` e `block_cmdline` são listas; quando ausentes, ficam vazios. Bandeja continua pendente. Exemplo de regra conjunta, para adicionar ao objeto de configuração somente se você quiser bloquear Minecraft Java:
 
 ```json
 "block_cmdline": [{"executable": "javaw.exe", "contains": ".minecraft"}]
@@ -90,4 +92,4 @@ Somente saída confirmada após solicitação aceita gera evento de tentativa; p
 
 Testes usam relógios/adaptadores controlados e diretórios isolados; não alteram hosts nem encerram aplicativos do usuário. Ver [documentação de desenvolvimento](docs/README.md), [contratos da fase 1](docs/PHASE1_CONTRACT.md), [fase 2](docs/PHASE2_CONTRACT.md) e [registro de desenvolvimento](docs/DEVELOPMENT_LOG.md).
 
-Os cinco smoke tests com widgets nativos são executados quando CustomTkinter está instalado, com janelas ocultas. Sem essa dependência, são marcados como ignorados; os testes de fluxo com widgets simulados e repositório real continuam funcionando. A inspeção visual e de DPI deve ser feita abrindo `--gui` no Windows, incluindo a rolagem em 880×660. A instalação da dependência continua indisponível neste ambiente; não há evidência de renderização nativa ainda.
+Os oito smoke tests com widgets nativos são executados quando CustomTkinter está instalado, com janelas ocultas e controlador simulado. Cobrem formulários, busca, importação/exportação, início/parada e limpeza de callbacks. Sem essa dependência, são marcados como ignorados. As dependências foram instaladas e os oito testes passaram neste ambiente; a captura da janela de QA falhou por timeout. A inspeção visual e de DPI deve ser feita abrindo `--gui` no Windows, incluindo a rolagem em 880×660.

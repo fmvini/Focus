@@ -1,6 +1,6 @@
 # Documentação de desenvolvimento — Focus Blocker
 
-Status: fases 1/2, editor CLI e implementação do editor gráfico independente; renderização nativa ainda pendente de validação. Etapas restantes e limites no log. Ver [instruções de execução](../README.md).
+Status: fases 1/2, editor CLI, painel/configuração gráfica e controle explícito do motor de processos. Oito smoke tests nativos passaram; inspeção visual/DPI e encerramentos reais permanecem pendentes. Etapas restantes e limites no log. Ver [instruções de execução](../README.md).
 
 ## Fonte e autoridade
 
@@ -28,6 +28,7 @@ Status: fases 1/2, editor CLI e implementação do editor gráfico independente;
 | [CONFIG_EDITOR_CONTRACT.md](CONFIG_EDITOR_CONTRACT.md) | Rascunho, edição pela CLI, salvamento e conflitos externos |
 | [GUI_EDITOR_CONTRACT.md](GUI_EDITOR_CONTRACT.md) | Editor gráfico, sessão de edição, consulta da agenda e limites de validação nativa |
 | [CONFIG_EVOLUTION_CONTRACT.md](CONFIG_EVOLUTION_CONTRACT.md) | Painel semanal, duplicação, busca e importação/exportação do rascunho |
+| [PROCESS_GUI_CONTRACT.md](PROCESS_GUI_CONTRACT.md) | Motor gráfico: início/parada, worker, snapshots, recarga e saída ordenada |
 
 ## Coordenação da equipe
 
@@ -35,10 +36,10 @@ Agentes identificados por `maestri list`: Maestro, Backend, Frontend e Banco de 
 
 Na fase 2, Backend mantém bloqueador/adaptador; Banco, JSON tipado; Frontend, CLI; Maestro, contratos/revisão/integração. Antes de iniciar implementação posterior, consultar log/decisões; não interpretar ausência de resposta como autorização para escolher comportamento de produto.
 
-No editor CLI independente, Backend mantém `ConfigDraft`; Banco, snapshots/persistência; Frontend, menu e flags; Maestro, integração, documentação e commit único. A unidade foi complementada em 2026-10-09 pelo editor gráfico `--gui`, reutilizando os mesmos contratos. A fase 5 completa, com bandeja e integração ao núcleo, continua pendente.
+No editor CLI independente, Backend mantém `ConfigDraft`; Banco, snapshots/persistência; Frontend, menu e flags; Maestro, integração, documentação e commit único. A unidade foi complementada pelo editor gráfico, painel semanal/portabilidade e controle de processos. Nesta última unidade, Backend entregou controlador, Banco presenter/integração com JSON, Frontend lifecycle/widgets e Maestro revisão/integração. A fase 5 completa, incluindo bandeja, continua pendente.
 
 A pedido do usuário, novas perguntas ficam em USER_ANSWERS, sem formulários/mensagens Maestri para colher respostas. Ler esse arquivo antes de cada etapa; preservar o texto preenchido, acrescentar perguntas com novos IDs e consolidar somente respostas explícitas em DECISIONS. Relatórios dos agentes não são respostas do usuário.
 
 ## Limites desta documentação
 
-O projeto possui núcleo de agenda/configuração, editores de terminal/gráfico e aplicação de regras de processos por CLI. A GUI está implementada com testes de fluxo, mas sem validação nativa neste ambiente. Não há bloqueador de sites, avisos/pausa, bandeja, schema SQLite ou instalador. Testes/resultados ficam em TEST_PLAN/DEVELOPMENT_LOG; catálogo de proteção não comprova reconhecimento universal de aplicativos. Versões Windows alvo, sites/Brave, desempenho e recuperação do hosts exigem validação própria.
+O projeto possui núcleo de agenda/configuração, editores de terminal/gráfico e aplicação de regras de processos por CLI e GUI. A suíte integrada inclui widgets nativos com controlador simulado; não substitui inspeção visual/DPI ou encerramentos Windows reais. Não há bloqueador de sites, avisos/pausa, bandeja, schema SQLite ou instalador. Testes/resultados ficam em TEST_PLAN/DEVELOPMENT_LOG; catálogo de proteção não comprova reconhecimento universal de aplicativos. Versões Windows alvo, sites/Brave, desempenho e recuperação do hosts exigem validação própria.

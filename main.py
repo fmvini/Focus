@@ -51,7 +51,8 @@ def _parser() -> argparse.ArgumentParser:
             "alvo; erro global/configuração interrompe novas ações. "
             "--edit-config edita um JSON existente e combina somente com "
             "--config; alterações ficam no rascunho até Salvar. "
-            "--gui abre o editor gráfico e também combina somente com --config. "
+            "--gui abre o editor gráfico com controle explícito de processos "
+            "e também combina somente com --config; a janela inicia com o motor parado. "
             "Códigos: 0 sucesso/Ctrl+C; 1 erro global/configuração/IO; "
             "2 argumentos inválidos. A criação inicial é exclusiva; falha "
             "durante a escrita pode deixar o arquivo novo incompleto."
@@ -65,7 +66,7 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--watch", action="store_true", help="recarrega e reavalia a cada 5 s até Ctrl+C")
     parser.add_argument("--apply-processes", action="store_true", help="encerra processos elegíveis; exige --watch e relógio real")
     parser.add_argument("--edit-config", action="store_true", help="abre editor interativo de horários e regras de processos")
-    parser.add_argument("--gui", action="store_true", help="abre editor gráfico de horários e regras; combina somente com --config")
+    parser.add_argument("--gui", action="store_true", help="abre configuração e controle de processos; motor inicia parado; combina somente com --config")
     return parser
 
 
@@ -242,7 +243,9 @@ def main(argv: list[str] | None = None) -> int:
             _print_status(config, args.at if args.at is not None else datetime.now())
         return 0
     except KeyboardInterrupt:
-        if args.edit_config or args.gui:
+        if args.gui:
+            message = "Editor encerrado por Ctrl+C; monitoramento parado e alterações não salvas descartadas."
+        elif args.edit_config:
             message = "Editor encerrado por Ctrl+C; alterações não salvas descartadas."
         elif args.apply_processes:
             message = "Varredura de processos encerrada por Ctrl+C; apps encerrados não são reabertos."
