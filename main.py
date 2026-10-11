@@ -2,7 +2,7 @@
 
 Códigos de saída: 0 = sucesso ou Ctrl+C; 1 = erro global/configuração/IO;
 2 = argumentos inválidos (argparse). Editores gravam somente ao salvar.
-A criação inicial é exclusiva, sem sobrescrita, mas não é atômica: falha de
+A criação inicial pela CLI é exclusiva, sem sobrescrita, mas não é atômica: falha de
 escrita pode deixar o arquivo novo incompleto.
 """
 
@@ -53,9 +53,11 @@ def _parser() -> argparse.ArgumentParser:
             "--config; alterações ficam no rascunho até Salvar. "
             "--gui abre o editor gráfico com controle explícito de processos "
             "e também combina somente com --config; a janela inicia com o motor parado. "
+            "Se o JSON estiver ausente, a janela prepara um rascunho inicial "
+            "e cria o arquivo somente ao Salvar. "
             "Enviar à bandeja é explícito; fechar a janela solicita saída ordenada. "
             "Códigos: 0 sucesso/Ctrl+C; 1 erro global/configuração/IO; "
-            "2 argumentos inválidos. A criação inicial é exclusiva; falha "
+            "2 argumentos inválidos. --init-config cria exclusivamente; falha "
             "durante a escrita pode deixar o arquivo novo incompleto."
         ),
     )

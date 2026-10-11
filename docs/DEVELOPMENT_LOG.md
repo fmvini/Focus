@@ -1,3 +1,31 @@
+## 2026-10-11 — Primeira configuração gráfica
+
+### Implementado
+- Abertura gráfica de destino ausente com rascunho vazio, sem criar arquivo ao abrir; orientação identifica arquivo ainda não criado e agenda ainda não salva. Salvar cria explicitamente; descartar saída não grava nada.
+- Sugestões do §6, treze itens desmarcados por padrão, adicionam somente escolhas ao rascunho em ordem do catálogo, sem duplicar regras equivalentes por casefold. Minecraft Java é regra conjunta `javaw.exe`/`.minecraft`; nenhuma descoberta de instalações, pasta presumida ou ativação automática.
+- Primeira gravação valida/prepara JSON completo e publica exclusivamente, recusando destinos existentes/concorrentes. Importar/exportar preserva estado novo; recarga estrita pode adotar arquivo externo após confirmação. Iniciar fica desabilitado até salvar e continua exigindo confirmação depois.
+- Maestro definiu contrato/arquivos dos três agentes; após os agentes pararem por limite de uso, assumiu finalização, revisão e testes restantes. D13 preservado, sem fechar decisões pendentes.
+- Perguntas complementares Q-PAUSE-01/02 e Q-WARN-01/02 adicionadas em USER_ANSWERS para preparar avisos/pausa; respostas anteriores preservadas. Campos vazios não foram tratados como aprovação.
+
+### Arquivos principais alterados
+- `core/initial_setup.py`, `core/config_session.py`, `core/config_portability.py`, `ui/config_gui.py`, `main.py`.
+- `tests/test_initial_setup.py`, `tests/test_initial_setup_integration.py`, `tests/test_config_gui.py`, `tests/test_config_gui_main.py`, `tests/test_config_gui_native.py`.
+- `docs/INITIAL_SETUP_CONTRACT.md`, `docs/USER_ANSWERS.md`, `README.md`, `docs/GUI_EDITOR_CONTRACT.md`, `docs/README.md`, `docs/DATA_MODEL.md`, `docs/ARCHITECTURE_BACKEND.md`, `docs/DECISIONS.md`, `docs/DELIVERY_PLAN.md`, `docs/TEST_PLAN.md`, `docs/DEVELOPMENT_LOG.md`.
+
+### Decisões técnicas
+- Reutilizar editor existente e sessão nova sem baseline; configuração existente permanece leitura estrita. Nunca converter JSON inválido/permissão/diretório/link quebrado em primeira execução.
+- Publicação exclusiva da primeira gravação, reaproveitando temporário/fsync/primitivos sem sobrescrita. Sugestões apenas por seleção, sem horários ativados ou descoberta de instalações; Java somente regra conjunta.
+- Snapshot novo é dos próprios bytes preparados, nunca de leitura após publicação; escritor posterior é detectado no próximo Salvar. Exportação continua recusando active_path inválido/aliases. Em falha de cleanup após publicação POSIX, arquivo completo pode existir enquanto sessão conserva estado novo; Recarregar lê estritamente para recuperar. Sem lock adversarial de diretórios ou garantia absoluta em crash.
+
+### Estado atual
+- Suíte completa fora do sandbox: **551 descobertos, 550 aprovados e 1 skip**, 38,140 s em Python 3.14.6/Windows. Único skip conhecido: symlink/WinError 1314. Inclui doze nativeGUI sem bgerrors/callbacks restantes, bandeja real e regressões guard/controller/config/CLI.
+- Novos testes: 22 catálogo/pureza, 14 sessão/publicação, sete fluxos GUI simulados, três mainGUI e dois nativeGUI. Corridas reais de rename/link preservaram destino externo, falhas fsync/publicação mantiveram rascunho, snapshot próprio preservado após escritor posterior. Sintaxe 3.12/UTF-8 nos 52 arquivos Python, links locais e diff conferidos.
+- Unidade integrada/validada para commit local conjunto, sem push; base anterior `86a5bcf`. Bloqueadores falsos e fixtures isoladas nesta suíte; nenhum aplicativo do usuário encerrado.
+- Runtime Python 3.12 e inspeção visual/DPI permanecem pendentes. Nenhum hosts ou processo do usuário alterado nesta etapa.
+
+### Próximos passos
+- Retomar avisos/pausa após respostas Q-PAUSE/Q-WARN; sites aguardam Q-HOSTS. Conferir primeira execução visual/DPI quando captura estiver disponível.
+
 ## 2026-10-11 — Bandeja explícita e guarda da interface
 
 ### Implementado

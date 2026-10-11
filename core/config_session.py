@@ -4,8 +4,9 @@ from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 
+from core.config import ConfigError, default_config
 from core.config_editor import ConfigDraft
-from core.config_portability import export_new_config
+from core.config_portability import _new_destination, create_new_config, export_new_config
 from core.config_repository import read_snapshot, save_snapshot
 from core.scheduler import is_blocking, next_block_start
 
@@ -23,13 +24,33 @@ class ConfigSession:
         self.path = Path(path)
         self.reload()
 
+    @classmethod
+    def for_new(cls, path: str | Path) -> "ConfigSession":
+        """Abre explicitamente rascunho vazio só para destino ausente, sem gravar."""
+        try:
+            destination = Path(path)
+            _new_destination(destination, conflict=True)
+            draft = ConfigDraft(default_config())
+        except (OSError, UnicodeError, ValueError, TypeError, RecursionError, RuntimeError) as exc:
+            raise ConfigError(f"Não foi possível preparar configuração nova em {path}: {exc}") from exc
+        session = cls.__new__(cls)
+        session.path, session.snapshot, session.draft = destination, None, draft
+        return session
+
+    @property
+    def is_new(self) -> bool:
+        return self.snapshot is None
+
     @property
     def dirty(self) -> bool:
-        return self.draft.config != self.snapshot.config
+        return self.is_new or self.draft.config != self.snapshot.config
 
     def save(self) -> None:
         # Mesmo sem alterações, conferir o baseline: não ocultar conflito externo.
-        self.snapshot = save_snapshot(self.path, self.draft.config, self.snapshot)
+        if self.is_new:
+            self.snapshot = create_new_config(self.path, self.draft.config)
+        else:
+            self.snapshot = save_snapshot(self.path, self.draft.config, self.snapshot)
 
     def reload(self) -> None:
         snapshot = read_snapshot(self.path)
@@ -47,5 +68,7 @@ class ConfigSession:
 
     def agenda_status(self, now: datetime) -> AgendaStatus:
         """Consulta a última agenda carregada/salva, nunca o rascunho."""
+        if self.is_new:
+            return AgendaStatus(False, None)
         windows = self.snapshot.config.windows
         return AgendaStatus(is_blocking(windows, now), next_block_start(windows, now))

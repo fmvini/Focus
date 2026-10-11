@@ -16,6 +16,12 @@ adapta pystray com imports lazy. Menu só publica comandos; polling Tk executa
 Mostrar/Parar/Sair. Janela só oculta após ready e restaura em erro/saída. Não há
 IPC ou garantia de instância entre CLI, hardlinks e sessões Windows diferentes.
 
+Primeira execução gráfica reutiliza o editor com sessão nova ainda sem arquivo;
+`ConfigSession.for_new` aceita apenas destino ausente e Salvar publica JSON
+completo exclusivamente. O catálogo puro em `core/initial_setup.py` oferece
+regras opt-in do escopo, sem descoberta de instalações. Motor continua parado
+até save e confirmação de Iniciar; [contrato](INITIAL_SETUP_CONTRACT.md).
+
 ## 1. Classificação e alcance
 
 - **Requisito explícito (R):** comportamento ou decisão escrito no escopo, com seção/RF citados.

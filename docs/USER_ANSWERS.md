@@ -85,4 +85,76 @@ Na fase 3, ainda sem interface gráfica, pode haver uma orientação pela CLI pa
 
 ## Pendências das etapas posteriores
 
-Pausas/avisos (D09/D10), medição de foco/relógio (D12), domínio ativo do Brave (D19), instalador/dados na desinstalação (D17/D18) serão convertidos em perguntas aqui quando sua etapa começar. Não preencher lacunas com decisões inventadas.
+As perguntas de pausas/avisos abaixo preparam a próxima etapa. Não impedem a
+primeira configuração gráfica baseada em D13.
+Medição de foco/relógio (D12), domínio ativo do Brave (D19) e instalador/dados na
+desinstalação (D17/D18) serão detalhados nas respectivas etapas. Não preencher
+lacunas com decisões inventadas.
+
+## Perguntas para avisos e pausa — D09/D10
+
+### Q-PAUSE-01 — Pedidos e fim do horário
+
+**Status:** aguardando resposta.
+
+Durante a espera de 60 segundos ou a pausa de 15 minutos, um novo pedido deve
+ser recusado sem reiniciar o tempo? Se o horário de bloqueio terminar durante
+a espera, podemos cancelar o pedido sem contar pausa e manter os aplicativos
+livres pela agenda? Ocultar a janela na bandeja manteria a espera/pausa;
+escolher Sair encerraria esses estados com o motor.
+
+**Sugestão da equipe:** recusar pedidos repetidos; cancelar a espera quando
+acabar a janela; ocultar não cancela; sair cancela sem continuar em segundo plano.
+
+**Resposta do usuário:**
+
+
+### Q-PAUSE-02 — Suspensão e reinício
+
+**Status:** aguardando resposta.
+
+O tempo de descanso pode continuar passando enquanto o PC está suspenso?
+Ao voltar, se a espera de 60 segundos terminou durante a suspensão, prefere
+cancelar esse pedido ou começar então uma pausa completa de 15 minutos?
+Ao fechar/reabrir ou após crash, a pausa deve ser descartada e a agenda atual
+reavaliada, ou precisa continuar pelo tempo restante? Não contar pausas
+descartadas antes da liberação; pausas já iniciadas continuam contando uma vez.
+
+**Sugestão da equipe:** descanso iniciado vence pelo tempo transcorrido,
+cancelar espera interrompida por suspensão e descartar estados ao reabrir.
+
+**Resposta do usuário:**
+
+
+### Q-WARN-01 — Repetição e aviso perdido
+
+**Status:** aguardando resposta.
+
+Podemos avisar aos 5 e 1 minuto antes do início efetivo após unir horários
+sobrepostos/adjacentes, uma vez por antecedência e início? Se o motor iniciar
+ou voltar de suspensão depois de uma antecedência, podemos ignorar esse aviso
+já passado, sem emitir avisos atrasados? Um ajuste do relógio para trás não
+repetiria aviso já emitido; mudar a agenda para outro início criaria avisos
+para esse novo início, quando ainda estiverem no futuro.
+
+**Sugestão da equipe:** avisos da união, sem duplicação ou recuperação de
+avisos passados; não avisar quando iniciar já dentro da janela, conforme §8.
+
+**Resposta do usuário:**
+
+
+### Q-WARN-02 — Condição e retorno da pausa
+
+**Status:** aguardando resposta.
+
+Para reconhecer jogo/launcher aberto, podemos usar as regras de processos
+que você selecionou, excluindo aplicativos protegidos, em vez de um catálogo
+automático adicional? A opção Sempre avisar dispensaria essa condição.
+O aviso de retorno da pausa, um minuto antes, pode sempre aparecer quando
+haverá bloqueio pela agenda, mesmo sem jogo aberto, e ser omitido quando
+o horário já terminou? O canal seria a notificação do Windows nos dois casos.
+
+**Sugestão da equipe:** elegibilidade pelas regras escolhidas; retorno avisa
+somente quando a agenda exigir bloqueio, sem depender de jogo aberto.
+
+**Resposta do usuário:**

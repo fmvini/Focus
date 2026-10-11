@@ -94,6 +94,21 @@ Persistência reutiliza parsing e gravação atômica da fase 1; comparação do
 
 Continuidade solicitada pelo usuário. Enquanto as decisões de sites seguem abertas, `--gui` implementa a edição gráfica das regras existentes, sem antecipar sites/pausa/foco. CustomTkinter 6.0.0 mantém a stack do escopo; importações sob demanda preservam os outros modos. `ConfigSession` reutiliza `ConfigDraft` e o repositório, sem schema novo. Três abas mostram somente recursos desta unidade. Fechamento com alterações oferece salvar/descartar/cancelar; não há bandeja nesta janela independente. Agenda exibida é a última carregada/salva e não confirmação de bloqueio aplicado. Renderização nativa ainda precisa ser validada em ambiente com a dependência instalada. Ver [contrato gráfico](GUI_EDITOR_CONTRACT.md).
 
+## Escolhas técnicas da primeira configuração — 2026-10-11
+
+Continuidade autorizada ao Maestro e aos três agentes, baseada em D13 já
+respondido: rascunho inicial sem horários/regras, sugestões do §6 desmarcadas e
+gravação somente ao Salvar. A GUI reutiliza o editor em vez de exigir criação
+prévia pela CLI. Somente destino ausente é elegível; leitura inválida, links e
+permissões não são convertidos em configuração nova. A primeira publicação é
+exclusiva e completa, sem substituir destino concorrente, e motor só inicia por
+confirmação posterior. Catálogo puro não descobre instalações ou presume pastas.
+Java usa regra conjunta, conforme D15. Ver [contrato](INITIAL_SETUP_CONTRACT.md).
+
+Detalhes de D09/D10 foram convertidos em Q-PAUSE-01/02 e Q-WARN-01/02 em
+USER_ANSWERS. Sugestões sem resposta permanecem pendentes; esta unidade não
+implementa avisos, pausa, sites, foco ou novos defaults.
+
 ## Contradições e limites que não podem ser ocultados
 
 Evoluções técnicas de 2026-10-11: quatro abas com painel semanal/portabilidade,

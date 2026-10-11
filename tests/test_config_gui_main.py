@@ -4,14 +4,18 @@ import builtins
 from contextlib import redirect_stderr, redirect_stdout
 import importlib.util
 import io
+import json
 from pathlib import Path
+import shutil
 import sys
 from types import ModuleType, SimpleNamespace
 import unittest
 from unittest.mock import Mock, patch
+from uuid import uuid4
 
 from core.config import ConfigError, default_config
 from core.instance_guard import InstanceGuardError
+from core.config_session import ConfigSession
 import main
 from ui.config_gui import run_config_gui
 
@@ -23,6 +27,106 @@ class ConfigGuiMainTests(unittest.TestCase):
         guard_patch = patch("ui.config_gui.InstanceGuard", return_value=self.guard)
         guard_patch.start()
         self.addCleanup(guard_patch.stop)
+
+    def fixture_path(self):
+        root = Path(__file__).resolve().parents[1] / f".editor-integration-{uuid4().hex}"
+        root.mkdir()
+        self.addCleanup(shutil.rmtree, root)
+        return root / "new.json"
+
+    def test_missing_json_uses_strict_read_cause_then_for_new_after_guard_without_creating_file(self):
+        path = self.fixture_path()
+        order = []
+        self.guard.acquire.side_effect = lambda: order.append("guard") or True
+        ctk = SimpleNamespace(set_appearance_mode=Mock(), set_default_color_theme=Mock())
+        sessions = []
+
+        def build(*args, **kwargs):
+            order.append("build")
+            session = args[4]
+            sessions.append(session)
+            self.assertTrue(session.is_new)
+            self.assertTrue(session.dirty)
+            self.assertIsNone(session.snapshot)
+            return SimpleNamespace(mainloop=Mock(), finish_close=Mock())
+
+        original_new = ConfigSession.for_new
+
+        def new(destination):
+            order.append("for_new")
+            return original_new(destination)
+
+        with patch.dict(sys.modules, {"customtkinter": ctk}), \
+                patch("ui.config_gui.ConfigSession", wraps=ConfigSession) as strict, \
+                patch("ui.config_gui.ProcessController") as controller, \
+                patch("ui.config_gui.WindowsTray"), \
+                patch("ui.config_gui._build_app", side_effect=build), \
+                patch.object(Path, "exists", side_effect=AssertionError("exists não decide primeira execução")):
+            strict.for_new.side_effect = new
+            self.assertEqual(run_config_gui(path), 0)
+            strict.assert_called_once_with(path)
+            strict.for_new.assert_called_once_with(path)
+            controller.return_value.start.assert_not_called()
+        self.assertEqual(order, ["guard", "for_new", "build"])
+        self.assertFalse(path.exists())
+        self.assertTrue(sessions[0].is_new)
+        self.guard.release.assert_called_once_with()
+
+    def test_invalid_directory_and_permission_error_never_fall_back_to_new_session(self):
+        path = self.fixture_path()
+        ctk = SimpleNamespace()
+        for contents in (b'{"windows":broken}', b'{}'):
+            path.write_bytes(contents)
+            with patch.dict(sys.modules, {"customtkinter": ctk}), \
+                    patch("ui.config_gui.ConfigSession", wraps=ConfigSession) as strict, \
+                    patch("ui.config_gui._build_app", side_effect=AssertionError("janela")), \
+                    redirect_stderr(io.StringIO()):
+                self.assertEqual(run_config_gui(path), 1)
+                strict.for_new.assert_not_called()
+            self.assertEqual(path.read_bytes(), contents)
+        path.unlink()
+        path.mkdir()
+        with patch.dict(sys.modules, {"customtkinter": ctk}), \
+                patch("ui.config_gui.ConfigSession", wraps=ConfigSession) as strict, \
+                redirect_stderr(io.StringIO()):
+            self.assertEqual(run_config_gui(path), 1)
+            strict.for_new.assert_not_called()
+        permission = ConfigError("leitura negada")
+        permission.__cause__ = PermissionError("negado")
+        with patch.dict(sys.modules, {"customtkinter": ctk}), \
+                patch("ui.config_gui.ConfigSession", side_effect=permission) as strict, \
+                redirect_stderr(io.StringIO()):
+            self.assertEqual(run_config_gui(path), 1)
+            strict.for_new.assert_not_called()
+
+    def test_missing_read_followed_by_existing_lstat_or_concurrent_file_refuses_without_window(self):
+        path = self.fixture_path()
+        ctk = SimpleNamespace()
+        original_new = ConfigSession.for_new
+
+        def raced(destination):
+            path.write_text(json.dumps({"windows": [], "writer": "other"}), encoding="utf-8")
+            return original_new(destination)
+
+        with patch.dict(sys.modules, {"customtkinter": ctk}), \
+                patch("ui.config_gui.ConfigSession", wraps=ConfigSession) as strict, \
+                patch("ui.config_gui._build_app", side_effect=AssertionError("janela")), \
+                redirect_stderr(io.StringIO()):
+            strict.for_new.side_effect = raced
+            self.assertEqual(run_config_gui(path), 1)
+            strict.for_new.assert_called_once_with(path)
+        original = path.read_bytes()
+        self.assertEqual(json.loads(original)["writer"], "other")
+        path.unlink()
+        # Simula lstat que encontra um symlink quebrado sem exigir privilégio.
+        with patch.dict(sys.modules, {"customtkinter": ctk}), \
+                patch("ui.config_gui.ConfigSession", wraps=ConfigSession) as strict, \
+                patch.object(Path, "lstat", return_value=Mock()), \
+                patch("ui.config_gui._build_app", side_effect=AssertionError("janela")), \
+                redirect_stderr(io.StringIO()):
+            self.assertEqual(run_config_gui(path), 1)
+            strict.for_new.assert_called_once_with(path)
+        self.assertFalse(path.exists())
 
     def test_second_instance_or_guard_failure_prevents_session_tk_and_workers(self):
         for outcome in (False, InstanceGuardError("mutex indisponível")):

@@ -7,11 +7,13 @@ import sys
 from time import monotonic
 
 from core.config import ConfigError
+from core.config_editor import ConfigDraft
 from core.config_repository import ConfigConflictError
 from core.config_session import ConfigSession
 from core.agenda_preview import week_preview
 from core.process_controller import ProcessController
 from core.instance_guard import InstanceGuard, InstanceGuardError
+from core.initial_setup import PROCESS_SUGGESTIONS, with_process_suggestions
 from ui.runtime_presenter import format_runtime
 from ui.tray_commands import TrayMailbox
 from ui.windows_tray import WindowsTray
@@ -55,13 +57,16 @@ def _run_guarded_config_gui(path: str | Path) -> int:
         return 1
 
     try:
-        session = ConfigSession(path)
+        try:
+            session = ConfigSession(path)
+        except ConfigError as exc:
+            # A leitura estrita mantém o erro original como causa. for_new
+            # reconfere com lstat: não recuperar inválidos/links quebrados.
+            if not isinstance(exc.__cause__, FileNotFoundError):
+                raise
+            session = ConfigSession.for_new(path)
     except ConfigError as exc:
-        print(
-            f"Erro ao abrir configuração: {exc}. Se o arquivo ainda não existe, "
-            "crie-o com --config PATH --init-config antes de usar --gui.",
-            file=sys.stderr,
-        )
+        print(f"Erro ao abrir configuração: {exc}. O destino foi preservado.", file=sys.stderr)
         return 1
 
     controller = ProcessController(session.path)
@@ -168,8 +173,8 @@ def _build_app(ctk, tk, filedialog, messagebox, session, controller=None, tray=N
             self.agenda_label.grid(row=0, column=0, sticky="ew", padx=18, pady=(12, 0))
             self.next_label = ctk.CTkLabel(summary, text="", anchor="w", text_color=muted)
             self.next_label.grid(row=1, column=0, sticky="ew", padx=18)
-            ctk.CTkLabel(summary, text="Consulta da agenda carregada; o estado do motor aparece acima.",
-                         text_color=muted, anchor="w").grid(row=2, column=0, sticky="ew", padx=18, pady=(0, 12))
+            self.agenda_hint = ctk.CTkLabel(summary, text="", text_color=muted, anchor="w")
+            self.agenda_hint.grid(row=2, column=0, sticky="ew", padx=18, pady=(0, 12))
 
             self.tabs = ctk.CTkTabview(self, fg_color="white", segmented_button_selected_color=accent,
                                        segmented_button_selected_hover_color="#10645F")
@@ -193,15 +198,18 @@ def _build_app(ctk, tk, filedialog, messagebox, session, controller=None, tray=N
                 tab.grid_rowconfigure(2, weight=1)
 
             overview.grid_columnconfigure(0, weight=1)
-            overview.grid_rowconfigure(3, weight=1)
+            overview.grid_rowconfigure(4, weight=1)
+            self.setup_note = ctk.CTkLabel(overview, text="", anchor="w", justify="left",
+                                           wraplength=730, text_color=muted)
+            self.setup_note.grid(row=0, column=0, sticky="ew", padx=14, pady=(10, 0))
             self.preview_summary = ctk.CTkLabel(overview, text="", anchor="w", justify="left",
                                                font=ctk.CTkFont(size=20, weight="bold"))
-            self.preview_summary.grid(row=0, column=0, sticky="ew", padx=14, pady=(10, 0))
+            self.preview_summary.grid(row=1, column=0, sticky="ew", padx=14, pady=(10, 0))
             self.preview_note = ctk.CTkLabel(overview, text="", anchor="w", justify="left",
                                             text_color=muted, wraplength=760)
-            self.preview_note.grid(row=1, column=0, sticky="ew", padx=14, pady=8)
+            self.preview_note.grid(row=2, column=0, sticky="ew", padx=14, pady=8)
             navigation = ctk.CTkFrame(overview, fg_color="transparent")
-            navigation.grid(row=2, column=0, sticky="ew", padx=14, pady=(0, 8))
+            navigation.grid(row=3, column=0, sticky="ew", padx=14, pady=(0, 8))
             for title, command in (
                 ("Semana anterior", lambda: self.change_week(-7)),
                 ("Esta semana", lambda: self.change_week(0)),
@@ -210,16 +218,19 @@ def _build_app(ctk, tk, filedialog, messagebox, session, controller=None, tray=N
                 ctk.CTkButton(navigation, text=title, width=130, fg_color=accent,
                               command=command).pack(side="left", padx=(0, 8))
             self.preview_days = ctk.CTkScrollableFrame(overview, fg_color="#F3F6F5")
-            self.preview_days.grid(row=3, column=0, sticky="nsew", padx=14)
+            self.preview_days.grid(row=4, column=0, sticky="nsew", padx=14)
             self.preview_days.grid_columnconfigure(0, weight=1)
             self.orientation = ctk.CTkLabel(overview, text="", anchor="w", justify="left",
                                             wraplength=760, text_color=muted)
-            self.orientation.grid(row=4, column=0, sticky="ew", padx=14, pady=8)
+            self.orientation.grid(row=5, column=0, sticky="ew", padx=14, pady=8)
             shortcuts = ctk.CTkFrame(overview, fg_color="transparent")
-            shortcuts.grid(row=5, column=0, sticky="w", padx=14, pady=(0, 14))
+            shortcuts.grid(row=6, column=0, sticky="w", padx=14, pady=(0, 14))
             for title, tab in (("Ir para Horários", "Horários"), ("Ir para Jogos / Apps", "Jogos / Apps")):
                 ctk.CTkButton(shortcuts, text=title, fg_color=accent,
                               command=lambda name=tab: self.select_tab(name)).pack(side="left", padx=(0, 8))
+            ctk.CTkButton(overview, text="Escolher sugestões de aplicativos", fg_color=accent,
+                          command=lambda: self.select_tab("Configuração")).grid(
+                              row=7, column=0, sticky="w", padx=14, pady=(0, 14))
 
             ctk.CTkLabel(schedules, text="Horários de foco", font=ctk.CTkFont(size=20, weight="bold"),
                          anchor="w").grid(row=0, column=0, sticky="w", padx=14, pady=(10, 0))
@@ -259,7 +270,8 @@ def _build_app(ctk, tk, filedialog, messagebox, session, controller=None, tray=N
             path_box.insert("1.0", str(session.path.absolute()))
             path_box.configure(state="disabled")
             ctk.CTkLabel(settings, justify="left", anchor="nw", wraplength=730, text=(
-                "As alterações ficam em um rascunho até você clicar em Salvar.\n\n"
+                "As alterações ficam em um rascunho até você clicar em Salvar. No primeiro uso, "
+                "Salvar cria o arquivo; fechar e descartar não cria nada. Salvar não inicia o motor.\n\n"
                 "Recarregar lê o arquivo novamente e descarta o rascunho. Se outro editor alterar "
                 "o arquivo, o Focus informa o conflito antes de salvar.\n\n"
                 "Iniciar exige confirmação e usa o JSON salvo. O motor pode ler alterações salvas no próximo ciclo. "
@@ -275,6 +287,29 @@ def _build_app(ctk, tk, filedialog, messagebox, session, controller=None, tray=N
                           command=self.import_config).pack(side="left", padx=(0, 8))
             ctk.CTkButton(portability, text="Exportar JSON", fg_color=accent,
                           command=self.export_config).pack(side="left")
+
+            ctk.CTkLabel(settings, text="Sugestões de jogos e aplicativos", anchor="w",
+                         font=ctk.CTkFont(size=20, weight="bold")).grid(
+                             row=4, column=0, sticky="ew", padx=18, pady=(22, 8))
+            ctk.CTkLabel(settings, text=(
+                "Escolha somente os aplicativos que deseja incluir no rascunho. Nada está selecionado inicialmente. "
+                "As sugestões não verificam instalações; revise e edite as regras em Jogos / Apps. "
+                "Minecraft Java exige javaw.exe junto ao trecho .minecraft. Proteções obrigatórias têm prioridade."
+            ), anchor="w", justify="left", wraplength=730, text_color=muted).grid(
+                row=5, column=0, sticky="ew", padx=18, pady=(0, 12))
+            self.suggestion_vars = {}
+            suggestions = ctk.CTkFrame(settings, fg_color="transparent")
+            suggestions.grid(row=6, column=0, sticky="ew", padx=18)
+            for index, suggestion in enumerate(PROCESS_SUGGESTIONS):
+                variable = tk.IntVar(value=0)
+                self.suggestion_vars[suggestion.key] = variable
+                detail = suggestion.executable
+                if suggestion.contains is not None:
+                    detail += f" + trecho {suggestion.contains}"
+                ctk.CTkCheckBox(suggestions, text=f"{suggestion.label} · {detail}",
+                                variable=variable).grid(row=index, column=0, sticky="w", pady=6)
+            ctk.CTkButton(settings, text="Adicionar selecionadas", fg_color=accent,
+                          command=self.add_suggestions).grid(row=7, column=0, sticky="w", padx=18, pady=14)
 
             footer = ctk.CTkFrame(self, fg_color="transparent")
             footer.grid(row=3, column=0, sticky="ew", padx=28, pady=16)
@@ -292,6 +327,8 @@ def _build_app(ctk, tk, filedialog, messagebox, session, controller=None, tray=N
             self.bind("<Control-r>", lambda _: self.reload_config() if self.modal is None else None)
             self.render()
             self.refresh_status()
+            if session.is_new:
+                self.notify("Arquivo ainda não criado. Clique em Salvar para criar.")
 
         def notify(self, text, *, error=False):
             self.feedback.configure(text=text, text_color="#A33232" if error else muted)
@@ -302,8 +339,32 @@ def _build_app(ctk, tk, filedialog, messagebox, session, controller=None, tray=N
             self.render_preview()
             self.render_windows()
             self.render_rules()
-            self.dirty_label.configure(text="Alterações não salvas" if session.dirty else "Sem alterações pendentes")
+            self.dirty_label.configure(text=("Arquivo ainda não criado" if session.is_new else
+                                            "Alterações não salvas" if session.dirty else "Sem alterações pendentes"))
+            self.setup_note.configure(text=(
+                "Primeira configuração: o arquivo ainda não foi criado. Escolha horários e aplicativos; "
+                "as sugestões são opcionais. Clique em Salvar para criar, depois confirme Iniciar quando desejar.\n"
+                f"Destino: {session.path.absolute()}"
+            ) if session.is_new else "Configuração carregada. Edite o rascunho e clique em Salvar para gravar alterações.")
             self.update_runtime()
+
+        def add_suggestions(self):
+            if self.closing or self.closed or self.modal is not None:
+                return
+            keys = [key for key, variable in self.suggestion_vars.items() if variable.get()]
+            if not keys:
+                self.notify("Selecione os aplicativos que deseja adicionar ao rascunho.")
+                return
+            try:
+                draft = ConfigDraft(with_process_suggestions(session.draft.config, keys))
+            except ConfigError as exc:
+                self.notify(f"Não foi possível adicionar sugestões: {exc}. Rascunho preservado.", error=True)
+                return
+            session.draft = draft
+            for variable in self.suggestion_vars.values():
+                variable.set(0)
+            self.render()
+            self.notify("Sugestões adicionadas ao rascunho. Revise em Jogos / Apps e clique em Salvar.")
 
         def select_tab(self, name):
             if not self.closing and not self.closed:
@@ -392,12 +453,15 @@ def _build_app(ctk, tk, filedialog, messagebox, session, controller=None, tray=N
                 self.runtime_detail.configure(state="disabled")
                 self.runtime_detail_text = view.detail
             self.start_button.configure(state="normal" if (
-                view.start_enabled and not alive and self.modal is None and not self.closing
+                view.start_enabled and not alive and self.modal is None and not self.closing and not session.is_new
             ) else "disabled")
             self.stop_button.configure(state="normal" if view.stop_enabled and not self.closing else "disabled")
 
         def start_runtime(self):
             if self.closing or self.closed or self.modal is not None or controller.is_alive():
+                return
+            if session.is_new:
+                self.notify("Crie a configuração clicando em Salvar antes de iniciar.", error=True)
                 return
             if session.dirty:
                 self.notify("Salve as alterações ou descarte o rascunho com Recarregar antes de iniciar.", error=True)
@@ -408,7 +472,7 @@ def _build_app(ctk, tk, filedialog, messagebox, session, controller=None, tray=N
                 "O motor usará exclusivamente o JSON salvo, incluindo alterações externas.\n\nIniciar agora?", parent=self
             ):
                 return
-            if self.closing or self.closed or session.dirty:
+            if self.closing or self.closed or session.dirty or session.is_new:
                 return
             if controller.start():
                 self.stop_requested = False
@@ -443,7 +507,8 @@ def _build_app(ctk, tk, filedialog, messagebox, session, controller=None, tray=N
                 f"Semana {preview.start:%d/%m/%Y} a {end:%d/%m/%Y}\n"
                 f"Horas PLANEJADAS: {self.planned_time(preview.total_minutes)}"
             ))
-            state = "Alterações não salvas" if session.dirty else "Sem alterações pendentes"
+            state = ("Arquivo ainda não criado" if session.is_new else
+                     "Alterações não salvas" if session.dirty else "Sem alterações pendentes")
             self.preview_note.configure(text=(
                 f"Prévia do rascunho · {state}\n"
                 "Horas planejadas pela agenda, não uma medição de foco. Sobreposições contam uma vez."
@@ -749,6 +814,7 @@ def _build_app(ctk, tk, filedialog, messagebox, session, controller=None, tray=N
         def save_config(self):
             if self.closing or self.closed:
                 return False
+            creating = session.is_new
             try:
                 session.save()
             except ConfigConflictError as exc:
@@ -760,7 +826,7 @@ def _build_app(ctk, tk, filedialog, messagebox, session, controller=None, tray=N
                 return False
             self.render()
             self.refresh_status(schedule=False)
-            self.notify("Configuração salva.")
+            self.notify("Arquivo de configuração criado. Motor permanece parado." if creating else "Configuração salva.")
             return True
 
         def reload_config(self):
@@ -788,8 +854,12 @@ def _build_app(ctk, tk, filedialog, messagebox, session, controller=None, tray=N
             if self.closing or self.closed:
                 return
             status = session.agenda_status(datetime.now())
-            self.agenda_label.configure(text="Agenda carregada: dentro da janela" if status.active else "Agenda carregada: fora da janela")
-            self.next_label.configure(text="Próximo início: " + (status.next_start.strftime("%d/%m/%Y às %H:%M") if status.next_start else "nenhum horário ativo"))
+            self.agenda_label.configure(text=("Agenda ainda não salva" if session.is_new else
+                                             "Agenda carregada: dentro da janela" if status.active else "Agenda carregada: fora da janela"))
+            self.next_label.configure(text=("Salvar cria o arquivo; Iniciar continua exigindo confirmação." if session.is_new else
+                "Próximo início: " + (status.next_start.strftime("%d/%m/%Y às %H:%M") if status.next_start else "nenhum horário ativo")))
+            self.agenda_hint.configure(text=("Prévia do rascunho abaixo; motor parado até salvar e confirmar Iniciar." if session.is_new else
+                                              "Consulta da agenda carregada; o estado do motor aparece acima."))
             self.update_runtime()
             if schedule and self.status_timer is None:
                 self.status_timer = self.after(250, self.poll_status)

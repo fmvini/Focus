@@ -16,8 +16,10 @@ Botão Enviar à bandeja e guarda gráfica por configuração/sessão são defin
 no [contrato de bandeja](TRAY_CONTRACT.md); fechar pelo X continua sair.
 
 - `--gui` abre um JSON existente, com o mesmo `--config`/APPDATA da CLI.
-  Criação inicial continua explícita em `--init-config`; arquivo inválido
-  não é substituído. A flag rejeita outros modos antes de IO/importações.
+  Destino ausente permite rascunho inicial, criado somente ao Salvar, conforme
+  [primeira configuração](INITIAL_SETUP_CONTRACT.md). `--init-config` continua
+  disponível pela CLI; arquivo inválido não é substituído. A flag rejeita
+  outros modos antes de IO/importações.
 - Quatro abas: Visão geral, Horários, Jogos / Apps e Configuração. Janela CustomTkinter na
   thread principal; motor e ícone de bandeja em workers separados. Callbacks
   da bandeja publicam fila limitada; somente polling Tk opera widgets/motor.
@@ -73,10 +75,10 @@ a conferência final e o replace; não equivale a CAS/lock de escritores externo
 - `tests/test_config_gui.py`: callbacks de CRUD, validação e correção,
   categorias, salvamento, recarga e saída usando widgets simulados com JSON
   e repositório reais. Não valida renderização ou compatibilidade dos widgets.
-- `tests/test_config_gui_native.py`: dez smoke tests com CustomTkinter real
+- `tests/test_config_gui_native.py`: doze smoke tests com CustomTkinter real
   quando instalado, com janelas ocultas; não substituem inspeção visual.
 
-Na retomada de 2026-10-11, as dependências foram instaladas no `.venv` e os dez
+Na retomada de 2026-10-11, as dependências foram instaladas no `.venv` e os doze
 smoke tests nativos passaram sem erros de callbacks Tk. Controlador simulado,
 sem encerramentos reais. A janela de QA abriu com JSON isolado e alvos vazios,
 mas a captura falhou duas vezes por timeout; inspeção visual, DPI e rolagem em

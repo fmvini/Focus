@@ -17,7 +17,7 @@ python main.py --config .\data\config.json --status --at 2026-10-05T09:00:00
 python main.py --config .\data\config.json --watch
 ```
 
-Sem `--config`, o caminho é `%APPDATA%\FocusBlocker\config.json`. A criação é explícita por `--init-config`, sem janela ou regra ativa, e não sobrescreve arquivo existente. `--watch` sozinho consulta a agenda a cada 5 segundos; Ctrl+C encerra. Esses comandos são diagnóstico, sem encerramentos.
+Sem `--config`, o caminho é `%APPDATA%\FocusBlocker\config.json`. Pela CLI, a criação é explícita por `--init-config`, sem janela ou regra ativa, e não sobrescreve arquivo existente. Pela GUI, o arquivo ausente é criado somente ao Salvar. `--watch` sozinho consulta a agenda a cada 5 segundos; Ctrl+C encerra. Esses comandos são diagnóstico, sem encerramentos.
 
 Para configurar sem editar JSON, use `--edit-config` depois de criar o arquivo. Exemplo de JSON escolhido apenas para demonstrar uma janela noturna de segunda-feira:
 
@@ -35,16 +35,18 @@ Segunda=0 até domingo=6; o dia é o de início da janela. Segunda 22:00–02:00
 
 ### Editor gráfico
 
-Após instalar as dependências, crie a configuração se ela ainda não existir e abra a janela:
+Após instalar as dependências, abra a janela:
 
 ```powershell
 .\.venv\Scripts\python.exe -m pip install -r requirements.txt
-# Apenas na primeira vez; --init-config recusa sobrescrever um arquivo existente.
-.\.venv\Scripts\python.exe main.py --config .\data\config.json --init-config
 .\.venv\Scripts\python.exe main.py --config .\data\config.json --gui
 ```
 
 A aba **Horários** permite adicionar, editar e remover janelas com seleção dos dias da semana. Todos os dias vêm selecionados em um novo horário; desmarcar todos desativa a janela. **Jogos / Apps** reúne executáveis, pastas, proteção adicional e regras conjuntas de linha de comando; pastas também podem ser escolhidas pelo seletor. **Configuração** mostra o arquivo e explica o salvamento.
+
+Na primeira execução, se o arquivo estiver ausente, a janela prepara um rascunho vazio. Escolha horários e regras, ou importe um JSON; clique em **Salvar** para criar a configuração. Fechar e descartar deixa o destino ausente. Um arquivo existente inválido é preservado e exige correção. A primeira gravação recusa qualquer destino criado por outra ferramenta enquanto você editava.
+
+As sugestões de jogos e launchers começam desmarcadas. Escolha quais adicionar ao rascunho; elas não detectam instalações nem iniciam o bloqueio. Minecraft Java usa `javaw.exe` junto ao trecho `.minecraft`, preservando a regra conjunta. Depois de salvar, **Iniciar** ainda exige confirmação. Ver [contrato da primeira configuração](docs/INITIAL_SETUP_CONTRACT.md).
 
 **Visão geral** mostra os horários planejados da semana atual, de segunda a domingo, com total por dia e por semana. A prévia acompanha o rascunho e identifica alterações não salvas; horários sobrepostos são contados uma vez e trechos após meia-noite aparecem no dia correspondente. Esses totais representam planejamento, sem medição de foco. A tela também orienta o primeiro uso e oferece atalhos para configurar horários e aplicativos.
 
@@ -96,4 +98,4 @@ Somente saída confirmada após solicitação aceita gera evento de tentativa; p
 
 Testes usam relógios/adaptadores controlados e diretórios isolados; não alteram hosts nem encerram aplicativos do usuário. Ver [documentação de desenvolvimento](docs/README.md), [contratos da fase 1](docs/PHASE1_CONTRACT.md), [fase 2](docs/PHASE2_CONTRACT.md) e [registro de desenvolvimento](docs/DEVELOPMENT_LOG.md).
 
-Os dez smoke tests com widgets nativos são executados quando CustomTkinter está instalado, com janelas ocultas e controlador/bandeja simulados. Cobrem formulários, busca, importação/exportação, início/parada, retorno da bandeja e limpeza de callbacks. Sem essa dependência, são marcados como ignorados. A suíte final no Windows teve 503 testes: 502 aprovados e um skip de symlink por permissão. O smoke de ícone real passou no desktop fora do sandbox; se o Shell recusar NIM_ADD, o teste falha explicitamente. Ver [evidências e limites](docs/TEST_PLAN.md). A captura da janela de QA falhou por timeout; inspeção visual e de DPI permanece pendente, incluindo a rolagem em 880×660.
+Os doze smoke tests com widgets nativos são executados quando CustomTkinter está instalado, com janelas ocultas e controlador/bandeja simulados. Cobrem primeira configuração, sugestões, formulários, busca, importação/exportação, início/parada, retorno da bandeja e limpeza de callbacks. Sem essa dependência, são marcados como ignorados. A suíte final no Windows teve 551 testes: 550 aprovados e um skip de symlink por permissão. O smoke de ícone real passou no desktop fora do sandbox; se o Shell recusar NIM_ADD, o teste falha explicitamente. Ver [evidências e limites](docs/TEST_PLAN.md). A captura da janela de QA falhou por timeout; inspeção visual e de DPI permanece pendente, incluindo a rolagem em 880×660.

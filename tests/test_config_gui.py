@@ -14,6 +14,7 @@ from unittest.mock import Mock, patch
 from uuid import uuid4
 
 from core.config import load_config
+from core.config import ConfigError
 from core.config_session import ConfigSession
 from core.process_controller import RuntimeSnapshot
 from ui.tray_commands import TrayMailbox
@@ -232,6 +233,176 @@ class ConfigGuiFlowTests(unittest.TestCase):
     def fire_timer(self, token):
         callback = self.app.timers.pop(token)
         callback()
+
+    def make_new(self):
+        self.app.close_editor()
+        self.path.unlink()
+        self.session = ConfigSession.for_new(self.path)
+        self.controller = FakeController(self.path)
+        self.mailbox = TrayMailbox()
+        self.tray = FakeTray()
+        self.app = _build_app(fake_ctk(), SimpleNamespace(IntVar=Variable), self.filedialog,
+                              self.messages, self.session, controller=self.controller,
+                              tray=self.tray, mailbox=self.mailbox)
+
+    def test_first_configuration_empty_unsaved_and_start_impossible_before_explicit_save(self):
+        self.make_new()
+        self.assertTrue(self.session.is_new)
+        self.assertTrue(self.session.dirty)
+        self.assertEqual(self.session.draft.config.windows, ())
+        self.assertEqual(self.session.draft.config.block_exes, ())
+        self.assertTrue(all(variable.get() == 0 for variable in self.app.suggestion_vars.values()))
+        self.assertIn(str(self.path.absolute()), self.app.setup_note.options["text"])
+        self.assertEqual(self.app.agenda_label.options["text"], "Agenda ainda não salva")
+        self.assertEqual(self.app.start_button.options["state"], "disabled")
+        self.app.start_runtime()
+        self.assertEqual(self.controller.starts, 0)
+        self.messages.askyesno.assert_not_called()
+        self.assertIn("Salvar", self.app.feedback.options["text"])
+        self.assertFalse(self.path.exists())
+        self.add_window("09:00", "11:00")
+        self.assertEqual(self.app.agenda_label.options["text"], "Agenda ainda não salva")
+        self.assertIn("14 h 00 min", self.app.preview_summary.options["text"])
+        self.app.callbacks["<Control-s>"](None)
+        self.assertFalse(self.session.is_new)
+        self.assertFalse(self.session.dirty)
+        self.assertEqual(self.controller.starts, 0)
+        self.assertEqual(len(load_config(self.path).windows), 1)
+        self.assertNotIn("ainda não", self.app.setup_note.options["text"])
+        self.assertEqual(self.app.start_button.options["state"], "normal")
+        self.messages.askyesno.return_value = False
+        self.app.start_runtime()
+        self.assertEqual(self.controller.starts, 0)
+        self.messages.askyesno.return_value = True
+        self.app.start_runtime()
+        self.assertEqual(self.controller.starts, 1)
+
+    def test_first_configuration_suggestions_are_opt_in_draft_only_and_editable(self):
+        self.make_new()
+        before = self.session.draft
+        button(self.app, "Adicionar selecionadas").invoke()
+        self.assertIs(self.session.draft, before)
+        self.app.suggestion_vars["steam"].set(1)
+        self.app.suggestion_vars["minecraft_java"].set(1)
+        button(self.app, "Adicionar selecionadas").invoke()
+        config = self.session.draft.config
+        self.assertEqual(config.block_exes, ("steam.exe",))
+        self.assertEqual([(rule.executable, rule.contains) for rule in config.block_cmdline],
+                         [("javaw.exe", ".minecraft")])
+        self.assertEqual(config.windows, ())
+        self.assertTrue(all(variable.get() == 0 for variable in self.app.suggestion_vars.values()))
+        self.assertFalse(self.path.exists())
+        self.assertEqual(self.controller.starts, 0)
+        self.app.rule_category.set("Linha de comando")
+        self.app.render_rules()
+        button(self.app.rules_list, "Editar").invoke()
+        executable, contains = self.entries()
+        self.assertEqual(executable.get(), "javaw.exe")
+        self.assertEqual(contains.get(), ".minecraft")
+        contains.insert(0, "custom-profile")
+        button(self.app.modal, "Aplicar alteração").invoke()
+        self.assertEqual(self.session.draft.config.block_cmdline[0].contains, "custom-profile")
+        button(self.app.rules_list, "Remover").invoke()
+        self.assertEqual(self.session.draft.config.block_cmdline, ())
+
+    def test_suggestions_preserve_existing_rules_extras_and_are_blocked_during_modal_or_close(self):
+        original = self.path.read_bytes()
+        self.session.draft.add_rule("block_exes", "STEAM.EXE")
+        self.app.suggestion_vars["steam"].set(1)
+        button(self.app, "Adicionar regra").invoke()
+        button(self.app, "Adicionar selecionadas").invoke()
+        self.assertEqual(self.app.suggestion_vars["steam"].get(), 1)
+        button(self.app.modal, "Cancelar").invoke()
+        button(self.app, "Adicionar selecionadas").invoke()
+        self.assertEqual(self.session.draft.config.block_exes, ("STEAM.EXE",))
+        self.assertEqual(self.session.draft.config.extra, {"future": {"keep": "ação"}})
+        self.assertEqual(self.path.read_bytes(), original)
+        self.app.suggestion_vars["valorant"].set(1)
+        self.messages.askyesnocancel.return_value = False
+        self.app.close_editor()
+        self.app.add_suggestions()
+        self.assertEqual(self.session.draft.config.block_exes, ("STEAM.EXE",))
+
+    def test_suggestions_validation_failure_preserves_draft_and_selection(self):
+        self.app.suggestion_vars["steam"].set(1)
+        before = self.session.draft
+        with patch("ui.config_gui.with_process_suggestions", side_effect=ConfigError("catálogo inválido")):
+            self.app.add_suggestions()
+        self.assertIs(self.session.draft, before)
+        self.assertEqual(self.app.suggestion_vars["steam"].get(), 1)
+        self.assertIn("Rascunho preservado", self.app.feedback.options["text"])
+
+    def test_first_configuration_import_export_reload_and_external_creation(self):
+        self.make_new()
+        self.import_source(block_exes=["imported.exe"], future={"preserved": True})
+        button(self.app, "Importar JSON").invoke()
+        self.assertTrue(self.session.is_new)
+        self.assertEqual(self.app.agenda_label.options["text"], "Agenda ainda não salva")
+        destination = self.root / "export.json"
+        self.filedialog.asksaveasfilename.return_value = str(destination)
+        button(self.app, "Exportar JSON").invoke()
+        self.assertEqual(load_config(destination).block_exes, ("imported.exe",))
+        self.assertFalse(self.path.exists())
+        self.assertTrue(self.session.is_new)
+        draft = self.session.draft
+        self.messages.askyesno.return_value = False
+        button(self.app, "Recarregar").invoke()
+        self.assertIs(self.session.draft, draft)
+        self.messages.askyesno.return_value = True
+        button(self.app, "Recarregar").invoke()
+        self.assertIs(self.session.draft, draft)
+        self.assertTrue(self.session.is_new)
+        self.assertIn("Rascunho preservado", self.app.feedback.options["text"])
+        self.path.write_text('{"windows":[],"block_exes":["external.exe"]}', encoding="utf-8")
+        self.assertFalse(self.app.save_config())
+        self.assertIs(self.session.draft, draft)
+        self.assertTrue(self.session.is_new)
+        self.assertEqual(load_config(self.path).block_exes, ("external.exe",))
+        button(self.app, "Recarregar").invoke()
+        self.assertFalse(self.session.is_new)
+        self.assertEqual(self.session.draft.config.block_exes, ("external.exe",))
+        self.assertEqual(self.controller.starts, 0)
+        self.assertIn("Agenda carregada", self.app.agenda_label.options["text"])
+
+    def test_first_configuration_save_failure_retry_and_close_save_create_explicitly(self):
+        self.make_new()
+        self.app.suggestion_vars["steam"].set(1)
+        self.app.add_suggestions()
+        self.messages.askyesnocancel.return_value = True
+        with patch.object(self.session, "save", side_effect=ConfigError("permissão negada")):
+            self.app.close_editor()
+        self.assertFalse(self.app.closed)
+        self.assertTrue(self.session.is_new)
+        self.assertFalse(self.path.exists())
+        self.assertEqual(self.controller.stops, 0)
+        self.app.close_editor()
+        self.assertTrue(self.app.closed)
+        self.assertFalse(self.session.is_new)
+        self.assertEqual(load_config(self.path).block_exes, ("steam.exe",))
+        self.assertEqual(self.controller.starts, 0)
+
+    def test_first_configuration_tray_cancel_then_discard_exit_never_creates_json(self):
+        self.make_new()
+        button(self.app, "Enviar à bandeja").invoke()
+        self.mailbox.post("ready")
+        self.fire_timer(self.app.status_timer)
+        self.assertTrue(self.app.tray_hidden)
+        self.mailbox.post("close")
+        self.fire_timer(self.app.status_timer)
+        self.assertFalse(self.app.tray_hidden)
+        self.assertFalse(self.app.closing)
+        self.assertEqual(self.tray.stops, 0)
+        self.assertFalse(self.path.exists())
+        self.messages.askyesnocancel.return_value = False
+        self.app.close_editor()
+        self.assertFalse(self.app.closed)
+        self.tray.alive = False
+        self.fire_timer(self.app.close_timer)
+        self.assertTrue(self.app.closed)
+        self.assertFalse(self.path.exists())
+        self.assertEqual(self.controller.starts, 0)
+        self.controller.wait.assert_not_called()
+        self.tray.wait.assert_not_called()
 
     def test_tray_hides_only_after_ready_and_keeps_draft_and_motor(self):
         button(self.app, "Iniciar").invoke()

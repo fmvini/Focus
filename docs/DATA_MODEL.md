@@ -15,6 +15,12 @@ sem persistência. Mutex gráfico é recurso Windows, sem arquivo-lock ou campo
 JSON; não muda baseline/conflitos e não coordena outros escritores. Nenhum
 schema, tabela SQLite ou migração nesta evolução. Ver [TRAY_CONTRACT.md](TRAY_CONTRACT.md).
 
+Primeira configuração gráfica usa sessão transitória com `snapshot=None`,
+`is_new=True` e rascunho vazio até a primeira gravação explícita. A agenda salva
+permanece vazia nesse estado; exportar/importar não cria baseline. Salvar publica
+exclusivamente e adota snapshot dos próprios bytes. Sugestões do §6 são catálogo
+puro, não novos defaults ou dados persistidos. Ver [INITIAL_SETUP_CONTRACT.md](INITIAL_SETUP_CONTRACT.md).
+
 `AppConfig` acrescenta `block_exes`, `block_folders`, `safelist_exes` e `block_cmdline`, mantendo `windows`/`extra`. Os quatro campos ausentes equivalem a listas vazias; gravação explícita emite as quatro listas. Nenhuma sugestão de bloqueio é ativada. Outros campos raiz continuam preservados e opacos. Colisões de `extra` com campos tipados são erro.
 
 Nomes exigem `.exe` completo sem diretório/wildcard/espaços externos. Pastas são absolutas Windows após expansão de `%VAR%` conhecida, conservando a entrada original no JSON; parsing não verifica instalação. O adaptador precisa resolver destinos antes de efeitos. Cmdline agora exige objetos com exatamente `executable` e `contains`, trecho não vazio/sem controles, e aplica conjunção literal sem caixa dentro de cada argumento. Strings legadas geram erro explícito e arquivo intacto; não são migradas por inferência.

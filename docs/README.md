@@ -30,6 +30,7 @@ Status: fases 1/2, editor CLI, painel/configuração gráfica, controle explíci
 | [CONFIG_EVOLUTION_CONTRACT.md](CONFIG_EVOLUTION_CONTRACT.md) | Painel semanal, duplicação, busca e importação/exportação do rascunho |
 | [PROCESS_GUI_CONTRACT.md](PROCESS_GUI_CONTRACT.md) | Motor gráfico: início/parada, worker, snapshots, recarga e saída ordenada |
 | [TRAY_CONTRACT.md](TRAY_CONTRACT.md) | Bandeja explícita, fila de comandos Tk e uma GUI por configuração/sessão |
+| [INITIAL_SETUP_CONTRACT.md](INITIAL_SETUP_CONTRACT.md) | Primeira configuração gráfica, sugestões opt-in e criação exclusiva ao Salvar |
 
 ## Coordenação da equipe
 

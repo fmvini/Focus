@@ -30,8 +30,11 @@ class NativeConfigGuiTests(unittest.TestCase):
         self.root.mkdir()
         self.addCleanup(shutil.rmtree, self.root)
         self.path = self.root / "config.json"
-        self.path.write_text(json.dumps({"windows": [], "future": {"keep": True}}), encoding="utf-8")
-        self.session = ConfigSession(self.path)
+        if self._testMethodName.startswith("test_first_setup_"):
+            self.session = ConfigSession.for_new(self.path)
+        else:
+            self.path.write_text(json.dumps({"windows": [], "future": {"keep": True}}), encoding="utf-8")
+            self.session = ConfigSession(self.path)
 
         class HiddenRoot(ctk.CTk):
             def __init__(self):
@@ -107,6 +110,56 @@ class NativeConfigGuiTests(unittest.TestCase):
         self.button(self.app, "Salvar").invoke()
         self.assertEqual(load_config(self.path).block_exes, ("game.exe",))
         self.assertEqual(load_config(self.path).extra, {"future": {"keep": True}})
+
+    def test_first_setup_selected_suggestions_create_only_on_save_with_real_widgets(self):
+        self.app.geometry("880x660")
+        self.app.update_idletasks()
+        self.assertFalse(self.path.exists())
+        self.assertTrue(self.session.is_new)
+        self.assertIn("ainda não salva", self.app.agenda_label.cget("text"))
+        self.assertEqual(self.app.start_button.cget("state"), "disabled")
+        self.assertTrue(all(variable.get() == 0 for variable in self.app.suggestion_vars.values()))
+        self.app.tabs.set("Configuração")
+        self.app.suggestion_vars["steam"].set(1)
+        self.app.suggestion_vars["minecraft_java"].set(1)
+        self.button(self.app, "Adicionar selecionadas").invoke()
+        self.assertFalse(self.path.exists())
+        self.assertEqual(self.session.draft.config.block_exes, ("steam.exe",))
+        self.assertEqual(self.session.draft.config.block_cmdline[0].contains, ".minecraft")
+        self.assertTrue(all(variable.get() == 0 for variable in self.app.suggestion_vars.values()))
+        self.button(self.app, "Salvar").invoke()
+        self.assertFalse(self.session.is_new)
+        self.assertFalse(self.session.dirty)
+        self.assertEqual(load_config(self.path), self.session.draft.config)
+        self.assertEqual(self.controller.starts, 0)
+        self.assertEqual(self.app.runtime_title.cget("text"), "Motor parado")
+        self.assertEqual(self.app.start_button.cget("state"), "normal")
+
+    def test_first_setup_tray_and_cancel_or_discard_close_do_not_create_file(self):
+        self.session.draft.add_rule("block_exes", "chosen.exe")
+        self.button(self.app, "Enviar à bandeja").invoke()
+        self.mailbox.post("ready")
+        self.app.refresh_status()
+        self.assertTrue(self.app.tray_hidden)
+        self.messages.askyesnocancel.return_value = None
+        self.mailbox.post("close")
+        self.app.refresh_status()
+        self.assertFalse(self.app.closing)
+        self.assertTrue(self.app.restore_requested)
+        self.assertFalse(self.path.exists())
+        self.assertTrue(self.session.is_new)
+        self.assertTrue(self.tray.alive)
+        self.messages.askyesnocancel.return_value = False
+        self.app.close_editor()
+        self.tray.alive = False
+        self.app.poll_close()
+        self.assertTrue(self.app.closed)
+        self.assertFalse(self.path.exists())
+        self.assertEqual(self.app.tk.splitlist(self.app.tk.call("after", "info")), ())
+        self.app.tk.call("update")
+        self.assertEqual(self.background_errors, [])
+        self.controller.wait.assert_not_called()
+        self.tray.wait.assert_not_called()
 
     def test_modal_validation_and_window_edit_roundtrip(self):
         self.button(self.app, "Adicionar horário").invoke()

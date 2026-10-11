@@ -2,6 +2,15 @@
 
 Fonte: [escopo](Focus%20Blocker_%20escopo%20do%20projeto.md), [requisitos](REQUIREMENTS.md) e [decisões](DECISIONS.md). Fases 1/2: 206 testes OK em Python 3.14.6/psutil 7.2.2 por `.venv/Scripts/python.exe -B -m unittest discover -s tests` (10,542 s). Sintaxe 3.12 dos 18 arquivos Python conferida; runtime 3.12 ainda não executado. Encerramentos reais e fases posteriores continuam pendentes.
 
+## Evidência da primeira configuração — 2026-10-11
+
+- Suíte completa fora do sandbox: `.venv/Scripts/python.exe -B -m unittest discover -s tests`, **551 descobertos, 550 aprovados e um skip conhecido** de symlink/WinError 1314, 38,140 s. Python 3.14.6/Windows 10; doze nativeGUI e smoke de bandeja real passaram.
+- `tests/test_initial_setup.py`: 22 testes de catálogo literal do §6/frozen, seleção individual/vazia/repetida, ordem do catálogo, dedup casefold, extras/duplicatas preservados, Java conjunto, iterable one-shot/falha atômica e import/função sem IO/psutil/Tk.
+- `tests/test_initial_setup_integration.py`: 14 testes com arquivos reais. Abrir não cria diretórios/JSON; salvar vazio ou completo, import/export somente draft, agenda salva vazia antes de publicar, recarga estrita, erro/concorrente mantidos. Corridas reais no rename Windows e link preservam bytes externos; fsync/publicação falhos limpam temporário e permitem retry; escritor posterior não é adotado como baseline.
+- GUI: sete novos fluxos simulados, três mainGUI e dois nativeGUI de primeira configuração. Somente FileNotFoundError de leitura permite for_new, lstat recusa existente/erro/link; sugestões desmarcadas, criação via Save/Ctrl+S/saída confirmada, start somente após salvar/confirmar, cancelamento/tray/discard sem JSON. Widgets reais em 880×660, bgerrors vazios/after vazio no teardown, motor/bandeja injetados.
+- Sintaxe 3.12/UTF-8 nos 52 arquivos Python e links locais/diff conferidos. Runtime 3.12, inspeção visual/DPI continuam pendentes; janelas de testes ficam ocultas. Nenhum processo/hosts do usuário afetado.
+- Primitivos de publicação são compartilhados com exportação, cuja cobertura de escrita/flush/cleanup/aliases segue passando. Runtime POSIX/FAT/exFAT real e crash adversarial não ensaiados; veja limites no [contrato](INITIAL_SETUP_CONTRACT.md).
+
 ## Evidência de bandeja e instância — 2026-10-11
 
 - Suíte final fora do sandbox: `.venv/Scripts/python.exe -B -m unittest discover -s tests`, **503 descobertos, 502 aprovados e um ignorado**, 30,474 s. Python 3.14.6/Windows 10 build 19045; psutil 7.2.2, CustomTkinter 6.0.0, pystray 0.19.5 e Pillow 12.3.0. Skip conhecido: symlink/WinError 1314.
