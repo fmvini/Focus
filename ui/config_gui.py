@@ -7,6 +7,7 @@ import sys
 from time import monotonic
 
 from core.config import ConfigError
+from core.config_comparison import configs_equal
 from core.config_review import review_config
 from core.config_diff import diff_config
 from core.config_repository import ConfigConflictError
@@ -16,6 +17,7 @@ from core.process_controller import ProcessController
 from core.instance_guard import InstanceGuard, InstanceGuardError
 from core.initial_setup import PROCESS_SUGGESTIONS, with_process_suggestions
 from ui.runtime_presenter import format_runtime
+from ui.review_navigation import review_links
 from ui.config_diff_presenter import format_config_diff
 from ui.tray_commands import TrayMailbox
 from ui.windows_tray import WindowsTray
@@ -138,6 +140,13 @@ def _build_app(ctk, tk, filedialog, messagebox, session, controller=None, tray=N
             self.stop_requested = False
             self.selecting_executables = False
             self.picker_active = False
+            self.review_generation = 0
+            self.review_choices = {}
+            self.review_selected = None
+            self.review_snapshot = self.review_draft = None
+            self.review_rows = {}
+            self.row_generation = {"windows": 0, "rules": 0}
+            self.highlighted_row = None
             self.tray = tray
             self.mailbox = mailbox
             self.tray_pending = self.tray_ready = self.tray_hidden = False
@@ -245,6 +254,17 @@ def _build_app(ctk, tk, filedialog, messagebox, session, controller=None, tray=N
             self.review_detail = ctk.CTkTextbox(overview, height=150, wrap="word", fg_color="#F3F6F5")
             self.review_detail.grid(row=9, column=0, sticky="ew", padx=14, pady=(0, 14))
             self.review_detail.configure(state="disabled")
+            review_actions = ctk.CTkFrame(overview, fg_color="transparent")
+            review_actions.grid(row=10, column=0, sticky="ew", padx=14, pady=(0, 14))
+            review_actions.grid_columnconfigure(0, weight=1)
+            self.review_choice = ctk.StringVar(value="Escolha um apontamento")
+            self.review_picker = ctk.CTkOptionMenu(review_actions, variable=self.review_choice,
+                                                   values=["Escolha um apontamento"], width=420,
+                                                   fg_color=accent, button_color=accent)
+            self.review_picker.grid(row=0, column=0, sticky="ew", padx=(0, 8))
+            self.review_go = ctk.CTkButton(review_actions, text="Ir para item", width=125, fg_color=accent,
+                                            state="disabled")
+            self.review_go.grid(row=0, column=1)
 
             ctk.CTkLabel(schedules, text="Horários de foco", font=ctk.CTkFont(size=20, weight="bold"),
                          anchor="w").grid(row=0, column=0, sticky="w", padx=14, pady=(10, 0))
@@ -423,7 +443,12 @@ def _build_app(ctk, tk, filedialog, messagebox, session, controller=None, tray=N
             return "break" if self.change_history(redo=redo) else None
 
         def render_review(self):
-            review = review_config(session.draft.config)
+            self.clear_review_highlight()
+            self.review_generation += 1
+            self.review_snapshot = session.draft.config
+            self.review_draft = session.draft
+            self.review_selected = None
+            review = review_config(self.review_snapshot)
             self.review_title.configure(text=(
                 f"Revisão do rascunho · {review.active_windows} horários ativos · "
                 f"{review.target_rules} regras cadastradas de bloqueio"
@@ -431,12 +456,12 @@ def _build_app(ctk, tk, filedialog, messagebox, session, controller=None, tray=N
             labels = {"windows": "Horários", "block_exes": "Executáveis", "block_folders": "Pastas",
                       "safelist_exes": "Proteção adicional", "block_cmdline": "Linha de comando"}
             lines = ["Análise estática, sem verificar processos ou instalações. Não altera suas regras."]
-            for item in review.items[:10]:
-                position = f", item {item.index + 1}" if item.index is not None else ""
+            for ordinal, item in enumerate(review.items[:10]):
+                position = f", item {item.index + 1}" if type(item.index) is int and item.index >= 0 else ""
                 detail = " ".join(item.detail.split())
                 if len(detail) > 260:
                     detail = detail[:259] + "…"
-                lines.append(f"• {labels[item.field]}{position}: {detail}")
+                lines.append(f"{ordinal + 1}. {labels.get(item.field, 'Categoria desconhecida')}{position}: {detail}")
             if not review.items:
                 lines.append("Nenhum apontamento estático. Proteções adicionais do motor também continuam valendo.")
             elif len(review.items) > 10:
@@ -445,6 +470,114 @@ def _build_app(ctk, tk, filedialog, messagebox, session, controller=None, tray=N
             self.review_detail.delete("1.0", "end")
             self.review_detail.insert("1.0", "\n".join(lines))
             self.review_detail.configure(state="disabled")
+            self.review_choices = {link.label: link for link in review_links(review)}
+            self.review_choice.set("Escolha um apontamento")
+            generation = self.review_generation
+            self.review_picker.configure(values=list(self.review_choices) or ["Nenhum item para navegar"],
+                                           command=lambda label: self.choose_review(label, generation))
+            self.review_go.configure(command=lambda: None)
+            self.update_review_navigation()
+
+        def navigation_available(self):
+            return not (self.closing or self.closed or self.modal is not None
+                        or self.picker_active or self.selecting_executables)
+
+        def review_is_current(self):
+            return (self.review_draft is session.draft and self.review_snapshot is not None
+                    and configs_equal(self.review_snapshot, session.draft.config))
+
+        def update_review_navigation(self):
+            available = self.navigation_available()
+            self.review_picker.configure(state="normal" if available and self.review_choices else "disabled")
+            self.review_go.configure(state="normal" if available and self.review_selected is not None else "disabled")
+
+        def choose_review(self, label, generation):
+            if (not isinstance(label, str) or not self.navigation_available()
+                    or generation != self.review_generation or not self.review_is_current()):
+                return False
+            link = self.review_choices.get(label)
+            if link is None:
+                return False
+            token = (generation, link.field, link.index)
+            self.review_selected = token
+            self.review_choice.set(label)
+            self.review_go.configure(command=lambda: self.navigate_review_choice(token))
+            self.update_review_navigation()
+            return True
+
+        def navigate_review_choice(self, token):
+            if token != self.review_selected or token[0] != self.review_generation:
+                return False
+            return self.navigate_review(token[1], token[2])
+
+        def navigate_review(self, field, index):
+            if not self.navigation_available():
+                return False
+            if not isinstance(field, str) or field not in ("windows", *rule_fields.values()) or type(index) is not int:
+                return False
+            if not self.review_is_current():
+                self.notify("A revisão mudou. Escolha um apontamento atualizado.")
+                return False
+            values = getattr(session.draft.config, field)
+            if not 0 <= index < len(values):
+                return False
+            if field == "windows":
+                self.tabs.set("Horários")
+                self.render_windows()
+            else:
+                self.tabs.set("Jogos / Apps")
+                self.rule_category.set(next(label for label, value in rule_fields.items() if value == field))
+                if self.rule_search.get():
+                    self.rule_search.set("")  # o trace renderiza a categoria atual
+                else:
+                    self.render_rules()
+            row = self.review_rows.get((field, index))
+            if row is None:
+                return False
+            self.clear_review_highlight()
+            self.highlighted_row = row
+            row.configure(fg_color="#E1F1ED", border_color=accent, border_width=2)
+            row.review_detail_label.configure(text=f"Selecionado pela revisão · item {index + 1}\n{row.review_base_detail}")
+            self.queue_review_scroll(row, field, index)
+            self.notify(f"Item {index + 1} destacado. Use Editar para alterar o rascunho.")
+            return True
+
+        def clear_review_highlight(self):
+            row = self.highlighted_row
+            if row is None:
+                return
+            self.highlighted_row = None
+            if row.review_scroll_timer is not None:
+                row.after_cancel(row.review_scroll_timer)
+                row.review_scroll_timer = None
+            row.configure(fg_color="white", border_width=0)
+            row.review_detail_label.configure(text=row.review_base_detail)
+
+        def queue_review_scroll(self, row, field, index):
+            kind = "windows" if field == "windows" else "rules"
+            frame = self.windows_list if kind == "windows" else self.rules_list
+            generation, review_generation = self.row_generation[kind], self.review_generation
+
+            def scroll():
+                row.review_scroll_timer = None
+                if (not self.navigation_available() or generation != self.row_generation[kind]
+                        or review_generation != self.review_generation or self.highlighted_row is not row
+                        or self.review_rows.get((field, index)) is not row or not self.review_is_current()):
+                    return
+                # CTk 6.0.0 não expõe scroll-to-item público. Só este adaptador
+                # usa o canvas interno; o destaque continua útil se indisponível.
+                canvas = getattr(frame, "_parent_canvas", None)
+                if (canvas is None or not callable(getattr(canvas, "yview_moveto", None))
+                        or not callable(getattr(canvas, "bbox", None)) or not callable(getattr(row, "winfo_y", None))):
+                    self.notify("Item destacado; use a rolagem da lista para vê-lo.")
+                    return
+                bounds = canvas.bbox("all")
+                if bounds is not None and bounds[3] > bounds[1]:
+                    canvas.yview_moveto(max(0.0, min(1.0, (row.winfo_y() - bounds[1]) / (bounds[3] - bounds[1]))))
+
+            # A linha possui o comando Tcl: clear/cancel_widget_callbacks o
+            # cancela antes de destroy. Nenhum timer de scroll pertence à raiz.
+            row.review_scroll_timer = row.after(40, scroll)
 
         def add_suggestions(self):
             if self.closing or self.closed or self.modal is not None:
@@ -564,6 +697,7 @@ def _build_app(ctk, tk, filedialog, messagebox, session, controller=None, tray=N
             ) else "disabled")
             self.stop_button.configure(state="normal" if view.stop_enabled and not self.closing else "disabled")
             self.update_history()
+            self.update_review_navigation()
 
         def start_runtime(self):
             if (self.closing or self.closed or self.modal is not None or controller.is_alive()
@@ -660,6 +794,14 @@ def _build_app(ctk, tk, filedialog, messagebox, session, controller=None, tray=N
                     widget.tk.call("after", "cancel", timer)
 
         def clear(self, frame):
+            if frame is self.windows_list or frame is self.rules_list:
+                kind = "windows" if frame is self.windows_list else "rules"
+                keys = [key for key in self.review_rows if (key[0] == "windows") == (kind == "windows")]
+                if self.highlighted_row in (self.review_rows[key] for key in keys):
+                    self.clear_review_highlight()
+                for key in keys:
+                    del self.review_rows[key]
+                self.row_generation[kind] += 1
             for child in frame.winfo_children():
                 self.cancel_widget_callbacks(child)
                 child.destroy()
@@ -681,8 +823,10 @@ def _build_app(ctk, tk, filedialog, messagebox, session, controller=None, tray=N
             wrap = 390 if duplicate is not None else 540
             ctk.CTkLabel(row, text=title, anchor="w", justify="left", wraplength=wrap,
                          font=ctk.CTkFont(size=16, weight="bold")).grid(row=0, column=0, sticky="ew", padx=14, pady=(10, 0))
-            ctk.CTkLabel(row, text=detail, text_color=muted, anchor="w", justify="left", wraplength=wrap
-                         ).grid(row=1, column=0, sticky="ew", padx=14, pady=(0, 10))
+            row.review_base_detail = detail
+            row.review_scroll_timer = None
+            row.review_detail_label = ctk.CTkLabel(row, text=detail, text_color=muted, anchor="w", justify="left", wraplength=wrap)
+            row.review_detail_label.grid(row=1, column=0, sticky="ew", padx=14, pady=(0, 10))
             ctk.CTkButton(row, text="Editar", width=75, fg_color=accent,
                           command=edit).grid(row=0, column=1, rowspan=2, padx=6)
             ctk.CTkButton(row, text="Remover", width=85, fg_color="#E0E8E6", text_color="#263D3A",
@@ -690,6 +834,7 @@ def _build_app(ctk, tk, filedialog, messagebox, session, controller=None, tray=N
             if duplicate is not None:
                 ctk.CTkButton(row, text="Duplicar", width=85, fg_color=accent,
                               command=duplicate).grid(row=0, column=3, rowspan=2, padx=(0, 12))
+            return row
 
         def render_windows(self):
             self.clear(self.windows_list)
@@ -699,7 +844,7 @@ def _build_app(ctk, tk, filedialog, messagebox, session, controller=None, tray=N
                              text_color=muted).grid(row=0, column=0, pady=45)
             for index, window in enumerate(windows):
                 day_text = ", ".join(days[day] for day in window.days) or "Desativado — nenhum dia selecionado"
-                self.item_row(self.windows_list, index,
+                self.review_rows[("windows", index)] = self.item_row(self.windows_list, index,
                               f"{window.start:%H:%M} → {window.end:%H:%M}", day_text,
                               lambda i=index: self.edit_window(i),
                               lambda i=index: self.remove_item("windows", i),
@@ -738,7 +883,7 @@ def _build_app(ctk, tk, filedialog, messagebox, session, controller=None, tray=N
                 searchable = f"{title}\n{value.contains}" if field == "block_cmdline" else title
                 if query not in searchable.casefold():
                     continue
-                self.item_row(self.rules_list, visible, title, detail,
+                self.review_rows[(field, index)] = self.item_row(self.rules_list, visible, title, detail,
                               lambda i=index, f=field: self.edit_rule(i, f),
                               lambda i=index, f=field: self.remove_item(f, i))
                 visible += 1

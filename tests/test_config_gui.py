@@ -222,6 +222,187 @@ class ConfigGuiFlowTests(unittest.TestCase):
         return [widget for widget in descendants(self.app.modal)
                 if widget.__class__.__name__ == "CTkEntry"]
 
+    def test_review_navigation_disabled_without_link_then_explicit_choice_matches_number(self):
+        self.assertEqual(self.app.review_picker.options["state"], "disabled")
+        self.assertEqual(self.app.review_go.options["state"], "disabled")
+        self.session.draft.add_rule("block_exes", "Code.exe")
+        self.session.draft.add_rule("block_exes", "code.exe")
+        self.app.render()
+        self.assertEqual(len(self.app.review_choices), 3)
+        for label, link in self.app.review_choices.items():
+            self.assertIn(f"{link.ordinal + 1}. ", self.app.review_detail.get())
+            self.assertIn(f"Apontamento {link.ordinal + 1}", label)
+        link = next(link for link in self.app.review_choices.values() if link.index == 1)
+        self.app.review_picker.options["command"](link.label)
+        self.assertIsNone(self.app.highlighted_row)
+        self.assertEqual(self.app.tabs.options.get("selected_tab", "Visão geral"), "Visão geral")
+        self.assertEqual(self.controller.starts, 0)
+        self.assertEqual(self.app.review_go.options["state"], "normal")
+        button(self.app, "Ir para item").invoke()
+        self.assertIs(self.app.highlighted_row, self.app.review_rows[("block_exes", 1)])
+        self.assertIn("item 2", self.app.highlighted_row.review_detail_label.options["text"])
+        for _ in range(8):
+            self.session.draft.add_rule("block_exes", "Code.exe")
+        self.app.render()
+        self.assertIsNone(self.app.highlighted_row)
+        self.assertEqual(len(self.app.review_choices), 9)  # prefixo10 inclui no_windows sem índice
+        self.assertTrue(all(link.ordinal < 10 for link in self.app.review_choices.values()))
+        self.assertIn("Mais", self.app.review_detail.get())
+
+    def test_review_navigation_all_fields_uses_original_duplicate_indices_without_io_or_edits(self):
+        for _ in range(2):
+            self.session.draft.add_window("09:00", "10:00", [0])
+            self.session.draft.add_rule("block_exes", "game.exe")
+            self.session.draft.add_rule("block_folders", r"C:\Games")
+            self.session.draft.add_rule("safelist_exes", "keep.exe")
+            self.session.draft.add_rule("block_cmdline", {"executable": "javaw.exe", "contains": " profile "})
+        self.app.render()
+        snapshot, draft, config = self.session.snapshot, self.session.draft, self.session.draft.config
+        original = self.path.read_bytes()
+        self.controller.alive = True
+        self.controller.value = RuntimeSnapshot(state="running")
+        with patch.object(Path, "read_bytes", side_effect=AssertionError("IO")), \
+                patch.object(self.session, "save", side_effect=AssertionError("save")), \
+                patch.object(self.controller, "start", side_effect=AssertionError("motor")), \
+                patch.object(self.controller, "stop", side_effect=AssertionError("motor")):
+            for field, category in (("windows", None), ("block_exes", "Executáveis"),
+                                    ("block_folders", "Pastas"), ("safelist_exes", "Proteção adicional"),
+                                    ("block_cmdline", "Linha de comando")):
+                with self.subTest(field=field):
+                    if category:
+                        self.app.rule_search.set("no results")
+                    self.assertTrue(self.app.navigate_review(field, 1))
+                    self.assertIs(self.app.highlighted_row, self.app.review_rows[(field, 1)])
+                    self.assertIsNot(self.app.highlighted_row, self.app.review_rows[(field, 0)])
+                    self.assertEqual(self.app.highlighted_row.options["border_width"], 2)
+                    self.assertIsNone(self.app.modal)
+                    if category:
+                        self.assertEqual(self.app.rule_category.get(), category)
+                        self.assertEqual(self.app.rule_search.get(), "")
+                        self.assertEqual(self.app.tabs.options["selected_tab"], "Jogos / Apps")
+                    else:
+                        self.assertEqual(self.app.tabs.options["selected_tab"], "Horários")
+        self.assertIs(self.session.snapshot, snapshot)
+        self.assertIs(self.session.draft, draft)
+        self.assertEqual(draft.config, config)
+        self.assertTrue(draft.can_undo)
+        self.assertFalse(draft.can_redo)
+        self.assertEqual(self.path.read_bytes(), original)
+        self.assertEqual(self.controller.value.state, "running")
+
+    def test_review_navigation_filtered_target_retains_crud_original_index(self):
+        for value in ("first.exe", "target.exe", "TARGET.EXE", "last.exe"):
+            self.session.draft.add_rule("block_exes", value)
+        self.app.render()
+        self.app.rule_search.set("last")
+        with patch.object(self.app, "render_rules", wraps=self.app.render_rules) as rendered:
+            self.assertTrue(self.app.navigate_review("block_exes", 2))
+            rendered.assert_called_once_with()
+        row = self.app.review_rows[("block_exes", 2)]
+        button(row, "Editar").invoke()
+        self.assertEqual(self.entries()[0].get(), "TARGET.EXE")
+        self.entries()[0].insert(0, "changed.exe")
+        button(self.app.modal, "Aplicar alteração").invoke()
+        self.assertIsNone(self.app.highlighted_row)
+        self.assertEqual(self.session.draft.config.block_exes, ("first.exe", "target.exe", "changed.exe", "last.exe"))
+        with patch.object(self.app, "render_rules", wraps=self.app.render_rules) as rendered:
+            self.assertTrue(self.app.navigate_review("block_exes", 2))
+            rendered.assert_called_once_with()
+        button(self.app.highlighted_row, "Remover").invoke()
+        self.assertEqual(self.session.draft.config.block_exes, ("first.exe", "target.exe", "last.exe"))
+        self.assertIsNone(self.app.highlighted_row)
+
+    def test_review_navigation_strict_invalid_inputs_modal_picker_closing_guards(self):
+        self.session.draft.add_rule("block_exes", "Code.exe")
+        self.app.render()
+        for field, index in (("unknown", 0), ([], 0), ("block_exes", True), ("block_exes", -1),
+                             ("block_exes", 1), ("block_exes", 0.0), ("windows", None)):
+            self.assertFalse(self.app.navigate_review(field, index))
+        self.app.edit_rule()
+        self.assertFalse(self.app.navigate_review("block_exes", 0))
+        self.assertEqual(self.app.review_go.options["state"], "disabled")
+        button(self.app.modal, "Cancelar").invoke()
+        for flag in ("picker_active", "selecting_executables", "closing", "closed"):
+            with self.subTest(flag=flag):
+                setattr(self.app, flag, True)
+                self.assertFalse(self.app.navigate_review("block_exes", 0))
+                setattr(self.app, flag, False)
+        self.assertIsNone(self.app.highlighted_row)
+
+    def test_review_navigation_stale_same_label_import_undo_redo_reload_and_unrendered_change(self):
+        self.import_source(block_exes=["old.exe", "old.exe"])
+        self.app.import_config()
+        label = next(iter(self.app.review_choices))
+        old_select = self.app.review_picker.options["command"]
+        old_select(label)
+        old_go = self.app.review_go.options["command"]
+        self.import_source(block_exes=["new.exe", "new.exe"])
+        self.app.import_config()
+        self.assertIn(label, self.app.review_choices)
+        self.assertFalse(old_select(label))
+        self.assertFalse(old_go())
+        self.assertIsNone(self.app.highlighted_row)
+        self.app.review_picker.options["command"](label)
+        old_go = self.app.review_go.options["command"]
+        self.session.draft.update_rule("block_exes", 0, "changed.exe")
+        self.app.render()
+        self.app.undo_draft()
+        self.app.redo_draft()
+        self.assertFalse(old_go())
+        self.assertIsNone(self.app.highlighted_row)
+        self.app.undo_draft()
+        self.app.review_picker.options["command"](label)
+        old_go = self.app.review_go.options["command"]
+        self.app.reload_config()
+        self.assertFalse(old_go())
+        self.assertIsNone(self.app.highlighted_row)
+        self.session.draft.add_rule("block_exes", "unrendered.exe")
+        self.assertFalse(self.app.navigate_review("block_exes", 0))
+
+    def test_review_navigation_identical_rows_rerender_invalidates_old_callbacks(self):
+        for _ in range(3):
+            self.session.draft.add_rule("block_exes", "same.exe")
+        self.app.render()
+        label = next(label for label, link in self.app.review_choices.items() if link.index == 2)
+        self.app.review_picker.options["command"](label)
+        callback = self.app.review_go.options["command"]
+        self.assertTrue(callback())
+        self.app.render()
+        self.assertIsNone(self.app.highlighted_row)
+        self.assertFalse(callback())
+        self.assertFalse(self.session.draft.can_redo)
+
+    def test_review_navigation_row_owned_scroll_is_cancelled_and_never_reaches_stale_canvas(self):
+        self.session.draft.add_rule("block_exes", "Code.exe")
+        self.app.render()
+        canvas = SimpleNamespace(bbox=Mock(return_value=(0, 0, 700, 1600)), yview_moveto=Mock())
+        self.app.rules_list._parent_canvas = canvas
+        root_timers = set(self.app.timers)
+        self.assertTrue(self.app.navigate_review("block_exes", 0))
+        row = self.app.highlighted_row
+        row.winfo_y = Mock(return_value=800)
+        callback = row.timers.pop(row.review_scroll_timer)
+        callback()
+        canvas.yview_moveto.assert_called_once_with(0.5)
+        self.assertEqual(set(self.app.timers), root_timers)
+        self.assertTrue(self.app.navigate_review("block_exes", 0))
+        row = self.app.highlighted_row
+        callback = row.timers[row.review_scroll_timer]
+        self.app.rule_search.set("no results")
+        self.assertEqual(row.timers, {})
+        self.assertTrue(row.destroyed)
+        callback()
+        self.assertEqual(canvas.yview_moveto.call_count, 1)
+        self.app.rule_search.set("")
+        self.assertTrue(self.app.navigate_review("block_exes", 0))
+        row = self.app.highlighted_row
+        callback = row.timers[row.review_scroll_timer]
+        self.messages.askyesnocancel.return_value = False
+        self.app.close_editor()
+        callback()
+        self.assertEqual(canvas.yview_moveto.call_count, 1)
+        self.assertTrue(self.app.closed)
+
     def test_changes_modal_uses_loaded_baseline_and_preserves_editing_and_motor_without_io(self):
         self.path.write_text(json.dumps({
             "windows": [{"start": "09:00", "end": "10:00", "days": [0]},

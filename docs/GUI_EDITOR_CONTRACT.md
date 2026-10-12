@@ -98,6 +98,15 @@ histórico/motor. Guardas de modal/seletor/saída e cleanup dos timers são os
 mesmos dos formulários; Salvar continua explícito, sem nova confirmação.
 Detalhes em [CONFIG_DIFF_CONTRACT.md](CONFIG_DIFF_CONTRACT.md).
 
+Na revisão da Visão geral, escolha um apontamento numerado e use **Ir para
+item**. A ação abre a aba/categoria e destaca/rola a linha original; limpar
+busca não altera regras. Links consideram somente os dez apontamentos
+mostrados e omitem os sem índice. Geração da revisão, identidade do draft
+e comparação tipada do snapshot recusam escolhas antigas após alterações;
+campo/int/faixa são conferidos antes de navegar. Rolagem pertence à linha
+e é cancelada antes de destroy; Iniciar/Save/history não são acionados pela
+navegação. Ver [REVIEW_NAVIGATION_CONTRACT.md](REVIEW_NAVIGATION_CONTRACT.md).
+
 `ui/config_gui.py` importa CustomTkinter/Tk somente na execução de `--gui`.
 A fábrica `_build_app` recebe toolkit, diálogos, sessão e controlador opcional
 para testar os callbacks com arquivos reais sem dependência gráfica. Abertura
@@ -121,10 +130,10 @@ a conferência final e o replace; não equivale a CAS/lock de escritores externo
 - `tests/test_config_gui.py`: callbacks de CRUD, validação e correção,
   categorias, salvamento, recarga e saída usando widgets simulados com JSON
   e repositório reais. Não valida renderização ou compatibilidade dos widgets.
-- `tests/test_config_gui_native.py`: vinte e quatro smoke tests com CustomTkinter real
+- `tests/test_config_gui_native.py`: vinte e oito smoke tests com CustomTkinter real
   quando instalado, com janelas ocultas; não substituem inspeção visual.
 
-Na retomada de 2026-10-12, as dependências foram instaladas no `.venv`/QA 3.12 e os vinte e quatro
+Na retomada de 2026-10-12, as dependências foram instaladas no `.venv`/QA 3.12 e os vinte e oito
 smoke tests nativos passaram sem erros de callbacks Tk. Controlador simulado,
 sem encerramentos reais. A janela de QA abriu com JSON isolado e alvos vazios,
 mas a captura falhou duas vezes por timeout; inspeção visual, DPI e rolagem em

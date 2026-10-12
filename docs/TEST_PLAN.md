@@ -2,6 +2,14 @@
 
 Fonte: [escopo](Focus%20Blocker_%20escopo%20do%20projeto.md), [requisitos](REQUIREMENTS.md) e [decisões](DECISIONS.md). Fases 1/2: 206 testes OK em Python 3.14.6/psutil 7.2.2 por `.venv/Scripts/python.exe -B -m unittest discover -s tests` (10,542 s). Sintaxe 3.12 dos 18 arquivos Python conferida; runtime 3.12 ainda não executado. Encerramentos reais e fases posteriores continuam pendentes.
 
+## Evidência da navegação da revisão — 2026-10-12
+
+- Dez novos testes helper verificam prefixo antes do filtro, ordinais/índices originais, cinco categorias, múltiplos apontamentos do mesmo item, metadata inválida, candidato fora de faixa, tipos/limites/frozen/pureza/lazy. Com nove reviewer, 19 aprovados nos dois runtimes em 0,645 s/1,298 s.
+- Sete fakeGUI/quatro nativeGUI novos verificam seleção explícita, filtros/duplicatas/mapa original/CRUD, escolhas antigas com mesmo label/quantidade/índice, import/reload/history, guardas/noIO/no mudança de dados, scroll real até item25 e cancelamento antes de rerender/destroy/saída. Frontend: 126 GUI/main/native aprovados em 61,771 s/62,241 s, zero skips; vinte e oito nativeGUI.
+- Suíte completa: **721 descobertos, 720 aprovados e um skip conhecido** symlink/WinError 1314 em ambos runtimes Windows AMD64. Python 3.14.6: 128,213 s; Python 3.12.14: 152,385 s. Vinte e oito nativeGUI, ícone real e guardas passaram. AST 3.12/UTF-8 nos 68 arquivos e links/diff conferidos.
+- Backend revisou fonte congelada sem achados e passou os 30 helper/reviewer/navfake/navnative nos dois runtimes (10,425 s/27,063 s). Uma única reconstrução da lista por navegação é assertada nos testes fake/nativos.
+- Uso do canvas interno CTk 6.0.0 está isolado no adaptador e deve ser revalidado em upgrade; fallback orienta rolagem manual. Nenhum processo/hosts/configuração do usuário afetado. Widgets ocultos não comprovam visual/DPI/acessibilidade.
+
 ## Evidência da comparação de alterações — 2026-10-12
 
 - Suíte completa `-B -m unittest discover -s tests`: **700 descobertos, 699 aprovados e um skip conhecido** symlink/WinError 1314 em ambos runtimes Windows AMD64. Python 3.14.6: 172,667 s; Python 3.12.14: 186,035 s. Vinte e quatro nativeGUI, ícone real e guardas passaram, sem supressão de falhas. AST 3.12/UTF-8 nos 66 arquivos e links locais/diff conferidos.

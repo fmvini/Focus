@@ -1,3 +1,26 @@
+## 2026-10-12 — Navegação dos apontamentos às linhas originais
+
+### Implementado
+- Helper puro produz links dos apontamentos mostrados às categorias/índices originais, com numeração humana consistente. Seletor e Ir para item navegam explicitamente, revelam a categoria/linha e destacam sem abrir formulário nem editar dados.
+
+### Arquivos principais alterados
+- `ui/review_navigation.py`, `tests/test_review_navigation.py`, `ui/config_gui.py`, `tests/test_config_gui.py`, `tests/test_config_gui_native.py`.
+- `README.md`, `docs/REVIEW_NAVIGATION_CONTRACT.md`, `docs/GUI_EDITOR_CONTRACT.md`, `docs/README.md`, `docs/TEST_PLAN.md`, `docs/DEVELOPMENT_LOG.md`.
+
+### Decisões técnicas
+- Prefixo de dez apontamentos antes de filtrar os sem índice, com numeração humana consistente. Navegação e destaque somente na interface; não edita/salva/inicia motor.
+- Banco possui helper/testes; Frontend GUI/testes; Backend revisão somente leitura; Maestro integra/docs/commit. Respeitar escolha obsoleta, busca/índice original, guards e callback owned pela linha.
+- Geração da revisão, identidade do draft e comparação tipada do snapshot evitam redirecionamento por escolha antiga. Mapa (field, índice original) separado da posição filtrada mantém CRUD; callback de rolagem pertence à linha, com gerações de linha/revisão antes de tocar canvas.
+- Adaptador limitado ao canvas interno CTk 6.0.0, com fallback de destaque/rolagem manual e revalidação em upgrade. Limpeza da busca usa trace ou render direto, nunca duas reconstruções por navegação.
+
+### Estado atual
+- Base `7ee59e8`, suíte anterior completa700/699 OK/um skip nos dois runtimes. Helper: dez novos testes e nove reviewer, todos aprovados nos dois runtimes (0,645 s/1,298 s). Frontend: 126 GUI/main/native aprovados nos dois runtimes (61,771 s/62,241 s), incluindo sete fake/quatro native novos. Backend revisou sem achados e passou 30 testes selecionados nos dois runtimes (10,425 s/27,063 s).
+- Suíte completa: **721 descobertos, 720 aprovados e um skip conhecido** symlink/WinError 1314 nos dois runtimes Windows AMD64: Python 3.14.6/128,213 s e Python 3.12.14/152,385 s. Vinte e oito nativeGUI, ícone real e guardas passaram. AST 3.12/UTF-8 nos 68 arquivos e links/diff conferidos. Nenhum processo/hosts/configuração do usuário alterado; visual/DPI permanece pendente. Fontes revisadas/congeladas para commit conjunto.
+
+### Próximos passos
+- Próxima evolução: ordenação visual das regras em Jogos / Apps, mantendo cadastro/JSON/índices originais e compatibilidade da navegação/CRUD.
+- Sites/avisos/pausa continuam dependendo das decisões abertas em USER_ANSWERS.
+
 ## 2026-10-12 — Comparação das alterações pendentes na GUI e CLI
 
 ### Implementado
