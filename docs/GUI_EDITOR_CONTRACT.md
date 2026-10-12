@@ -107,6 +107,13 @@ campo/int/faixa são conferidos antes de navegar. Rolagem pertence à linha
 e é cancelada antes de destroy; Iniciar/Save/history não são acionados pela
 navegação. Ver [REVIEW_NAVIGATION_CONTRACT.md](REVIEW_NAVIGATION_CONTRACT.md).
 
+**Ordem visual**, ao lado da busca em Jogos / Apps, oferece Cadastro/Nome
+A–Z/Nome Z–A. É preferência somente da janela e combina com filtro; empates
+preservam cadastro nos dois sentidos. Helper puro retorna índices originais,
+mantendo callbacks e mapa da revisão. Alterar view cancela scroll/highlight
+das linhas reconstruídas, sem alterar geração/snapshot da revisão ou dados.
+Ver [RULE_LIST_VIEW_CONTRACT.md](RULE_LIST_VIEW_CONTRACT.md).
+
 `ui/config_gui.py` importa CustomTkinter/Tk somente na execução de `--gui`.
 A fábrica `_build_app` recebe toolkit, diálogos, sessão e controlador opcional
 para testar os callbacks com arquivos reais sem dependência gráfica. Abertura
@@ -130,10 +137,10 @@ a conferência final e o replace; não equivale a CAS/lock de escritores externo
 - `tests/test_config_gui.py`: callbacks de CRUD, validação e correção,
   categorias, salvamento, recarga e saída usando widgets simulados com JSON
   e repositório reais. Não valida renderização ou compatibilidade dos widgets.
-- `tests/test_config_gui_native.py`: vinte e oito smoke tests com CustomTkinter real
+- `tests/test_config_gui_native.py`: trinta e um smoke tests com CustomTkinter real
   quando instalado, com janelas ocultas; não substituem inspeção visual.
 
-Na retomada de 2026-10-12, as dependências foram instaladas no `.venv`/QA 3.12 e os vinte e oito
+Na retomada de 2026-10-12, as dependências foram instaladas no `.venv`/QA 3.12 e os trinta e um
 smoke tests nativos passaram sem erros de callbacks Tk. Controlador simulado,
 sem encerramentos reais. A janela de QA abriu com JSON isolado e alvos vazios,
 mas a captura falhou duas vezes por timeout; inspeção visual, DPI e rolagem em

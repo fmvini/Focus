@@ -222,6 +222,135 @@ class ConfigGuiFlowTests(unittest.TestCase):
         return [widget for widget in descendants(self.app.modal)
                 if widget.__class__.__name__ == "CTkEntry"]
 
+    def displayed_rule_indices(self, field):
+        return [index for row_field, index in self.app.review_rows if row_field == field]
+
+    def test_visual_rule_order_default_stable_ties_search_and_original_crud_indices(self):
+        for value in ("z.exe", "a.exe", "A.exe", "b.exe"):
+            self.session.draft.add_rule("block_exes", value)
+        self.app.render()
+        self.assertEqual(self.app.rule_order.get(), "Cadastro")
+        self.assertEqual(self.displayed_rule_indices("block_exes"), [0, 1, 2, 3])
+        self.app.change_rule_order("Nome A–Z")
+        self.assertEqual(self.displayed_rule_indices("block_exes"), [1, 2, 3, 0])
+        self.app.change_rule_order("Nome Z–A")
+        self.assertEqual(self.displayed_rule_indices("block_exes"), [0, 3, 1, 2])
+        self.app.rule_search.set(" A.EXE ")
+        self.assertEqual(self.displayed_rule_indices("block_exes"), [1, 2])
+        button(self.app.review_rows[("block_exes", 2)], "Editar").invoke()
+        self.assertEqual(self.entries()[0].get(), "A.exe")
+        self.entries()[0].insert(0, "changed.exe")
+        button(self.app.modal, "Aplicar alteração").invoke()
+        self.assertEqual(self.session.draft.config.block_exes, ("z.exe", "a.exe", "changed.exe", "b.exe"))
+        self.app.rule_search.set("")
+        button(self.app.review_rows[("block_exes", 3)], "Remover").invoke()
+        self.assertEqual(self.session.draft.config.block_exes, ("z.exe", "a.exe", "changed.exe"))
+
+    def test_visual_rule_order_all_categories_cmdline_pair_and_two_field_search(self):
+        for field in ("block_exes", "block_folders", "safelist_exes"):
+            values = (r"C:\Zed", r"C:\alpha", r"C:\ALPHA") if field == "block_folders" else ("z.exe", "a.exe", "A.exe")
+            for value in values:
+                self.session.draft.add_rule(field, value)
+        for executable, contains in (("z.exe", "a"), ("a.exe", "Z"), ("a.exe", "a"), ("A.exe", "A")):
+            self.session.draft.add_rule("block_cmdline", {"executable": executable, "contains": contains})
+        self.app.render()
+        self.app.change_rule_order("Nome A–Z")
+        for category, field in (("Executáveis", "block_exes"), ("Pastas", "block_folders"),
+                                ("Proteção adicional", "safelist_exes")):
+            self.app.rule_category.set(category)
+            self.app.render_rules()
+            self.assertEqual(self.displayed_rule_indices(field), [1, 2, 0])
+            self.assertEqual(self.app.rule_order.get(), "Nome A–Z")
+        self.app.rule_category.set("Linha de comando")
+        self.app.render_rules()
+        self.assertEqual(self.displayed_rule_indices("block_cmdline"), [2, 3, 1, 0])
+        self.app.change_rule_order("Nome Z–A")
+        self.assertEqual(self.displayed_rule_indices("block_cmdline"), [0, 1, 2, 3])
+        self.app.rule_search.set("z")
+        self.assertEqual(self.displayed_rule_indices("block_cmdline"), [0, 1])
+
+    def test_visual_rule_order_only_changes_view_no_io_dirty_history_review_or_motor(self):
+        for value in ("z.exe", "Code.exe", "Code.exe", "a.exe"):
+            self.session.draft.add_rule("block_exes", value)
+        self.app.save_config()
+        self.app.undo_draft()
+        self.app.redo_draft()
+        self.app.undo_draft()
+        snapshot, draft, config = self.session.snapshot, self.session.draft, self.session.draft.config
+        original = self.path.read_bytes()
+        generation, review_snapshot = self.app.review_generation, self.app.review_snapshot
+        dirty, undo, redo = self.session.dirty, draft.can_undo, draft.can_redo
+        self.controller.alive = True
+        self.controller.value = RuntimeSnapshot(state="running")
+        label = next(iter(self.app.review_choices))
+        self.app.choose_review(label, generation)
+        old_go = self.app.review_go.options["command"]
+        with patch.object(Path, "read_bytes", side_effect=AssertionError("IO")), \
+                patch.object(self.session, "save", side_effect=AssertionError("Save")), \
+                patch.object(self.controller, "start", side_effect=AssertionError("motor")), \
+                patch.object(self.controller, "stop", side_effect=AssertionError("motor")):
+            for title in ("Nome A–Z", "Nome Z–A", "Cadastro"):
+                self.app.change_rule_order(title)
+                self.assertEqual(self.app.review_generation, generation)
+                self.assertIs(self.app.review_snapshot, review_snapshot)
+            self.assertTrue(old_go())
+        self.assertIs(self.session.draft, draft)
+        self.assertIs(self.session.snapshot, snapshot)
+        self.assertEqual(draft.config, config)
+        self.assertEqual((self.session.dirty, draft.can_undo, draft.can_redo), (dirty, undo, redo))
+        self.assertEqual(self.path.read_bytes(), original)
+        self.assertEqual(self.controller.value.state, "running")
+
+    def test_visual_rule_order_navigation_cancels_rows_but_retains_choice_and_order(self):
+        for value in ("z.exe", "Code.exe", "a.exe"):
+            self.session.draft.add_rule("block_exes", value)
+        self.app.render()
+        label = next(iter(self.app.review_choices))
+        self.app.choose_review(label, self.app.review_generation)
+        navigate = self.app.review_go.options["command"]
+        self.assertTrue(navigate())
+        old_row = self.app.highlighted_row
+        old_scroll = old_row.timers[old_row.review_scroll_timer]
+        self.app.change_rule_order("Nome A–Z")
+        self.assertIsNone(self.app.highlighted_row)
+        self.assertTrue(old_row.destroyed)
+        self.assertEqual(old_row.timers, {})
+        old_scroll()
+        self.app.rule_search.set("z")
+        self.assertTrue(navigate())
+        self.assertEqual(self.app.rule_search.get(), "")
+        self.assertEqual(self.app.rule_order.get(), "Nome A–Z")
+        self.assertEqual(self.displayed_rule_indices("block_exes"), [2, 1, 0])
+        self.assertIs(self.app.highlighted_row, self.app.review_rows[("block_exes", 1)])
+
+    def test_visual_rule_order_guards_and_recalculates_after_history_import_reload(self):
+        for value in ("z.exe", "a.exe"):
+            self.session.draft.add_rule("block_exes", value)
+        self.app.render()
+        self.app.change_rule_order("Nome A–Z")
+        self.app.edit_rule()
+        self.assertEqual(self.app.rule_order_picker.options["state"], "disabled")
+        self.app.rule_order.set("Nome Z–A")
+        self.assertFalse(self.app.change_rule_order("Nome Z–A"))
+        self.assertEqual(self.app.rule_order.get(), "Nome A–Z")
+        button(self.app.modal, "Cancelar").invoke()
+        for flag in ("picker_active", "selecting_executables", "closing", "closed"):
+            setattr(self.app, flag, True)
+            self.assertFalse(self.app.change_rule_order("Nome Z–A"))
+            setattr(self.app, flag, False)
+        self.assertFalse(self.app.change_rule_order("unknown"))
+        self.app.undo_draft()
+        self.assertEqual(self.displayed_rule_indices("block_exes"), [0])
+        self.app.redo_draft()
+        self.assertEqual(self.displayed_rule_indices("block_exes"), [1, 0])
+        self.import_source(block_exes=["b.exe", "a.exe"])
+        self.app.import_config()
+        self.assertEqual(self.displayed_rule_indices("block_exes"), [1, 0])
+        self.assertEqual(self.app.rule_order.get(), "Nome A–Z")
+        self.app.reload_config()
+        self.assertEqual(self.displayed_rule_indices("block_exes"), [])
+        self.assertEqual(self.app.rule_order.get(), "Nome A–Z")
+
     def test_review_navigation_disabled_without_link_then_explicit_choice_matches_number(self):
         self.assertEqual(self.app.review_picker.options["state"], "disabled")
         self.assertEqual(self.app.review_go.options["state"], "disabled")

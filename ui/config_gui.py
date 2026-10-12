@@ -18,6 +18,7 @@ from core.instance_guard import InstanceGuard, InstanceGuardError
 from core.initial_setup import PROCESS_SUGGESTIONS, with_process_suggestions
 from ui.runtime_presenter import format_runtime
 from ui.review_navigation import review_links
+from ui.rule_list_view import rule_view_indices
 from ui.config_diff_presenter import format_config_diff
 from ui.tray_commands import TrayMailbox
 from ui.windows_tray import WindowsTray
@@ -113,6 +114,7 @@ def _build_app(ctk, tk, filedialog, messagebox, session, controller=None, tray=N
         "Proteção adicional": "safelist_exes",
         "Linha de comando": "block_cmdline",
     }
+    rule_orders = {"Cadastro": "registered", "Nome A–Z": "name_asc", "Nome Z–A": "name_desc"}
     descriptions = {
         "block_exes": "Nomes completos, como jogo.exe. A comparação ignora maiúsculas e minúsculas. "
                       "Selecionar arquivos adiciona apenas nomes, válidos em qualquer pasta.",
@@ -147,6 +149,7 @@ def _build_app(ctk, tk, filedialog, messagebox, session, controller=None, tray=N
             self.review_rows = {}
             self.row_generation = {"windows": 0, "rules": 0}
             self.highlighted_row = None
+            self.visual_rule_order = "registered"
             self.tray = tray
             self.mailbox = mailbox
             self.tray_pending = self.tray_ready = self.tray_hidden = False
@@ -291,9 +294,18 @@ def _build_app(ctk, tk, filedialog, messagebox, session, controller=None, tray=N
             self.rule_description.grid(row=1, column=0, columnspan=2, sticky="ew", padx=14, pady=10)
             self.rule_search = ctk.StringVar(value="")
             ctk.CTkLabel(processes, text="Buscar regras nesta categoria", anchor="w", text_color=muted
-                         ).grid(row=2, column=0, columnspan=2, sticky="ew", padx=14)
+                         ).grid(row=2, column=0, sticky="ew", padx=14)
             ctk.CTkEntry(processes, textvariable=self.rule_search).grid(
-                row=3, column=0, columnspan=2, sticky="ew", padx=14, pady=(0, 10))
+                row=3, column=0, sticky="ew", padx=14, pady=(0, 10))
+            order_controls = ctk.CTkFrame(processes, fg_color="transparent")
+            order_controls.grid(row=3, column=1, sticky="w", padx=14, pady=(0, 10))
+            ctk.CTkLabel(order_controls, text="Ordem visual", text_color=muted).pack(side="left", padx=(0, 10))
+            self.rule_order = ctk.StringVar(value="Cadastro")
+            self.rule_order_picker = ctk.CTkOptionMenu(order_controls, variable=self.rule_order,
+                                                       values=list(rule_orders), width=155,
+                                                       fg_color=accent, button_color=accent,
+                                                       command=self.change_rule_order)
+            self.rule_order_picker.pack(side="left")
             self.rules_list = ctk.CTkScrollableFrame(processes, fg_color="#F3F6F5")
             processes.grid_rowconfigure(2, weight=0)
             processes.grid_rowconfigure(4, weight=1)
@@ -488,6 +500,7 @@ def _build_app(ctk, tk, filedialog, messagebox, session, controller=None, tray=N
 
         def update_review_navigation(self):
             available = self.navigation_available()
+            self.rule_order_picker.configure(state="normal" if available else "disabled")
             self.review_picker.configure(state="normal" if available and self.review_choices else "disabled")
             self.review_go.configure(state="normal" if available and self.review_selected is not None else "disabled")
 
@@ -861,6 +874,17 @@ def _build_app(ctk, tk, filedialog, messagebox, session, controller=None, tray=N
             self.render()
             self.notify("Horário duplicado no rascunho. Clique em Salvar para gravar.")
 
+        def change_rule_order(self, label):
+            if self.closing or self.closed:
+                return False
+            if not self.navigation_available() or not isinstance(label, str) or label not in rule_orders:
+                self.rule_order.set(next(title for title, value in rule_orders.items() if value == self.visual_rule_order))
+                return False
+            self.visual_rule_order = rule_orders[label]
+            self.rule_order.set(label)
+            self.render_rules()
+            return True
+
         def render_rules(self):
             if self.closing or self.closed:
                 return
@@ -870,24 +894,21 @@ def _build_app(ctk, tk, filedialog, messagebox, session, controller=None, tray=N
             self.executable_picker.configure(state="normal" if (
                 field in {"block_exes", "safelist_exes"} and self.modal is None and not self.selecting_executables
             ) else "disabled")
-            values = getattr(session.draft.config, field)
-            query = self.rule_search.get().strip().casefold()
+            config = session.draft.config
+            values = getattr(config, field)
+            indices = rule_view_indices(config, field, query=self.rule_search.get(), order=self.visual_rule_order)
             if not values:
                 ctk.CTkLabel(self.rules_list, text="Nenhuma regra nesta lista.", text_color=muted
                              ).grid(row=0, column=0, pady=45)
                 return
-            visible = 0
-            for index, value in enumerate(values):
+            for visible, index in enumerate(indices):
+                value = values[index]
                 title = value.executable if field == "block_cmdline" else value
                 detail = f"Contém: {value.contains}" if field == "block_cmdline" else self.rule_category.get()
-                searchable = f"{title}\n{value.contains}" if field == "block_cmdline" else title
-                if query not in searchable.casefold():
-                    continue
                 self.review_rows[(field, index)] = self.item_row(self.rules_list, visible, title, detail,
                               lambda i=index, f=field: self.edit_rule(i, f),
                               lambda i=index, f=field: self.remove_item(f, i))
-                visible += 1
-            if not visible:
+            if not indices:
                 ctk.CTkLabel(self.rules_list, text="Nenhuma regra corresponde à busca nesta categoria.",
                              text_color=muted).grid(row=0, column=0, pady=45)
 

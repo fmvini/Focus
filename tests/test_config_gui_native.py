@@ -105,6 +105,117 @@ class NativeConfigGuiTests(unittest.TestCase):
     def entries(self):
         return [child for child in self.descendants(self.app.modal) if isinstance(child, self.ctk.CTkEntry)]
 
+    def native_rule_indices(self, field):
+        return [index for row_field, index in self.app.review_rows if row_field == field]
+
+    def test_visual_rule_order_native_compact_layout_stable_ties_and_crud_indices(self):
+        self.app.geometry("880x660")
+        self.app.tabs.set("Jogos / Apps")
+        self.assertEqual(self.app.rule_order.get(), "Cadastro")
+        self.assertEqual(self.app.rule_order_picker.master.grid_info()["row"], 3)
+        self.assertEqual(self.app.rule_order_picker.master.grid_info()["column"], 1)
+        for value in ("z.exe", "a.exe", "A.exe", "b.exe"):
+            self.session.draft.add_rule("block_exes", value)
+        self.app.render()
+        original = self.path.read_bytes()
+        self.assertEqual(self.native_rule_indices("block_exes"), [0, 1, 2, 3])
+        self.app.change_rule_order("Nome A–Z")
+        self.assertEqual(self.native_rule_indices("block_exes"), [1, 2, 3, 0])
+        self.app.change_rule_order("Nome Z–A")
+        self.assertEqual(self.native_rule_indices("block_exes"), [0, 3, 1, 2])
+        self.app.rule_search.set(" A.EXE ")
+        self.assertEqual(self.native_rule_indices("block_exes"), [1, 2])
+        row = self.app.review_rows[("block_exes", 2)]
+        self.button(row, "Editar").invoke()
+        self.app.modal.withdraw()
+        self.assertEqual(self.entries()[0].get(), "A.exe")
+        self.assertEqual(self.app.rule_order_picker.cget("state"), "disabled")
+        self.entries()[0].delete(0, "end")
+        self.entries()[0].insert(0, "changed.exe")
+        self.button(self.app.modal, "Aplicar alteração").invoke()
+        self.assertEqual(self.session.draft.config.block_exes, ("z.exe", "a.exe", "changed.exe", "b.exe"))
+        self.app.rule_search.set("")
+        self.messages.askyesno.return_value = True
+        self.button(self.app.review_rows[("block_exes", 3)], "Remover").invoke()
+        self.assertEqual(self.session.draft.config.block_exes, ("z.exe", "a.exe", "changed.exe"))
+        self.assertEqual(self.path.read_bytes(), original)
+        self.assertEqual(self.background_errors, [])
+
+    def test_visual_rule_order_native_all_categories_query_pairs_and_preserved_data(self):
+        for field in ("block_exes", "safelist_exes", "block_folders"):
+            values = (r"C:\Zed", r"C:\alpha", r"C:\ALPHA") if field == "block_folders" else ("z.exe", "a.exe", "A.exe")
+            for value in values:
+                self.session.draft.add_rule(field, value)
+        for name, contains in (("z.exe", "a"), ("a.exe", "Z"), ("a.exe", "a"), ("A.exe", "A")):
+            self.session.draft.add_rule("block_cmdline", {"executable": name, "contains": contains})
+        self.app.render()
+        draft, snapshot, config = self.session.draft, self.session.snapshot, self.session.draft.config
+        original = self.path.read_bytes()
+        generation = self.app.review_generation
+        self.app.change_rule_order("Nome A–Z")
+        for category, field in (("Executáveis", "block_exes"), ("Pastas", "block_folders"),
+                                ("Proteção adicional", "safelist_exes")):
+            self.app.rule_category.set(category)
+            self.app.render_rules()
+            self.assertEqual(self.native_rule_indices(field), [1, 2, 0])
+        self.app.rule_category.set("Linha de comando")
+        self.app.render_rules()
+        self.assertEqual(self.native_rule_indices("block_cmdline"), [2, 3, 1, 0])
+        self.app.change_rule_order("Nome Z–A")
+        self.assertEqual(self.native_rule_indices("block_cmdline"), [0, 1, 2, 3])
+        self.app.rule_search.set("z")
+        self.assertEqual(self.native_rule_indices("block_cmdline"), [0, 1])
+        self.assertIs(self.session.draft, draft)
+        self.assertIs(self.session.snapshot, snapshot)
+        self.assertEqual(draft.config, config)
+        self.assertEqual(self.path.read_bytes(), original)
+        self.assertEqual(self.app.review_generation, generation)
+        self.assertTrue(draft.can_undo)
+        self.assertFalse(draft.can_redo)
+        self.assertEqual(self.controller.starts, 0)
+        self.assertEqual(self.background_errors, [])
+
+    def test_visual_rule_order_native_navigation_scroll_owned_cancel_and_picker_guard(self):
+        for index in range(20):
+            self.session.draft.add_rule("block_exes", f"a-{index:02}.exe")
+        self.session.draft.add_rule("block_exes", "Code.exe")
+        self.app.render()
+        link = next(iter(self.app.review_choices.values()))
+        self.app.choose_review(link.label, self.app.review_generation)
+        token = self.app.review_selected
+        self.app.navigate_review_choice(token)
+        old_row = self.app.highlighted_row
+        timer = old_row.review_scroll_timer
+        self.app.change_rule_order("Nome A–Z")
+        self.assertIsNone(self.app.highlighted_row)
+        self.assertNotIn(timer, self.app.tk.splitlist(self.app.tk.call("after", "info")))
+        self.app.rule_search.set("a-00")
+        self.assertTrue(self.app.navigate_review_choice(token))
+        self.assertEqual(self.app.rule_search.get(), "")
+        self.assertEqual(self.app.rule_order.get(), "Nome A–Z")
+        self.assertIs(self.app.highlighted_row, self.app.review_rows[("block_exes", 20)])
+        self.app.after(100, self.app.quit)
+        self.app.mainloop()
+        self.assertGreater(self.app.rules_list._parent_canvas.yview()[0], 0)
+
+        def picker(**kwargs):
+            self.assertEqual(self.app.rule_order_picker.cget("state"), "disabled")
+            self.assertFalse(self.app.change_rule_order("Nome Z–A"))
+            self.assertEqual(self.app.rule_order.get(), "Nome A–Z")
+            return ()
+
+        self.filedialog.askopenfilenames.side_effect = picker
+        self.app.select_executables()
+        self.assertEqual(self.app.rule_order_picker.cget("state"), "normal")
+        self.app.navigate_review_choice(token)
+        self.messages.askyesnocancel.return_value = False
+        self.app.close_editor()
+        self.assertTrue(self.app.closed)
+        self.assertFalse(self.app.change_rule_order("Nome Z–A"))
+        self.assertEqual(self.app.tk.splitlist(self.app.tk.call("after", "info")), ())
+        self.app.tk.call("update")
+        self.assertEqual(self.background_errors, [])
+
     def test_review_navigation_native_duplicates_all_categories_clear_filter_and_preserve_data(self):
         self.app.geometry("880x660")
         for _ in range(2):

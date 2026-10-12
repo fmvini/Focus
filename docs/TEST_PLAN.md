@@ -2,6 +2,12 @@
 
 Fonte: [escopo](Focus%20Blocker_%20escopo%20do%20projeto.md), [requisitos](REQUIREMENTS.md) e [decisões](DECISIONS.md). Fases 1/2: 206 testes OK em Python 3.14.6/psutil 7.2.2 por `.venv/Scripts/python.exe -B -m unittest discover -s tests` (10,542 s). Sintaxe 3.12 dos 18 arquivos Python conferida; runtime 3.12 ainda não executado. Encerramentos reais e fases posteriores continuam pendentes.
 
+## Evidência da ordenação visual das regras — 2026-10-12
+
+- Helper: 14 testes aprovados nos dois runtimes, 0,222 s/0,639 s; quatro integrações de sessão/JSON reais, 0,182 s/0,141 s. Verificam índices originais, empates/duplicatas/casefold, cmdline/pastas literais, tipos/ordens/filtro/imutabilidade/pureza/lazy, CRUD por índice retornado, Undo/Redo, Save com cadastro original, import/reload e conflitos externos.
+- Cinco fakeGUI/três nativeGUI novos verificam ordens/categorias/busca, CRUD da segunda duplicata, preferência da sessão, noIO/dados/history/motor, navegação mantendo ordem, guards, canvas real/row-owned scroll cancelado e layout do controle ao lado da busca. Frontend: 134 GUI/main/native nos dois runtimes, 87,015 s/86,196 s, zero skips; 31 nativeGUI.
+- Suíte completa: **747 descobertos, 746 aprovados e um skip conhecido** symlink/WinError 1314 nos dois runtimes Windows AMD64: Python 3.14.6/147,755 s e Python 3.12.14/167,510 s. Trinta e um nativeGUI, ícone real e guardas passaram. Fontes congeladas; AST 3.12/UTF-8 nos 71 arquivos e links/diff conferidos. Nenhum processo/hosts/configuração do usuário afetado; visual/DPI/acessibilidade permanece pendente.
+
 ## Evidência da navegação da revisão — 2026-10-12
 
 - Dez novos testes helper verificam prefixo antes do filtro, ordinais/índices originais, cinco categorias, múltiplos apontamentos do mesmo item, metadata inválida, candidato fora de faixa, tipos/limites/frozen/pureza/lazy. Com nove reviewer, 19 aprovados nos dois runtimes em 0,645 s/1,298 s.

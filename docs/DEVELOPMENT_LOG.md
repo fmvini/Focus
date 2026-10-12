@@ -1,3 +1,24 @@
+## 2026-10-12 — Ordenação visual das regras sem alterar o cadastro
+
+### Implementado
+- Cadastro/Nome A–Z/Nome Z–A combinados com busca, mantendo dados/índices originais. Controle compacto ao lado da busca preserva a área da lista em 880×660; preferência somente da janela, sem schema/gravação/histórico/motor.
+
+### Arquivos principais alterados
+- `ui/rule_list_view.py`, `tests/test_rule_list_view.py`, `tests/test_rule_list_view_integration.py`, `ui/config_gui.py`, `tests/test_config_gui.py`, `tests/test_config_gui_native.py`.
+- `README.md`, `docs/RULE_LIST_VIEW_CONTRACT.md`, `docs/GUI_EDITOR_CONTRACT.md`, `docs/README.md`, `docs/TEST_PLAN.md`, `docs/DEVELOPMENT_LOG.md`.
+
+### Decisões técnicas
+- Estado somente visual, sem schema/gravação/histórico/motor. Helper puro retorna índices originais, ordenação estável e casefold de nomes/pares cmdline, pastas literais sem expansão.
+- Backend helper/testes; Frontend GUI/testes; Banco integração de sessão em teste exclusivo; Maestro docs/revisão/suíte/commit. Manter navegação e CRUD nos índices originais após sort/filter.
+
+### Estado atual
+- Suíte completa: **747 descobertos, 746 aprovados e um skip conhecido** nos dois runtimes Windows AMD64: Python 3.14.6/147,755 s e Python 3.12.14/167,510 s. Trinta e um nativeGUI, ícone real e guardas passaram. AST 3.12/UTF-8 nos 71 arquivos e links/diff conferidos. Sources revisadas/congeladas para commit conjunto; sem efeitos em processos/hosts/configuração do usuário; visual/DPI segue pendente.
+- Base `d61279e`. Novos 26 testes: 14 helper, quatro integrações, cinco fakeGUI/três nativeGUI. Seleções anteriores passaram nos dois runtimes: helper (0,222 s/0,639 s), integração (0,182 s/0,141 s), 134 GUI/main/native (87,015 s/86,196 s).
+
+### Próximos passos
+- Próxima unidade do formulário de horários: atalhos de dias e preservar ordem original dos dias ao aplicar edição sem mudanças (P3 confirmado por Backend).
+- Sites/avisos/pausa seguem as perguntas abertas de USER_ANSWERS.
+
 ## 2026-10-12 — Navegação dos apontamentos às linhas originais
 
 ### Implementado
