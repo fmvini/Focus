@@ -78,7 +78,7 @@ class NativeConfigGuiTests(unittest.TestCase):
 
     def cleanup_app(self):
         if self.app.modal is not None:
-            self.button(self.app.modal, "Cancelar").invoke()
+            self.button(self.app.modal, "Fechar" if self.app.modal.read_only else "Cancelar").invoke()
         self.controller.finish()
         self.tray.alive = False
         self.messages.askyesnocancel.return_value = False
@@ -162,6 +162,132 @@ class NativeConfigGuiTests(unittest.TestCase):
         self.assertTrue(self.session.dirty)
         self.assertEqual(self.path.read_bytes(), saved)
         self.assertEqual(self.controller.starts, 0)
+
+    def test_changes_modal_readonly_resizable_and_history_preview_in_880_window(self):
+        self.app.geometry("880x660")
+        self.app.tabs.set("Configuração")
+        self.session.draft.add_rule("block_exes", "game.exe")
+        self.session.draft.add_rule("block_cmdline", {"executable": "javaw.exe", "contains": " value  line "})
+        self.app.render()
+        original = self.path.read_bytes()
+        snapshot = self.session.snapshot
+        draft = self.session.draft
+        changes = self.button(self.app, "Ver alterações")
+        self.assertIsInstance(changes.master, self.ctk.CTkScrollableFrame)
+        self.assertEqual(changes.grid_info()["row"], 2)
+        changes.invoke()
+        dialog = self.app.modal
+        dialog.withdraw()
+        self.app.update_idletasks()
+        self.assertEqual(dialog.resizable(), (1, 1))
+        minimum = dialog.tk.call("wm", "minsize", dialog._w)
+        self.assertGreaterEqual(minimum[0], 620)
+        self.assertGreaterEqual(minimum[1], 420)
+        self.assertEqual(dialog.diff_text.cget("state"), "disabled")
+        self.assertEqual(dialog.diff_text.cget("wrap"), "none")
+        self.assertEqual(self.entries(), [])
+        text = dialog.diff_text.get("1.0", "end")
+        self.assertIn("game.exe", text)
+        self.assertIn("' value  line '", text)
+        self.assertEqual(self.app.undo_button.cget("state"), "disabled")
+        self.assertFalse(self.app.undo_draft())
+        self.assertEqual(dialog.diff_text.get("1.0", "end"), text)
+        self.button(dialog, "Fechar").invoke()
+        self.assertIsNone(self.app.modal)
+        self.assertIs(self.session.snapshot, snapshot)
+        self.assertIs(self.session.draft, draft)
+        self.assertEqual(self.path.read_bytes(), original)
+        self.app.undo_draft()
+        self.app.show_changes()
+        self.app.modal.withdraw()
+        self.assertNotIn("javaw.exe", self.app.modal.diff_text.get("1.0", "end"))
+        self.button(self.app.modal, "Fechar").invoke()
+        self.button(self.app, "Salvar").invoke()
+        self.app.show_changes()
+        self.app.modal.withdraw()
+        self.assertEqual(self.app.modal.title(), "Sem alterações")
+        self.button(self.app.modal, "Fechar").invoke()
+        self.assertEqual(self.controller.starts, 0)
+        self.assertEqual(self.background_errors, [])
+
+    def test_first_setup_changes_empty_modal_and_private_extras_stay_unsaved(self):
+        self.app.geometry("880x660")
+        self.app.show_changes()
+        self.app.modal.withdraw()
+        self.assertEqual(self.app.modal.title(), "Nova configuração")
+        self.assertIn("0", self.app.modal.diff_text.get("1.0", "end"))
+        self.assertIn("criad", self.app.modal.diff_text.get("1.0", "end"))
+        self.button(self.app.modal, "Fechar").invoke()
+        source = self.root / "import.json"
+        source.write_text(json.dumps({"windows": [], "PRIVATE_KEY": "SECRET_DO_NOT_SHOW"}), encoding="utf-8")
+        self.filedialog.askopenfilename.return_value = str(source)
+        self.messages.askyesno.return_value = True
+        self.app.import_config()
+        self.app.show_changes()
+        self.app.modal.withdraw()
+        text = self.app.modal.diff_text.get("1.0", "end")
+        self.assertNotIn("PRIVATE_KEY", text)
+        self.assertNotIn("SECRET_DO_NOT_SHOW", text)
+        self.button(self.app.modal, "Fechar").invoke()
+        self.assertTrue(self.session.is_new)
+        self.assertTrue(self.session.dirty)
+        self.assertFalse(self.path.exists())
+        self.assertEqual(self.controller.starts, 0)
+
+    def test_changes_modal_picker_guard_conflict_and_owned_timers_preserve_root_poll(self):
+        self.session.draft.add_rule("block_exes", "draft.exe")
+        self.path.write_text('{"windows":[],"block_exes":["external.exe"]}', encoding="utf-8")
+        external = self.path.read_bytes()
+
+        def picker(**kwargs):
+            self.app.show_changes()
+            self.assertIsNone(self.app.modal)
+            return ()
+
+        self.filedialog.askopenfilenames.side_effect = picker
+        self.app.select_executables()
+        self.app.show_changes()
+        dialog = self.app.modal
+        dialog.withdraw()
+        self.assertNotIn("external.exe", dialog.diff_text.get("1.0", "end"))
+        orphaned = Mock()
+        dialog.diff_text.after(30, orphaned)
+        self.button(dialog, "Fechar").invoke()
+        root_callback = Mock()
+        self.app.after(30, root_callback)
+        self.app.after(150, self.app.quit)
+        self.app.mainloop()
+        root_callback.assert_called_once_with()
+        orphaned.assert_not_called()
+        self.assertIsNotNone(self.app.status_timer)
+        self.assertFalse(self.app.save_config())
+        self.assertEqual(self.path.read_bytes(), external)
+        self.assertTrue(self.session.dirty)
+        self.assertEqual(self.background_errors, [])
+
+    def test_changes_modal_close_cancel_discard_teardown_and_explicit_limits(self):
+        for index in range(105):
+            self.session.draft.add_rule("block_exes", f"game-{index}.exe")
+        self.session.draft.update_rule("block_exes", 0, "x" * 1200 + ".exe")
+        self.app.show_changes()
+        dialog = self.app.modal
+        dialog.withdraw()
+        text = dialog.diff_text.get("1.0", "end")
+        self.assertIn("Mais 5", text)
+        self.assertIn("truncad", text)
+        self.messages.askyesnocancel.return_value = None
+        self.app.close_editor()
+        self.assertIs(self.app.modal, dialog)
+        self.assertFalse(self.app.closing)
+        self.app.modal.withdraw()
+        self.messages.askyesnocancel.return_value = False
+        self.app.close_editor()
+        self.assertTrue(self.app.closed)
+        self.assertEqual(self.app.tk.splitlist(self.app.tk.call("after", "info")), ())
+        self.app.tk.call("update")
+        self.assertEqual(self.background_errors, [])
+        self.controller.wait.assert_not_called()
+        self.tray.wait.assert_not_called()
 
     def test_first_setup_selected_suggestions_create_only_on_save_with_real_widgets(self):
         self.app.geometry("880x660")

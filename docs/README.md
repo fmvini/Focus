@@ -28,6 +28,7 @@ Status: fases 1/2, editor CLI, painel/configuração gráfica, controle explíci
 | [CONFIG_EDITOR_CONTRACT.md](CONFIG_EDITOR_CONTRACT.md) | Rascunho, edição pela CLI, salvamento e conflitos externos |
 | [GUI_EDITOR_CONTRACT.md](GUI_EDITOR_CONTRACT.md) | Editor gráfico, sessão de edição, consulta da agenda e limites de validação nativa |
 | [CONFIG_EVOLUTION_CONTRACT.md](CONFIG_EVOLUTION_CONTRACT.md) | Painel semanal, duplicação, busca e importação/exportação do rascunho |
+| [CONFIG_DIFF_CONTRACT.md](CONFIG_DIFF_CONTRACT.md) | Comparação de alterações pendentes GUI/CLI, índices e limites de apresentação |
 | [PROCESS_GUI_CONTRACT.md](PROCESS_GUI_CONTRACT.md) | Motor gráfico: início/parada, worker, snapshots, recarga e saída ordenada |
 | [TRAY_CONTRACT.md](TRAY_CONTRACT.md) | Bandeja explícita, fila de comandos Tk e uma GUI por configuração/sessão |
 | [INITIAL_SETUP_CONTRACT.md](INITIAL_SETUP_CONTRACT.md) | Primeira configuração gráfica, sugestões opt-in e criação exclusiva ao Salvar |
@@ -38,7 +39,7 @@ Agentes identificados por `maestri list`: Maestro, Backend, Frontend e Banco de 
 
 Na fase 2, Backend mantém bloqueador/adaptador; Banco, JSON tipado; Frontend, CLI; Maestro, contratos/revisão/integração. Antes de iniciar implementação posterior, consultar log/decisões; não interpretar ausência de resposta como autorização para escolher comportamento de produto.
 
-No editor CLI independente, Backend mantém `ConfigDraft`; Banco, snapshots/persistência; Frontend, menu e flags; Maestro, integração, documentação e commit único. A unidade foi complementada pelo editor gráfico, painel semanal/portabilidade e controle de processos. Nesta última unidade, Backend entregou controlador, Banco presenter/integração com JSON, Frontend lifecycle/widgets e Maestro revisão/integração. A fase 5 completa, incluindo bandeja, continua pendente.
+No editor CLI independente, Backend mantém `ConfigDraft`; Banco, snapshots/persistência; Frontend, menu e flags; Maestro, integração, documentação e commit único. A unidade foi complementada pelo editor gráfico, painel semanal/portabilidade, controle de processos e bandeja. Backend entregou controlador/guarda, Banco presenters/integração com JSON, Frontend lifecycle/widgets e Maestro revisão/integração. Avisos/pausa e aceite visual da fase 5 continuam pendentes.
 
 A pedido do usuário, novas perguntas ficam em USER_ANSWERS, sem formulários/mensagens Maestri para colher respostas. Ler esse arquivo antes de cada etapa; preservar o texto preenchido, acrescentar perguntas com novos IDs e consolidar somente respostas explícitas em DECISIONS. Relatórios dos agentes não são respostas do usuário.
 

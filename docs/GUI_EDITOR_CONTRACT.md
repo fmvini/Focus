@@ -90,6 +90,14 @@ a intenção anterior de ocultar; um ready tardio exige novo Enviar à bandeja.
 O seletor de pastas descarta retorno após fechar/substituir seu formulário,
 antes de acessar os campos; falha de abertura é informada sem alterar draft.
 
+**Ver alterações**, na aba Configuração, abre comparação de leitura entre
+baseline e rascunho em modal redimensionável/rolável. Apresenta índices de
+cada lado, Antes/Depois e somente indicador para extras; limites explícitos
+evitam crescimento ilimitado do texto. Abrir/fechar não grava nem altera
+histórico/motor. Guardas de modal/seletor/saída e cleanup dos timers são os
+mesmos dos formulários; Salvar continua explícito, sem nova confirmação.
+Detalhes em [CONFIG_DIFF_CONTRACT.md](CONFIG_DIFF_CONTRACT.md).
+
 `ui/config_gui.py` importa CustomTkinter/Tk somente na execução de `--gui`.
 A fábrica `_build_app` recebe toolkit, diálogos, sessão e controlador opcional
 para testar os callbacks com arquivos reais sem dependência gráfica. Abertura
@@ -113,10 +121,10 @@ a conferência final e o replace; não equivale a CAS/lock de escritores externo
 - `tests/test_config_gui.py`: callbacks de CRUD, validação e correção,
   categorias, salvamento, recarga e saída usando widgets simulados com JSON
   e repositório reais. Não valida renderização ou compatibilidade dos widgets.
-- `tests/test_config_gui_native.py`: vinte smoke tests com CustomTkinter real
+- `tests/test_config_gui_native.py`: vinte e quatro smoke tests com CustomTkinter real
   quando instalado, com janelas ocultas; não substituem inspeção visual.
 
-Na retomada de 2026-10-11, as dependências foram instaladas no `.venv` e os vinte
+Na retomada de 2026-10-12, as dependências foram instaladas no `.venv`/QA 3.12 e os vinte e quatro
 smoke tests nativos passaram sem erros de callbacks Tk. Controlador simulado,
 sem encerramentos reais. A janela de QA abriu com JSON isolado e alvos vazios,
 mas a captura falhou duas vezes por timeout; inspeção visual, DPI e rolagem em

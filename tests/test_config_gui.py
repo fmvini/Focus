@@ -58,10 +58,17 @@ class Widget:
     pack = grid
     grid_columnconfigure = lambda *args, **kwargs: None
     grid_rowconfigure = lambda *args, **kwargs: None
-    title = lambda *args, **kwargs: None
-    geometry = lambda *args, **kwargs: None
-    minsize = lambda *args, **kwargs: None
-    resizable = lambda *args, **kwargs: None
+    def title(self, value):
+        self.options["title"] = value
+
+    def geometry(self, value):
+        self.options["geometry"] = value
+
+    def minsize(self, width, height):
+        self.options["minsize"] = (width, height)
+
+    def resizable(self, width, height):
+        self.options["resizable"] = (width, height)
     transient = lambda *args, **kwargs: None
     grab_set = lambda *args, **kwargs: None
     focus_set = lambda *args, **kwargs: None
@@ -214,6 +221,206 @@ class ConfigGuiFlowTests(unittest.TestCase):
     def entries(self):
         return [widget for widget in descendants(self.app.modal)
                 if widget.__class__.__name__ == "CTkEntry"]
+
+    def test_changes_modal_uses_loaded_baseline_and_preserves_editing_and_motor_without_io(self):
+        self.path.write_text(json.dumps({
+            "windows": [{"start": "09:00", "end": "10:00", "days": [0]},
+                        {"start": "11:00", "end": "12:00", "days": [1]}],
+            "block_exes": ["keep.exe", "old.exe"], "block_folders": [r"C:\Games"],
+            "safelist_exes": ["keep-safe.exe"],
+            "block_cmdline": [{"executable": "javaw.exe", "contains": " old  value "}],
+            "private-key": "PRIVATE_VALUE_DO_NOT_SHOW",
+        }), encoding="utf-8")
+        self.session.reload()
+        self.session.draft.update_window(0, "09:00", "11:00", [0])
+        self.session.draft.remove_window(1)
+        self.session.draft.update_rule("block_exes", 1, "new.exe")
+        self.session.draft.add_rule("block_exes", "last.exe")
+        self.session.draft.update_rule("block_folders", 0, r"D:\Games")
+        self.session.draft.remove_rule("safelist_exes", 0)
+        self.session.draft.update_rule("block_cmdline", 0, {"executable": "javaw.exe", "contains": " new  value "})
+        self.app.render()
+        draft, snapshot = self.session.draft, self.session.snapshot
+        state = draft.config
+        original = self.path.read_bytes()
+        self.controller.alive = True
+        self.controller.value = RuntimeSnapshot(state="running")
+        with patch.object(Path, "read_bytes", side_effect=AssertionError("releitura")), \
+                patch.object(self.session, "save", side_effect=AssertionError("gravação")), \
+                patch.object(self.controller, "start", side_effect=AssertionError("motor")), \
+                patch.object(self.controller, "stop", side_effect=AssertionError("motor")):
+            button(self.app, "Ver alterações").invoke()
+            dialog = self.app.modal
+            text = dialog.diff_text.get()
+            self.assertTrue(dialog.read_only)
+            self.assertEqual(dialog.diff_text.options["state"], "disabled")
+            self.assertEqual(dialog.diff_text.options["wrap"], "none")
+            self.assertEqual(dialog.options["resizable"], (True, True))
+            self.assertEqual(dialog.options["minsize"], (620, 420))
+            for value in ("Horários", "Executáveis", "Pastas", "Proteção adicional", "Linha de comando",
+                          "old.exe", "new.exe", "last.exe", "09:00", "11:00", "' old  value '", "' new  value '"):
+                self.assertIn(value, text)
+            self.assertNotIn("PRIVATE_VALUE_DO_NOT_SHOW", text)
+            self.assertNotIn("private-key", text)
+            self.assertIn("salvo 2", text)
+            self.assertIn("novo 3", text)
+            self.assertIn("Antes", text)
+            self.assertIn("Depois", text)
+            button(dialog, "Fechar").invoke()
+        self.assertIsNone(self.app.modal)
+        self.assertTrue(dialog.destroyed)
+        self.assertEqual(dialog.timers, {})
+        self.assertEqual(self.path.read_bytes(), original)
+        self.assertIs(self.session.draft, draft)
+        self.assertIs(self.session.snapshot, snapshot)
+        self.assertEqual(draft.config, state)
+        self.assertTrue(draft.can_undo)
+        self.assertTrue(self.session.dirty)
+        self.assertTrue(self.controller.alive)
+        self.assertEqual(self.controller.value.state, "running")
+        self.assertIsNotNone(self.app.status_timer)
+
+    def test_changes_modal_distinguishes_noop_new_empty_and_private_extra_changes(self):
+        self.app.show_changes()
+        self.assertEqual(self.app.modal.options["title"], "Sem alterações")
+        button(self.app.modal, "Fechar").invoke()
+        self.path.write_text(json.dumps({"windows": [], "private-key": True}), encoding="utf-8")
+        self.session.reload()
+        self.import_source(**{"private-key": 1})
+        self.app.import_config()
+        self.assertTrue(self.session.dirty)
+        self.app.show_changes()
+        self.assertEqual(self.app.modal.options["title"], "Alterações da configuração")
+        self.assertIn("Extras: alterados", self.app.modal.diff_text.get())
+        self.assertNotIn("private-key", self.app.modal.diff_text.get())
+        button(self.app.modal, "Fechar").invoke()
+        self.messages.askyesnocancel.return_value = False
+        self.make_new()
+        self.app.show_changes()
+        self.assertEqual(self.app.modal.options["title"], "Nova configuração")
+        self.assertIn("0", self.app.modal.diff_text.get())
+        self.assertIn("criad", self.app.modal.diff_text.get())
+        button(self.app.modal, "Fechar").invoke()
+        self.assertTrue(self.session.is_new)
+        self.assertTrue(self.session.dirty)
+        self.assertFalse(self.path.exists())
+
+    def test_changes_modal_is_captured_and_reopens_after_history_save_import_reload(self):
+        self.session.draft.add_rule("block_exes", "draft.exe")
+        self.app.render()
+        self.app.show_changes()
+        dialog = self.app.modal
+        text = dialog.diff_text.get()
+        original = self.path.read_bytes()
+        self.app.callbacks["<Control-s>"](None)
+        self.app.callbacks["<Control-r>"](None)
+        self.app.undo_draft()
+        self.app.import_config()
+        self.assertEqual(dialog.diff_text.get(), text)
+        self.assertEqual(self.path.read_bytes(), original)
+        self.filedialog.askopenfilename.assert_not_called()
+        button(dialog, "Fechar").invoke()
+        self.app.undo_draft()
+        self.app.show_changes()
+        self.assertEqual(self.app.modal.options["title"], "Sem alterações")
+        button(self.app.modal, "Fechar").invoke()
+        self.app.redo_draft()
+        self.app.save_config()
+        self.app.show_changes()
+        self.assertEqual(self.app.modal.options["title"], "Sem alterações")
+        button(self.app.modal, "Fechar").invoke()
+        self.app.undo_draft()
+        self.app.show_changes()
+        self.assertIn("draft.exe", self.app.modal.diff_text.get())
+        self.assertIn("removido", self.app.modal.diff_text.get())
+        button(self.app.modal, "Fechar").invoke()
+        self.import_source(block_exes=["imported.exe"])
+        self.app.import_config()
+        self.app.show_changes()
+        self.assertIn("imported.exe", self.app.modal.diff_text.get())
+        button(self.app.modal, "Fechar").invoke()
+        self.app.reload_config()
+        self.app.show_changes()
+        self.assertEqual(self.app.modal.options["title"], "Sem alterações")
+        button(self.app.modal, "Fechar").invoke()
+
+    def test_changes_preview_does_not_adopt_external_file_or_bypass_save_conflicts(self):
+        self.session.draft.add_rule("block_exes", "draft.exe")
+        self.path.write_bytes(b'{"windows":[],"block_exes":["external.exe"]}')
+        external = self.path.read_bytes()
+        self.app.show_changes()
+        text = self.app.modal.diff_text.get()
+        self.assertIn("draft.exe", text)
+        self.assertNotIn("external.exe", text)
+        button(self.app.modal, "Fechar").invoke()
+        self.assertFalse(self.app.save_config())
+        self.assertEqual(self.path.read_bytes(), external)
+        self.assertTrue(self.session.dirty)
+        self.app.show_changes()
+        self.assertEqual(self.app.modal.diff_text.get(), text)
+        button(self.app.modal, "Fechar").invoke()
+
+    def test_changes_modal_guards_existing_form_picker_closing_and_simple_escape(self):
+        self.app.edit_rule()
+        form = self.app.modal
+        self.app.show_changes()
+        self.assertIs(self.app.modal, form)
+        button(form, "Cancelar").invoke()
+        for flag in ("picker_active", "selecting_executables", "closing"):
+            setattr(self.app, flag, True)
+            self.app.show_changes()
+            self.assertIsNone(self.app.modal)
+            setattr(self.app, flag, False)
+        self.app.show_changes()
+        dialog = self.app.modal
+        self.assertEqual(self.app.start_button.options["state"], "disabled")
+        self.assertEqual(self.app.undo_button.options["state"], "disabled")
+        self.assertEqual(self.entries(), [])
+        dialog.callbacks["<Escape>"](None)
+        self.assertIsNone(self.app.modal)
+        self.assertFalse(self.session.dirty)
+        self.app.close_editor()
+        self.app.show_changes()
+        self.assertIsNone(self.app.modal)
+
+    def test_changes_modal_parent_close_preserves_cancel_then_resolves_dirty_and_workers(self):
+        self.session.draft.add_rule("block_exes", "draft.exe")
+        self.app.show_changes()
+        dialog = self.app.modal
+        self.messages.askyesnocancel.return_value = None
+        self.app.close_editor()
+        self.assertIs(self.app.modal, dialog)
+        self.assertFalse(self.app.closing)
+        self.assertEqual(self.controller.stops, 0)
+        self.messages.askyesnocancel.return_value = False
+        self.app.close_editor()
+        self.assertTrue(self.app.closed)
+        self.assertTrue(dialog.destroyed)
+        self.assertEqual(dialog.timers, {})
+        self.assertEqual(self.app.timers, {})
+        self.controller.wait.assert_not_called()
+        self.tray.wait.assert_not_called()
+
+    def test_changes_modal_long_values_and_lists_have_explicit_presenter_limits(self):
+        for index in range(105):
+            self.session.draft.add_rule("block_exes", f"game-{index}.exe")
+        self.session.draft.update_rule("block_exes", 0, "very-" + "x" * 1200 + ".exe")
+        self.session.draft.add_rule("block_cmdline", {"executable": "javaw.exe", "contains": " value  line "})
+        self.app.show_changes()
+        text = self.app.modal.diff_text.get()
+        self.assertIn("Mais 6", text)
+        self.assertIn("truncad", text)
+        self.assertIn("game-99.exe", text)
+        self.assertNotIn("game-100.exe", text)
+        button(self.app.modal, "Fechar").invoke()
+        for _ in range(105):
+            self.session.draft.remove_rule("block_exes", 0)
+        self.session.draft.add_rule("block_exes", "look\u202e.exe")
+        self.app.show_changes()
+        self.assertIn("' value  line '", self.app.modal.diff_text.get())
+        self.assertIn("look\\u202e.exe", self.app.modal.diff_text.get())
+        self.assertNotIn("\u202e", self.app.modal.diff_text.get())
+        button(self.app.modal, "Fechar").invoke()
 
     def test_executable_picker_batch_draft_only_dedup_and_save(self):
         original = self.path.read_bytes()

@@ -80,6 +80,18 @@ class ConfigEditorIntegrationTests(unittest.TestCase):
         self.assertEqual(load_config(self.path).windows[0].start.hour, 9)
         self.assertIn("Não há edição disponível", result.stdout)
 
+    def test_cli_preview_tracks_draft_history_and_saved_baseline_without_implicit_write(self):
+        original = self.path.read_bytes()
+        result = self.run_editor(["1", "2", "09:00", "11:00", "0", "8", "6", "8", "7", "8", "5"])
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout.count("09:00"), 2)
+        self.assertEqual(result.stdout.count("11:00"), 2)
+        self.assertEqual(self.path.read_bytes(), original)
+        result = self.run_editor(["1", "2", "09:00", "11:00", "0", "3", "8", "5"])
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertNotIn("09:00", result.stdout)
+        self.assertEqual(load_config(self.path).windows[0].start.hour, 9)
+
     def test_invalid_entry_then_disabled_window_can_be_saved(self):
         result = self.run_editor([
             "1", "2", "08:00", "08:00", "",

@@ -8,6 +8,7 @@ from time import monotonic
 
 from core.config import ConfigError
 from core.config_review import review_config
+from core.config_diff import diff_config
 from core.config_repository import ConfigConflictError
 from core.config_session import ConfigSession
 from core.agenda_preview import week_preview
@@ -15,6 +16,7 @@ from core.process_controller import ProcessController
 from core.instance_guard import InstanceGuard, InstanceGuardError
 from core.initial_setup import PROCESS_SUGGESTIONS, with_process_suggestions
 from ui.runtime_presenter import format_runtime
+from ui.config_diff_presenter import format_config_diff
 from ui.tray_commands import TrayMailbox
 from ui.windows_tray import WindowsTray
 
@@ -286,6 +288,8 @@ def _build_app(ctk, tk, filedialog, messagebox, session, controller=None, tray=N
             path_box.grid(row=1, column=0, sticky="ew", padx=18)
             path_box.insert("1.0", str(session.path.absolute()))
             path_box.configure(state="disabled")
+            ctk.CTkButton(settings, text="Ver alterações", fg_color=accent,
+                          command=self.show_changes).grid(row=2, column=0, sticky="w", padx=18, pady=(12, 0))
             ctk.CTkLabel(settings, justify="left", anchor="nw", wraplength=730, text=(
                 "As alterações ficam em um rascunho até você clicar em Salvar. No primeiro uso, "
                 "Salvar cria o arquivo; fechar e descartar não cria nada. Salvar não inicia o motor.\n\n"
@@ -299,9 +303,9 @@ def _build_app(ctk, tk, filedialog, messagebox, session, controller=None, tray=N
                 "Uma CLI separada continua independente.\n\n"
                 "Importar JSON substitui apenas o rascunho, após confirmação. Clique em Salvar para aplicar ao arquivo ativo.\n\n"
                 "Exportar JSON grava o rascunho em um destino novo. Não salva a configuração ativa."
-            )).grid(row=2, column=0, sticky="ew", padx=18, pady=18)
+            )).grid(row=3, column=0, sticky="ew", padx=18, pady=18)
             portability = ctk.CTkFrame(settings, fg_color="transparent")
-            portability.grid(row=3, column=0, sticky="w", padx=18)
+            portability.grid(row=4, column=0, sticky="w", padx=18)
             ctk.CTkButton(portability, text="Importar JSON", fg_color=accent,
                           command=self.import_config).pack(side="left", padx=(0, 8))
             ctk.CTkButton(portability, text="Exportar JSON", fg_color=accent,
@@ -309,16 +313,16 @@ def _build_app(ctk, tk, filedialog, messagebox, session, controller=None, tray=N
 
             ctk.CTkLabel(settings, text="Sugestões de jogos e aplicativos", anchor="w",
                          font=ctk.CTkFont(size=20, weight="bold")).grid(
-                             row=4, column=0, sticky="ew", padx=18, pady=(22, 8))
+                             row=5, column=0, sticky="ew", padx=18, pady=(22, 8))
             ctk.CTkLabel(settings, text=(
                 "Escolha somente os aplicativos que deseja incluir no rascunho. Nada está selecionado inicialmente. "
                 "As sugestões não verificam instalações; revise e edite as regras em Jogos / Apps. "
                 "Minecraft Java exige javaw.exe junto ao trecho .minecraft. Proteções obrigatórias têm prioridade."
             ), anchor="w", justify="left", wraplength=730, text_color=muted).grid(
-                row=5, column=0, sticky="ew", padx=18, pady=(0, 12))
+                row=6, column=0, sticky="ew", padx=18, pady=(0, 12))
             self.suggestion_vars = {}
             suggestions = ctk.CTkFrame(settings, fg_color="transparent")
-            suggestions.grid(row=6, column=0, sticky="ew", padx=18)
+            suggestions.grid(row=7, column=0, sticky="ew", padx=18)
             for index, suggestion in enumerate(PROCESS_SUGGESTIONS):
                 variable = tk.IntVar(value=0)
                 self.suggestion_vars[suggestion.key] = variable
@@ -328,7 +332,7 @@ def _build_app(ctk, tk, filedialog, messagebox, session, controller=None, tray=N
                 ctk.CTkCheckBox(suggestions, text=f"{suggestion.label} · {detail}",
                                 variable=variable).grid(row=index, column=0, sticky="w", pady=6)
             ctk.CTkButton(settings, text="Adicionar selecionadas", fg_color=accent,
-                          command=self.add_suggestions).grid(row=7, column=0, sticky="w", padx=18, pady=14)
+                          command=self.add_suggestions).grid(row=8, column=0, sticky="w", padx=18, pady=14)
 
             footer = ctk.CTkFrame(self, fg_color="transparent")
             footer.grid(row=3, column=0, sticky="ew", padx=28, pady=16)
@@ -812,11 +816,28 @@ def _build_app(ctk, tk, filedialog, messagebox, session, controller=None, tray=N
             self.render()
             self.notify("Item removido do rascunho. Clique em Salvar para gravar.")
 
-        def new_dialog(self, title):
+        def show_changes(self):
+            if self.closing or self.closed or self.modal is not None or self.picker_active or self.selecting_executables:
+                return
+            baseline = None if session.is_new else session.snapshot.config
+            view = format_config_diff(diff_config(baseline, session.draft.config))
+            dialog, form, _, _, _ = self.new_dialog(view.title, read_only=True)
+            form.grid_rowconfigure(0, weight=1)
+            dialog.diff_text = ctk.CTkTextbox(form, wrap="none", fg_color="#F3F6F5")
+            dialog.diff_text.grid(row=0, column=0, sticky="nsew")
+            dialog.diff_text.insert("1.0", view.detail)
+            dialog.diff_text.configure(state="disabled")
+            dialog.startup_timers.append(dialog.after(150, dialog.diff_text.focus_set))
+
+        def new_dialog(self, title, *, read_only=False):
             dialog = ctk.CTkToplevel(self)
+            dialog.read_only = read_only
             dialog.title(title)
-            dialog.geometry("560x430")
-            dialog.resizable(False, False)
+            dialog.geometry("760x560" if read_only else "560x430")
+            dialog.resizable(read_only, read_only)
+            if read_only:
+                dialog.minsize(620, 420)
+                dialog.grid_rowconfigure(1, weight=1)
             dialog.transient(self)
             dialog.grid_columnconfigure(0, weight=1)
             self.modal = dialog
@@ -838,7 +859,7 @@ def _build_app(ctk, tk, filedialog, messagebox, session, controller=None, tray=N
             error_label.grid(row=2, column=0, sticky="ew", padx=24, pady=10)
             actions = ctk.CTkFrame(dialog, fg_color="transparent")
             actions.grid(row=3, column=0, sticky="e", padx=24, pady=(0, 20))
-            ctk.CTkButton(actions, text="Cancelar", fg_color="#E0E8E6", text_color="#263D3A",
+            ctk.CTkButton(actions, text="Fechar" if read_only else "Cancelar", fg_color="#E0E8E6", text_color="#263D3A",
                           command=close).pack(side="left", padx=(0, 8))
             dialog.startup_timers.append(dialog.after(100, dialog.grab_set))
             self.update_runtime()

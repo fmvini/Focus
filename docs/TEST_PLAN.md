@@ -2,6 +2,14 @@
 
 Fonte: [escopo](Focus%20Blocker_%20escopo%20do%20projeto.md), [requisitos](REQUIREMENTS.md) e [decisões](DECISIONS.md). Fases 1/2: 206 testes OK em Python 3.14.6/psutil 7.2.2 por `.venv/Scripts/python.exe -B -m unittest discover -s tests` (10,542 s). Sintaxe 3.12 dos 18 arquivos Python conferida; runtime 3.12 ainda não executado. Encerramentos reais e fases posteriores continuam pendentes.
 
+## Evidência da comparação de alterações — 2026-10-12
+
+- Suíte completa `-B -m unittest discover -s tests`: **700 descobertos, 699 aprovados e um skip conhecido** symlink/WinError 1314 em ambos runtimes Windows AMD64. Python 3.14.6: 172,667 s; Python 3.12.14: 186,035 s. Vinte e quatro nativeGUI, ícone real e guardas passaram, sem supressão de falhas. AST 3.12/UTF-8 nos 66 arquivos e links locais/diff conferidos.
+- 64 testes novos: 32 diff (tipos/dados exatos, offsets/opcodes, bordas/duplicatas/no-op, 992 reconstruções nos dois sentidos, frozen/defensive/pureza/lazy), 18 presenter (índices humanos, criação vazia/0 itens, extras privados, controles/espaços/literais, limites/truncamento/excedentes), sete fakeGUI/quatro nativeGUI (modal readonly/resizable/scroll, captura/baseline, próximos previews/history/save/import/reload, novo arquivo, guardas/conflito/saída/after/bgerrors) e três CLI (sem read/save extra, conflito externo e história/baseline em subprocesso).
+- Revisão Banco GUI/CLI sem achados: 113 testes relevantes aprovados nos dois runtimes (11,077 s/15,314 s). Frontend selecionou 115 GUI/main/native, todos aprovados em 131,989 s/132,484 s. Maestro CLI/presenter/núcleo: 85 aprovados em 4,021 s. Fontes permaneceram congeladas durante integração.
+- Benchmark puro Backend: sete amostras, inputs pré-alocados, troca central em 2000 regras uniformes. Antes 1480,65 ms; após preservar bordas iguais, mediana 0,664 ms em 3.14.6 e 0,403 ms em 3.12.14. Não mede renderTk/RSS nem garante limite de tempo; miolo residual repetitivo ainda pode custar quadraticamente. Nenhum fallback aproximado.
+- Nenhum processo/hosts/configuração do usuário afetado; fixtures UUID próprias. Widgets ocultos/seletores fake não substituem visual/DPI/acessibilidade/interação do seletor nativo.
+
 ## Evidência das correções do editor e runtime 3.12 — 2026-10-11
 
 - Suíte integrada em ambos runtimes: **636 descobertos, 635 aprovados e um skip conhecido** symlink/WinError 1314. Python 3.14.6: 79,903 s; Python 3.12.14: 103,041 s, Windows AMD64. Vinte nativeGUI/ícone real/guardas passaram. Carregamento explícito dos `test_*.py` com exceção apenas de `test_config_diff.py`, ainda em implementação; todas as unidades já integradas foram executadas.

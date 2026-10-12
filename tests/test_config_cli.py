@@ -147,6 +147,35 @@ class ConfigCliTests(unittest.TestCase):
         self.assertEqual(code, 0)
         self.assertEqual(json.loads(self.path.read_text(encoding="utf-8"))["windows"][0]["days"], [])
 
+    def test_preview_reads_only_loaded_baseline_and_does_not_save_draft(self):
+        with patch.object(self.module, "read_snapshot", wraps=_read_snapshot) as read, \
+                patch.object(self.module, "save_snapshot", side_effect=AssertionError("preview wrote")):
+            code, output = self.run_editor(["8", "1", "2", "09:00", "11:00", "0", "8", "5"])
+        self.assertEqual(code, 0)
+        self.assertIn("09:00", output)
+        self.assertIn("11:00", output)
+        self.assertEqual(read.call_count, 1)
+        self.assertEqual(self.path.read_bytes(), self.original)
+
+    def test_preview_does_not_adopt_external_change_or_bypass_conflict(self):
+        external = b'{"windows":[],"external":true}'
+        answers = iter(["1", "2", "09:00", "11:00", "0", "8", "3", "5"])
+        output = []
+
+        def read(prompt):
+            action = next(answers)
+            if prompt == "Editor > " and action == "8":
+                self.path.write_bytes(external)
+            return action
+
+        with patch.object(self.module, "read_snapshot", wraps=_read_snapshot) as read_snapshot:
+            self.assertEqual(self.module.run_config_editor(self.path, input_fn=read, output_fn=output.append), 0)
+        self.assertEqual(read_snapshot.call_count, 1)
+        self.assertIn("09:00", "\n".join(output))
+        self.assertIn("Conflito:", "\n".join(output))
+        self.assertNotIn("Configuração salva.", output)
+        self.assertEqual(self.path.read_bytes(), external)
+
     def test_invalid_window_keeps_file_unchanged_and_session_open(self):
         code, output = self.run_editor(["1", "2", "09:00", "09:00", "", "5"])
         self.assertEqual(code, 0)

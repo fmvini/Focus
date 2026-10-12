@@ -33,6 +33,11 @@ revalida ambiente/caminhos; validação continua nas operações de edição.
 Save mantém histórico, reload bem-sucedido cria draft novo sem histórico.
 Restauração não grava; EOF/Ctrl+C/saída continuam descartando edições pendentes.
 
+Menu **8 ver alterações** apresenta a comparação do rascunho com o snapshot
+carregado/salvo, conforme [contrato do diff](CONFIG_DIFF_CONTRACT.md). Não
+relê disco nem grava; a consulta seguinte acompanha Undo/Redo/Save/Reload.
+Conflitos externos continuam sendo verificados somente pela persistência.
+
 ## APIs e responsáveis
 
 ### Banco de dados — core/config_repository.py

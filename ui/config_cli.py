@@ -170,7 +170,7 @@ def run_config_editor(
         try:
             output_fn(
                 "\n1 horários  2 regras de processos  3 salvar  "
-                "4 recarregar (descarta rascunho e histórico)  5 sair  6 desfazer  7 refazer"
+                "4 recarregar (descarta rascunho e histórico)  5 sair  6 desfazer  7 refazer  8 ver alterações"
             )
             action = input_fn("Editor > ").strip()
             if action == "1":
@@ -196,6 +196,13 @@ def run_config_editor(
                     output_fn(f"Alteração {label} no rascunho; Salvar continua explícito.")
                 else:
                     output_fn("Não há edição disponível para restaurar.")
+            elif action == "8":
+                from core.config_diff import diff_config
+                from ui.config_diff_presenter import format_config_diff
+
+                view = format_config_diff(diff_config(snapshot.config, draft.config))
+                output_fn(view.title)
+                output_fn(view.detail)
             else:
                 output_fn("Erro: opção inválida.")
         except (EOFError, KeyboardInterrupt):

@@ -1,3 +1,28 @@
+## 2026-10-12 — Comparação das alterações pendentes na GUI e CLI
+
+### Implementado
+- Núcleo puro compara baseline/rascunho ordenados, apresentando inclusões/remoções/alterações com índices de cada lado e indicador privado de extras. Primeiro arquivo distingue criação mesmo vazia.
+- Presenter compartilhado mostra título/contagens, índices humanos, Antes/Depois, limites de 100 mudanças/1000 caracteres por valor e aviso de excedentes/truncamento. Controles escapados preservam espaços e impedem linhas enganosas. CLI menu 8 e botão Ver alterações na GUI usam a mesma apresentação.
+- Modal somente leitura, redimensionável/rolável, preserva rascunho/histórico/baseline/motor. Consultas seguintes acompanham Undo/Redo/Save/Reload/Import; não relê disco nem contorna conflito externo.
+
+### Arquivos principais alterados
+- `core/config_diff.py`, `ui/config_diff_presenter.py`, `ui/config_gui.py`, `ui/config_cli.py`.
+- `tests/test_config_diff.py`, `tests/test_config_diff_presenter.py`, `tests/test_config_gui.py`, `tests/test_config_gui_native.py`, `tests/test_config_cli.py`, `tests/test_config_editor_integration.py`.
+- `README.md`, `docs/CONFIG_DIFF_CONTRACT.md`, `docs/CONFIG_EDITOR_CONTRACT.md`, `docs/GUI_EDITOR_CONTRACT.md`, `docs/README.md`, `docs/TEST_PLAN.md`, `docs/DEVELOPMENT_LOG.md`.
+
+### Decisões técnicas
+- Modelo frozen e SequenceMatcher exato sem casefold/dedup; indicador de extras usa comparação JSON tipada compartilhada. Bordas iguais são preservadas antes de comparar o miolo, mantendo índices globais/API. Comparação é estrutural, não previsão de efeitos nem script mínimo/identidade de duplicatas. Sem fallback aproximado; miolo residual repetitivo ainda pode ter custo quadrático.
+- Acesso opcional antes de Salvar, sem nova confirmação obrigatória, IO, consulta de processos ou alteração de conflito/baseline. Presenter compartilhado evita apresentação divergente na GUI/CLI.
+
+### Estado atual
+- Suíte completa: **700 descobertos, 699 aprovados e um skip conhecido** nos dois runtimes Windows AMD64: Python 3.14.6/172,667 s e Python 3.12.14/186,035 s. Vinte e quatro nativeGUI, ícone real e guardas passaram; AST 3.12/UTF-8 nos 66 arquivos e links/diff conferidos.
+- Novos 64 testes: 32 núcleo (incluindo 992 reconstruções bidirecionais), 18 presenter, sete GUI fake, quatro nativeGUI e três CLI. CLI/reviewer relevante: 85/85 em 4,021 s. Frontend: 115/115 GUI/main/native nos dois runtimes (131,989 s/132,484 s). Banco reviu GUI/CLI sem achados e executou 113/113 nos dois runtimes (11,077 s/15,314 s).
+- Medição local Backend em 2000 regras uniformes com troca central: antes 1480,65 ms, depois 0,664 ms no Python 3.14.6 e 0,403 ms no 3.12.14 (sete amostras, entradas pré-alocadas). Não é garantia de latência/renderização/RSS; residual quadrático permanece. Nenhum processo/hosts/configuração do usuário alterado; visual/DPI pendente. Base `f2385a0`, unidade validada para commit conjunto.
+
+### Próximos passos
+- Próxima evolução independente: navegar de apontamentos da revisão para a categoria/linha original, destacando o item sem alterar rascunho.
+- Avisos/pausa/sites permanecem nas perguntas abertas de USER_ANSWERS.
+
 ## 2026-10-11 — Preservação de edições JSON e seletores seguros
 
 ### Implementado
