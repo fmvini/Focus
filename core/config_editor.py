@@ -2,6 +2,7 @@
 
 from copy import deepcopy
 from collections import deque
+from collections.abc import Iterable
 import ntpath
 import os
 
@@ -166,3 +167,25 @@ class ConfigDraft:
         index = self._index(index, candidate[field])
         del candidate[field][index]
         self._accept(candidate)
+
+    def remove_rules(self, field: str, indices: Iterable[int]) -> int:
+        """Remove posições originais em uma única edição validada e atômica.
+
+        Consome a seleção uma vez e valida cada índice antes de deduplicar.
+        Seleção vazia não serializa nem revalida o modelo ou muda o histórico.
+        """
+        field = self._field(field)
+        if isinstance(indices, (str, bytes, bytearray)):
+            raise ConfigError("remoção de regras: esperada uma coleção de índices")
+        try:
+            requested = list(indices)
+        except Exception as exc:
+            raise ConfigError("Não foi possível ler os índices de remoção") from exc
+        values = getattr(self._config, field)
+        positions = {self._index(index, values) for index in requested}
+        if not positions:
+            return 0
+        candidate = config_to_dict(self._config)
+        candidate[field] = [value for index, value in enumerate(candidate[field]) if index not in positions]
+        self._accept(candidate)
+        return len(positions)

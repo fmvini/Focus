@@ -68,6 +68,16 @@ no [contrato de bandeja](TRAY_CONTRACT.md); fechar pelo X continua sair.
   Escape dos formulários continua fechando o formulário. Rótulo Buscar regras ·
   Ctrl+F · Esc limpa e controle compacto na linha existente, conforme
   [contrato da busca por teclado](RULE_SEARCH_KEYBOARD_CONTRACT.md).
+- Selecionar regras ativa checkboxes e barra com contador N selecionadas/M
+  exibidas; Selecionar exibidas abrange todos os resultados do filtro atual,
+  inclusive fora do viewport. Limpar/Fechar seleção não editam dados. Toda
+  atualização da lista limpa seleção; callbacks capturam contexto/geração,
+  modelo e identidade da linha. Remover selecionadas confirma quantidade e
+  categoria, revalida antes/depois do diálogo e aplica uma edição Undo/Redo
+  sem gravar. Flag em try/finally impede reentrância. Layout padrão mantém
+  lista na linha 4; somente modo ativo mostra barra e desloca lista à linha 5.
+  Polling altera estado dos checkboxes apenas quando necessário, evitando
+  redesenhos repetidos. Ver [contrato do lote](RULE_BULK_REMOVE_CONTRACT.md).
 - Diálogos aplicam alterações ao rascunho; Cancelar/Escape/fechar o diálogo
   descartam somente os campos desse formulário. Remover exige confirmação.
 - Salvar/Ctrl+S publica pelo repositório existente. Erro/conflito preserva

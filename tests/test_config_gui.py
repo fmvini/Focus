@@ -52,10 +52,14 @@ class Widget:
     def configure(self, **options):
         self.options.update(options)
 
+    def cget(self, name):
+        return self.options.get(name, "normal" if name == "state" else None)
+
     def grid(self, **options):
         pass
 
     pack = grid
+    grid_remove = lambda *args, **kwargs: None
     grid_columnconfigure = lambda *args, **kwargs: None
     grid_rowconfigure = lambda *args, **kwargs: None
     def title(self, value):
@@ -378,6 +382,274 @@ class ConfigGuiFlowTests(unittest.TestCase):
 
     def displayed_rule_indices(self, field):
         return [index for row_field, index in self.app.review_rows if row_field == field]
+
+    def bulk_fixture(self):
+        self.path.write_text(json.dumps({"windows": [], "typed": [True, 1, 1.0],
+            "block_exes": ["z.exe", "dup.exe", "hidden.exe", "DUP.exe"],
+            "safelist_exes": ["z.exe", "dup.exe", "hidden.exe", "DUP.exe"],
+            "block_folders": ["C:\\z", "C:\\dup", "C:\\hidden", "C:\\DUP"],
+            "block_cmdline": [{"executable": name, "contains": "literal "}
+                              for name in ("z.exe", "dup.exe", "hidden.exe", "DUP.exe")]}), encoding="utf-8")
+        self.session.reload()
+        self.app.render()
+
+    def test_rule_bulk_selection_view_only_all_visible_indices_all_categories_and_one_undo(self):
+        self.bulk_fixture()
+        original, snapshot = self.path.read_bytes(), self.session.snapshot
+        for category, field in (("Executáveis", "block_exes"), ("Pastas", "block_folders"),
+                                ("Proteção adicional", "safelist_exes"), ("Linha de comando", "block_cmdline")):
+            with self.subTest(field=field):
+                self.app.rule_category.set(category)
+                self.app.rule_search.set("dup")
+                self.app.change_rule_order("Nome Z–A")
+                self.assertTrue(button(self.app, "Selecionar regras").invoke())
+                context = self.app.rule_selection_context
+                self.assertEqual(context[2], (1, 3))
+                config = self.session.draft.config
+                with patch.object(self.app, "render_rules", side_effect=AssertionError("render selection")), \
+                        patch.object(Path, "read_bytes", side_effect=AssertionError("IO")), \
+                        patch.object(self.controller, "start", side_effect=AssertionError("motor")), \
+                        patch.object(self.controller, "stop", side_effect=AssertionError("motor")):
+                    self.assertTrue(button(self.app, "Selecionar exibidas").invoke())
+                    self.assertEqual(self.app.rule_selection_indices, {1, 3})
+                    self.assertEqual(self.session.draft.config, config)
+                    self.assertFalse(self.session.dirty)
+                    self.assertFalse(self.session.draft.can_undo)
+                    self.assertIn("2 selecionadas / 2 exibidas", self.app.rule_selection_count.options["text"])
+                with patch.object(self.session.draft, "remove_rules", wraps=self.session.draft.remove_rules) as remove:
+                    self.assertTrue(button(self.app, "Remover selecionadas").invoke())
+                    remove.assert_called_once_with(field, (1, 3))
+                prompt = self.messages.askyesno.call_args.args[1]
+                self.assertIn(category, prompt)
+                self.assertIn("2 regra(s)", prompt)
+                self.assertIn("rascunho", prompt)
+                self.assertEqual(getattr(self.session.draft.config, field),
+                                 tuple(value for index, value in enumerate(getattr(config, field)) if index not in (1, 3)))
+                self.assertEqual(self.app.rule_selection_indices, set())
+                self.assertEqual(self.path.read_bytes(), original)
+                self.assertIs(self.session.snapshot, snapshot)
+                self.assertTrue(self.app.undo_draft())
+                self.assertEqual(self.session.draft.config, config)
+                self.assertFalse(self.session.draft.can_undo)
+                self.assertTrue(self.app.redo_draft())
+                self.assertTrue(self.app.undo_draft())
+                self.assertTrue(button(self.app, "Fechar seleção").invoke())
+
+    def test_rule_bulk_selection_unchanged_runtime_poll_does_not_reconfigure_checkboxes(self):
+        self.bulk_fixture()
+        self.app.begin_rule_selection()
+        generation, config = self.app.rule_selection_generation, self.session.draft.config
+        self.app.selection_select_all(self.app.rule_selection_context)
+        controls = [checkbox for _, _, checkbox in self.app.rule_selection_boxes.values()]
+        for control in controls:
+            control.configure = Mock(wraps=control.configure)
+        for _ in range(3):
+            self.app.update_runtime()
+        for control in controls:
+            control.configure.assert_not_called()
+        self.app.picker_active = True
+        self.app.update_runtime()
+        self.app.update_runtime()
+        for control in controls:
+            control.configure.assert_called_once_with(state="disabled")
+            self.assertEqual(control.cget("state"), "disabled")
+            control.configure.reset_mock()
+        self.app.picker_active = False
+        self.app.update_runtime()
+        self.app.update_runtime()
+        for control in controls:
+            control.configure.assert_called_once_with(state="normal")
+        self.assertEqual(self.app.rule_selection_generation, generation)
+        self.assertEqual(self.app.rule_selection_indices, {0, 1, 2, 3})
+        self.assertEqual(self.session.draft.config, config)
+
+    def test_rule_bulk_selection_checkbox_clear_cancel_empty_and_mode_preserve_redo(self):
+        self.bulk_fixture()
+        self.session.draft.add_rule("block_exes", "redo.exe")
+        self.session.draft.undo()
+        self.app.render()
+        original, draft, snapshot = self.path.read_bytes(), self.session.draft, self.session.snapshot
+        config = draft.config
+        self.app.begin_rule_selection()
+        self.assertEqual(self.app.rule_selection_actions["remove"].options["state"], "disabled")
+        row, variable, checkbox = self.app.rule_selection_boxes[3]
+        context = self.app.rule_selection_context
+        with patch.object(self.app, "render_rules", side_effect=AssertionError("render")):
+            variable.set(1)
+            self.assertTrue(checkbox.invoke())
+            self.assertEqual(self.app.rule_selection_indices, {3})
+            self.messages.askyesno.return_value = False
+            self.assertFalse(button(self.app, "Remover selecionadas").invoke())
+            self.assertEqual(self.app.rule_selection_indices, {3})
+            self.assertFalse(self.app.confirming_rule_removal)
+            self.assertTrue(button(self.app, "Limpar seleção").invoke())
+            self.assertEqual(variable.get(), 0)
+            self.messages.askyesno.reset_mock()
+            self.assertFalse(self.app.selection_remove(context))
+            self.messages.askyesno.assert_not_called()
+        button(self.app, "Fechar seleção").invoke()
+        self.assertIs(self.session.draft, draft)
+        self.assertIs(self.session.snapshot, snapshot)
+        self.assertEqual(draft.config, config)
+        self.assertFalse(self.session.dirty)
+        self.assertFalse(draft.can_undo)
+        self.assertTrue(draft.can_redo)
+        self.assertEqual(self.path.read_bytes(), original)
+        self.app.rule_search.set("missing")
+        self.app.begin_rule_selection()
+        self.assertEqual(self.app.rule_selection_actions["all"].options["state"], "disabled")
+        self.assertEqual(self.app.rule_selection_actions["remove"].options["state"], "disabled")
+        self.assertIn("0 selecionadas / 0 exibidas", self.app.rule_selection_count.options["text"])
+
+    def test_rule_bulk_selection_every_render_resets_and_all_old_commands_are_stale(self):
+        self.bulk_fixture()
+        self.app.begin_rule_selection()
+        for change in (lambda: self.app.render_rules(), lambda: self.app.rule_search.set("dup"),
+                       lambda: self.app.change_rule_order("Nome A–Z"),
+                       lambda: (self.app.rule_category.set("Proteção adicional"), self.app.render_rules()),
+                       lambda: self.app.render(), lambda: self.app.undo_draft(),
+                       lambda: (self.session.draft.add_rule("block_exes", "redo-history.exe"),
+                                self.session.draft.undo(), self.app.redo_draft())):
+            # History operations have real edits so they must render.
+            if not self.session.draft.can_undo:
+                self.session.draft.add_rule("block_exes", "history.exe")
+                self.app.render()
+            self.app.selection_select_all(self.app.rule_selection_context)
+            old = self.app.rule_selection_context
+            commands = [control.options["command"] for control in self.app.rule_selection_actions.values()]
+            row, variable, checkbox = next(iter(self.app.rule_selection_boxes.values()))
+            callback = checkbox.options["command"]
+            change()
+            self.assertGreater(self.app.rule_selection_generation, old[0])
+            self.assertEqual(self.app.rule_selection_indices, set())
+            with patch.object(variable, "get", side_effect=AssertionError("old Tk")):
+                self.assertFalse(callback())
+                for command in commands:
+                    self.assertFalse(command())
+        old_close = self.app.rule_selection_actions["close"].options["command"]
+        self.assertTrue(old_close())
+        self.app.begin_rule_selection()
+        self.assertFalse(old_close())
+        self.assertTrue(self.app.rule_selection_mode)
+
+    def test_rule_bulk_selection_prompt_reentrancy_cancel_and_failure_release_flag(self):
+        self.bulk_fixture()
+        self.app.begin_rule_selection()
+        context = self.app.rule_selection_context
+        self.app.selection_select_all(context)
+        config = self.session.draft.config
+        def confirm(*args, **kwargs):
+            self.assertTrue(self.app.confirming_rule_removal)
+            self.assertFalse(self.app.selection_remove(context))
+            self.assertFalse(self.app.selection_clear(context))
+            self.assertFalse(self.app.selection_select_all(context))
+            self.assertFalse(self.app.selection_close(context))
+            return False
+        self.messages.askyesno.side_effect = confirm
+        self.assertFalse(self.app.selection_remove(context))
+        self.messages.askyesno.assert_called_once()
+        self.assertEqual(self.app.rule_selection_indices, {0, 1, 2, 3})
+        self.assertEqual(self.session.draft.config, config)
+        self.messages.askyesno.side_effect = RuntimeError("dialog error")
+        with self.assertRaisesRegex(RuntimeError, "dialog error"):
+            self.app.selection_remove(context)
+        self.assertFalse(self.app.confirming_rule_removal)
+        self.messages.askyesno.side_effect = None
+        self.messages.askyesno.return_value = True
+        with patch.object(self.session.draft, "remove_rules", side_effect=ConfigError("invalid")):
+            self.assertFalse(self.app.selection_remove(context))
+        self.assertEqual(self.session.draft.config, config)
+        self.assertFalse(self.app.confirming_rule_removal)
+
+    def test_rule_bulk_selection_changes_during_prompt_never_remove_new_or_old_target(self):
+        mutations = ("query", "order", "category", "render", "model", "typed_extra", "identity", "undo_redo",
+                     "row", "picker", "selecting", "modal", "closing", "closed")
+        for mutation in mutations:
+            with self.subTest(mutation=mutation):
+                self.app.rule_selection_mode = False
+                self.app.rule_category.set("Executáveis")
+                self.app.rule_search.set("")
+                self.bulk_fixture()
+                self.app.begin_rule_selection()
+                context = self.app.rule_selection_context
+                self.app.selection_select_all(context)
+                draft = self.session.draft
+                def confirm(*args, **kwargs):
+                    if mutation == "query": self.app.rule_search.set("dup")
+                    elif mutation == "order": self.app.change_rule_order("Nome A–Z")
+                    elif mutation == "category":
+                        self.app.rule_category.set("Proteção adicional")
+                        self.app.render_rules()
+                    elif mutation == "render": self.app.render_rules()
+                    elif mutation == "model": draft.update_rule("block_exes", 0, "changed.exe")
+                    elif mutation == "typed_extra":
+                        changed = draft.config
+                        changed.extra["typed"][0] = 1
+                        draft.replace_config(changed)
+                    elif mutation == "identity": self.session.import_config(self.path)
+                    elif mutation == "undo_redo":
+                        draft.add_rule("block_exes", "temporary.exe")
+                        self.app.undo_draft()
+                        self.app.redo_draft()
+                        self.app.undo_draft()
+                    elif mutation == "row": self.app.review_rows[("block_exes", 0)] = Widget()
+                    elif mutation == "picker": self.app.picker_active = True
+                    elif mutation == "selecting": self.app.selecting_executables = True
+                    elif mutation == "modal": self.app.edit_window()
+                    else: setattr(self.app, mutation, True)
+                    return True
+                self.messages.askyesno.side_effect = confirm
+                with patch.object(draft, "remove_rules", side_effect=AssertionError("stale removal")):
+                    self.assertFalse(self.app.selection_remove(context))
+                self.assertFalse(self.app.confirming_rule_removal)
+                self.app.closing = self.app.closed = self.app.picker_active = self.app.selecting_executables = False
+                if self.app.modal is not None:
+                    button(self.app.modal, "Cancelar").invoke()
+                self.messages.askyesno.side_effect = None
+
+    def test_rule_bulk_selection_guards_old_checkbox_and_toolbar_before_tk_even_after_close(self):
+        self.bulk_fixture()
+        self.app.begin_rule_selection()
+        context = self.app.rule_selection_context
+        row, variable, checkbox = self.app.rule_selection_boxes[0]
+        commands = [control.options["command"] for control in self.app.rule_selection_actions.values()]
+        commands.append(checkbox.options["command"])
+        for flag in ("picker_active", "selecting_executables", "closing", "closed"):
+            setattr(self.app, flag, True)
+            with patch.object(variable, "get", side_effect=AssertionError("Tk")), \
+                    patch.object(self.app.rule_category, "get", side_effect=AssertionError("Tk")):
+                for command in commands:
+                    self.assertFalse(command())
+                self.assertFalse(self.app.begin_rule_selection())
+            setattr(self.app, flag, False)
+        self.app.edit_window()
+        for command in commands:
+            self.assertFalse(command())
+        button(self.app.modal, "Cancelar").invoke()
+        self.app.close_editor()
+        with patch.object(variable, "get", side_effect=AssertionError("destroyed Tk")):
+            for command in commands:
+                self.assertFalse(command())
+
+    def test_rule_bulk_selection_only_save_changes_bytes_and_external_conflict_is_preserved(self):
+        self.bulk_fixture()
+        baseline, snapshot = self.path.read_bytes(), self.session.snapshot
+        self.app.begin_rule_selection()
+        self.app.selection_select_all(self.app.rule_selection_context)
+        self.app.selection_remove(self.app.rule_selection_context)
+        self.assertEqual(self.path.read_bytes(), baseline)
+        self.path.write_text(json.dumps({"windows": [], "block_exes": ["external.exe"]}), encoding="utf-8")
+        external = self.path.read_bytes()
+        self.assertFalse(self.app.save_config())
+        self.assertEqual(self.path.read_bytes(), external)
+        self.assertIs(self.session.snapshot, snapshot)
+        self.assertTrue(self.session.dirty)
+        self.assertTrue(self.session.draft.can_undo)
+        self.assertTrue(self.app.undo_draft())
+        self.assertEqual(self.session.draft.config.block_exes, ("z.exe", "dup.exe", "hidden.exe", "DUP.exe"))
+        self.app.reload_config()
+        self.assertEqual(self.session.draft.config.block_exes, ("external.exe",))
+        self.assertEqual(self.app.rule_selection_indices, set())
 
     def test_rule_search_keyboard_focus_preserves_each_category_query_order_without_render(self):
         entry = self.app.rule_search_entry

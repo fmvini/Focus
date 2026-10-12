@@ -150,6 +150,12 @@ def _build_app(ctk, tk, filedialog, messagebox, session, controller=None, tray=N
             self.row_generation = {"windows": 0, "rules": 0}
             self.highlighted_row = None
             self.visual_rule_order = "registered"
+            self.rule_selection_mode = False
+            self.rule_selection_generation = 0
+            self.rule_selection_context = None
+            self.rule_selection_indices = set()
+            self.rule_selection_boxes = {}
+            self.confirming_rule_removal = False
             self.tray = tray
             self.mailbox = mailbox
             self.tray_pending = self.tray_ready = self.tray_hidden = False
@@ -295,6 +301,9 @@ def _build_app(ctk, tk, filedialog, messagebox, session, controller=None, tray=N
             self.rule_search = ctk.StringVar(value="")
             ctk.CTkLabel(processes, text="Buscar regras · Ctrl+F · Esc limpa", anchor="w", text_color=muted
                          ).grid(row=2, column=0, sticky="ew", padx=14)
+            self.rule_selection_begin = ctk.CTkButton(processes, text="Selecionar regras", width=145,
+                                                       fg_color=accent)
+            self.rule_selection_begin.grid(row=2, column=1, sticky="w", padx=14)
             search_controls = ctk.CTkFrame(processes, fg_color="transparent")
             search_controls.grid(row=3, column=0, sticky="ew", padx=14, pady=(0, 10))
             search_controls.grid_columnconfigure(0, weight=1)
@@ -312,6 +321,10 @@ def _build_app(ctk, tk, filedialog, messagebox, session, controller=None, tray=N
                                                        fg_color=accent, button_color=accent,
                                                        command=self.change_rule_order)
             self.rule_order_picker.pack(side="left")
+            self.rule_area = processes
+            self.rule_selection_bar = ctk.CTkFrame(processes, fg_color="transparent")
+            self.rule_selection_count = None
+            self.rule_selection_actions = {}
             self.rules_list = ctk.CTkScrollableFrame(processes, fg_color="#F3F6F5")
             processes.grid_rowconfigure(2, weight=0)
             processes.grid_rowconfigure(4, weight=1)
@@ -510,6 +523,7 @@ def _build_app(ctk, tk, filedialog, messagebox, session, controller=None, tray=N
             self.rule_order_picker.configure(state="normal" if available else "disabled")
             self.review_picker.configure(state="normal" if available and self.review_choices else "disabled")
             self.review_go.configure(state="normal" if available and self.review_selected is not None else "disabled")
+            self.update_rule_selection_controls()
 
         def choose_review(self, label, generation):
             if (not isinstance(label, str) or not self.navigation_available()
@@ -836,21 +850,30 @@ def _build_app(ctk, tk, filedialog, messagebox, session, controller=None, tray=N
             self.modal = None
             dialog.destroy()
 
-        def item_row(self, frame, index, title, detail, edit, remove, duplicate=None):
+        def item_row(self, frame, index, title, detail, edit, remove, duplicate=None, selection=None):
             row = ctk.CTkFrame(frame, fg_color="white", corner_radius=8)
             row.grid(row=index, column=0, sticky="ew", pady=(0, 8))
-            row.grid_columnconfigure(0, weight=1)
-            wrap = 390 if duplicate is not None else 540
+            text_column = 0 if selection is None else 1
+            row.grid_columnconfigure(text_column, weight=1)
+            wrap = 390 if duplicate is not None else 500 if selection is not None else 540
+            if selection is not None:
+                context, original_index = selection
+                variable = tk.IntVar(value=0)
+                checkbox = ctk.CTkCheckBox(row, text="", width=24, checkbox_width=20, checkbox_height=20,
+                                         variable=variable, command=lambda: self.selection_toggle(
+                                             context, original_index, row, variable))
+                checkbox.grid(row=0, column=0, rowspan=2, padx=(8, 0))
+                self.rule_selection_boxes[original_index] = (row, variable, checkbox)
             ctk.CTkLabel(row, text=title, anchor="w", justify="left", wraplength=wrap,
-                         font=ctk.CTkFont(size=16, weight="bold")).grid(row=0, column=0, sticky="ew", padx=14, pady=(10, 0))
+                         font=ctk.CTkFont(size=16, weight="bold")).grid(row=0, column=text_column, sticky="ew", padx=14, pady=(10, 0))
             row.review_base_detail = detail
             row.review_scroll_timer = None
             row.review_detail_label = ctk.CTkLabel(row, text=detail, text_color=muted, anchor="w", justify="left", wraplength=wrap)
-            row.review_detail_label.grid(row=1, column=0, sticky="ew", padx=14, pady=(0, 10))
+            row.review_detail_label.grid(row=1, column=text_column, sticky="ew", padx=14, pady=(0, 10))
             ctk.CTkButton(row, text="Editar", width=75, fg_color=accent,
-                          command=edit).grid(row=0, column=1, rowspan=2, padx=6)
+                          command=edit).grid(row=0, column=text_column + 1, rowspan=2, padx=6)
             ctk.CTkButton(row, text="Remover", width=85, fg_color="#E0E8E6", text_color="#263D3A",
-                          hover_color="#CEDAD7", command=remove).grid(row=0, column=2, rowspan=2, padx=(0, 12))
+                          hover_color="#CEDAD7", command=remove).grid(row=0, column=text_column + 2, rowspan=2, padx=(0, 12))
             if duplicate is not None:
                 ctk.CTkButton(row, text="Duplicar", width=85, fg_color=accent,
                               command=duplicate).grid(row=0, column=3, rowspan=2, padx=(0, 12))
@@ -909,9 +932,154 @@ def _build_app(ctk, tk, filedialog, messagebox, session, controller=None, tray=N
             self.render_rules()
             return True
 
+        def begin_rule_selection(self, generation=None):
+            if (not self.navigation_available() or self.confirming_rule_removal or self.rule_selection_mode
+                    or (generation is not None and generation != self.rule_selection_generation)):
+                return False
+            self.rule_selection_mode = True
+            self.render_rules()
+            return True
+
+        def selection_is_current(self, context, *, during_confirmation=False):
+            if (not self.navigation_available() or not self.rule_selection_mode
+                    or (self.confirming_rule_removal and not during_confirmation)
+                    or context is None or context is not self.rule_selection_context):
+                return False
+            generation, field, indices, draft, config, query, order = context
+            if (generation != self.rule_selection_generation or session.draft is not draft
+                    or not configs_equal(config, session.draft.config)):
+                return False
+            if (rule_fields.get(self.rule_category.get()) != field or self.rule_search.get() != query
+                    or self.visual_rule_order != order):
+                return False
+            values = getattr(config, field)
+            return (all(type(index) is int and 0 <= index < len(values) for index in indices)
+                    and self.rule_selection_indices.issubset(indices)
+                    and all(self.rule_selection_boxes.get(index) is not None
+                            and self.review_rows.get((field, index)) is self.rule_selection_boxes[index][0]
+                            for index in indices))
+
+        def update_rule_selection_controls(self):
+            available = self.navigation_available() and not self.confirming_rule_removal
+            self.rule_selection_begin.configure(state="normal" if available and not self.rule_selection_mode else "disabled")
+            context = self.rule_selection_context
+            if self.rule_selection_count is None or context is None:
+                return
+            selected, shown = len(self.rule_selection_indices), len(context[2])
+            self.rule_selection_count.configure(text=f"{selected} selecionadas / {shown} exibidas\nAtualizar a lista limpa a seleção.")
+            current = self.selection_is_current(context)
+            for action, control in self.rule_selection_actions.items():
+                enabled = current and (shown > 0 if action == "all" else selected > 0 if action in {"clear", "remove"} else True)
+                control.configure(state="normal" if enabled else "disabled")
+            for _, _, checkbox in self.rule_selection_boxes.values():
+                state = "normal" if current else "disabled"
+                if checkbox.cget("state") != state:
+                    checkbox.configure(state=state)
+
+        def selection_toggle(self, context, index, row, variable):
+            if (not self.selection_is_current(context) or type(index) is not int
+                    or self.review_rows.get((context[1], index)) is not row
+                    or self.rule_selection_boxes.get(index, ())[:2] != (row, variable)):
+                return False
+            if variable.get():
+                self.rule_selection_indices.add(index)
+            else:
+                self.rule_selection_indices.discard(index)
+            self.update_rule_selection_controls()
+            return True
+
+        def selection_select_all(self, context):
+            if not self.selection_is_current(context):
+                return False
+            self.rule_selection_indices = set(context[2])
+            for _, variable, _ in self.rule_selection_boxes.values():
+                variable.set(1)
+            self.update_rule_selection_controls()
+            return True
+
+        def selection_clear(self, context):
+            if not self.selection_is_current(context):
+                return False
+            self.rule_selection_indices.clear()
+            for _, variable, _ in self.rule_selection_boxes.values():
+                variable.set(0)
+            self.update_rule_selection_controls()
+            return True
+
+        def selection_close(self, context):
+            if not self.selection_is_current(context):
+                return False
+            self.rule_selection_mode = False
+            self.render_rules()
+            return True
+
+        def selection_remove(self, context):
+            if not self.selection_is_current(context):
+                return False
+            indices = tuple(index for index in context[2] if index in self.rule_selection_indices)
+            if not indices:
+                return False
+            field, draft = context[1], context[3]
+            rows = tuple(self.review_rows[(field, index)] for index in indices)
+            category = next(label for label, value in rule_fields.items() if value == field)
+            self.confirming_rule_removal = True
+            try:
+                self.update_rule_selection_controls()
+                confirmed = messagebox.askyesno("Remover regras selecionadas",
+                    f"Remover {len(indices)} regra(s) de {category} do rascunho?\n"
+                    "A remoção pode ser desfeita. Clique em Salvar para gravar no arquivo.", parent=self)
+                if (not confirmed or not self.selection_is_current(context, during_confirmation=True)
+                        or indices != tuple(index for index in context[2] if index in self.rule_selection_indices)
+                        or rows != tuple(self.review_rows.get((field, index)) for index in indices)):
+                    return False
+                try:
+                    removed = draft.remove_rules(field, indices)
+                except ConfigError as exc:
+                    self.notify(f"Não foi possível remover as regras: {exc}. Rascunho preservado.", error=True)
+                    return False
+                self.render()
+                self.notify(f"{removed} regra(s) removida(s) do rascunho de {category}. Clique em Salvar para gravar.")
+                return True
+            finally:
+                self.confirming_rule_removal = False
+                if not self.closing and not self.closed:
+                    self.update_rule_selection_controls()
+
+        def build_rule_selection_bar(self, context):
+            self.rule_selection_count = ctk.CTkLabel(self.rule_selection_bar, text="", width=215,
+                                                      wraplength=205, anchor="w", justify="left", text_color=muted)
+            self.rule_selection_count.pack(side="left")
+            for action, title, width, callback in (
+                ("all", "Selecionar exibidas", 125, self.selection_select_all),
+                ("clear", "Limpar seleção", 105, self.selection_clear),
+                ("remove", "Remover selecionadas", 155, self.selection_remove),
+                ("close", "Fechar seleção", 110, self.selection_close),
+            ):
+                control = ctk.CTkButton(self.rule_selection_bar, text=title, width=width,
+                                      fg_color=accent, command=lambda action=callback: action(context))
+                control.pack(side="left", padx=(6, 0))
+                self.rule_selection_actions[action] = control
+
         def render_rules(self):
             if self.closing or self.closed:
                 return
+            self.rule_selection_generation += 1
+            self.rule_selection_indices.clear()
+            self.rule_selection_boxes.clear()
+            self.rule_selection_context = None
+            self.clear(self.rule_selection_bar)
+            self.rule_selection_count = None
+            self.rule_selection_actions = {}
+            generation = self.rule_selection_generation
+            self.rule_selection_begin.configure(command=lambda: self.begin_rule_selection(generation))
+            self.rule_area.grid_rowconfigure(4, weight=0 if self.rule_selection_mode else 1)
+            self.rule_area.grid_rowconfigure(5, weight=1 if self.rule_selection_mode else 0)
+            if self.rule_selection_mode:
+                self.rule_selection_bar.grid(row=4, column=0, columnspan=2, sticky="ew", padx=14, pady=(0, 4))
+            else:
+                self.rule_selection_bar.grid_remove()
+            self.rules_list.grid(row=5 if self.rule_selection_mode else 4, column=0, columnspan=2,
+                                 sticky="nsew", padx=14, pady=(0, 14))
             self.clear(self.rules_list)
             field = rule_fields[self.rule_category.get()]
             self.rule_description.configure(text=descriptions[field])
@@ -921,9 +1089,15 @@ def _build_app(ctk, tk, filedialog, messagebox, session, controller=None, tray=N
             config = session.draft.config
             values = getattr(config, field)
             indices = rule_view_indices(config, field, query=self.rule_search.get(), order=self.visual_rule_order)
+            context = None
+            if self.rule_selection_mode:
+                context = (generation, field, indices, session.draft, config, self.rule_search.get(), self.visual_rule_order)
+                self.rule_selection_context = context
+                self.build_rule_selection_bar(context)
             if not values:
                 ctk.CTkLabel(self.rules_list, text="Nenhuma regra nesta lista.", text_color=muted
                              ).grid(row=0, column=0, pady=45)
+                self.update_rule_selection_controls()
                 return
             for visible, index in enumerate(indices):
                 value = values[index]
@@ -931,10 +1105,12 @@ def _build_app(ctk, tk, filedialog, messagebox, session, controller=None, tray=N
                 detail = f"Contém: {value.contains}" if field == "block_cmdline" else self.rule_category.get()
                 self.review_rows[(field, index)] = self.item_row(self.rules_list, visible, title, detail,
                               lambda i=index, f=field: self.edit_rule(i, f),
-                              lambda i=index, f=field: self.remove_item(f, i))
+                              lambda i=index, f=field: self.remove_item(f, i),
+                              selection=(context, index) if context is not None else None)
             if not indices:
                 ctk.CTkLabel(self.rules_list, text="Nenhuma regra corresponde à busca nesta categoria.",
                              text_color=muted).grid(row=0, column=0, pady=45)
+            self.update_rule_selection_controls()
 
         def open_picker(self, choose, **options):
             # Desfaz a intenção anterior de ocultar, inclusive ready que só

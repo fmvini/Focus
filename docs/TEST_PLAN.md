@@ -2,6 +2,13 @@
 
 Fonte: [escopo](Focus%20Blocker_%20escopo%20do%20projeto.md), [requisitos](REQUIREMENTS.md) e [decisões](DECISIONS.md). Fases 1/2: 206 testes OK em Python 3.14.6/psutil 7.2.2 por `.venv/Scripts/python.exe -B -m unittest discover -s tests` (10,542 s). Sintaxe 3.12 dos 18 arquivos Python conferida; runtime 3.12 ainda não executado. Encerramentos reais e fases posteriores continuam pendentes.
 
+## Evidência da remoção em lote — 2026-10-12
+
+- Quinze novos core testam quatro listas/posições/duplicatas, one-shot/falha tardia/causa/interrupção, tipos/faixa/campo, vazio sem serializer/revalidação preservando redo, atomicidade/uma edição, source/typedextras/pureza/import lazy. Com 35 regressões, 50 aprovados nos dois runtimes, 0,880 s/1,270 s. Quatro integrações com JSON/helper/sessão reais cobrem sort/filter/dup/Save/UndoRedo/conflict/import/reload; 0,217 s/0,197 s.
+- Oito fake/três native novos verificam modo/view/reset/contexto/oldcallbacks, offviewport, contador sem render, cancel/reentrância/14 mudanças durante prompt, uma operação/uma edição, noIO/bytes/conflito/guardas/teardown. Regressão de polling confere zero configure redundante e mudança disabled/enabled uma vez. Erro de teste `invoke` inexistente foi corrigido para `toggle`; nenhuma exceção suprimida.
+- Fonte final: Frontend 124 GUI/main/três native nos dois runtimes, 119,048 s/116,961 s; Backend revisão sem achados, 13 em 3.14/112,058 s e nova regressão polling em 3.12/0,041 s; Banco 11 nos dois runtimes, 112,393 s/111,544 s, sem achados. Seleções anteriores não equivalem ao último ajuste.
+- Suíte completa final Maestro: **793 descobertos, 792 aprovados e um skip conhecido** symlink/WinError 1314 nos dois runtimes Windows AMD64: Python 3.14.6/213,791 s e Python 3.12.14/231,287 s. Quarenta nativeGUI, ícone real e guardas passaram. AST 3.12/UTF-8 nos 73 arquivos e links/diff conferidos. Sem efeitos em processos/hosts/configuração do usuário; widgets ocultos não comprovam visual/DPI/acessibilidade.
+
 ## Evidência da busca pelo teclado — 2026-10-12
 
 - Quatro fake/três native novos verificam quatro categorias/query/ordem, APIs públicas de foco/seleção, ausência de timer/render ao focar, limpeza única por trace/empty no-op, índices originais/duplicatas/CRUD, histórico/redo/baseline/bytes/revisão/motor preservados, guards antes de Tk e Escape separado do formulário.

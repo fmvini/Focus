@@ -8,6 +8,13 @@ O [editor independente](CONFIG_EDITOR_CONTRACT.md) usa `core/config_editor.py` p
 
 O editor gráfico de 2026-10-09 reutiliza os mesmos dados: `ConfigSession` em `core/config_session.py` compara rascunho e baseline e atualiza o snapshot somente após publicação ou recarga bem-sucedida. Não há novos campos ou migração; a consulta da agenda usa o último snapshot carregado/salvo. Ver [contrato gráfico](GUI_EDITOR_CONTRACT.md).
 
+`ConfigDraft.remove_rules(field, indices)` remove posições originais de uma
+lista em uma edição reversível validada, mantendo ordem dos sobreviventes e
+extras tipados. Vazio conserva redo; seleção inválida/falha não publica.
+Baseline/bytes continuam mudando somente ao Salvar ou Recarregar. O modo
+gráfico de seleção é definido no [contrato de remoção em lote](RULE_BULK_REMOVE_CONTRACT.md),
+sem novo campo, persistência de seleção ou schema SQLite.
+
 O controle gráfico acrescenta apenas dados transitórios: `RuntimeSnapshot` frozen guarda estado, última agenda avaliada/instante, último `ScanReport` e erro; `RuntimeView` apresenta esses dados. Parar/errar preserva a última avaliação, sem representar autorização atual de ação. Cada ciclo lê o JSON persistido; importar altera só rascunho e exportar não salva o ativo. Não há histórico, tabela de processos ou mudança de schema. Ver [PROCESS_GUI_CONTRACT.md](PROCESS_GUI_CONTRACT.md).
 
 Bandeja usa `TrayCommand` frozen e `TrayMailbox` de até cinco ações coalescidas,

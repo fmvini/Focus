@@ -70,6 +70,12 @@ Conflitos externos continuam sendo verificados somente pela persistência.
 - `add_rule(field: str, value)`; `update_rule(field, index, value)`;
   `remove_rule(field, index)`. Fields só `block_exes`, `block_folders`,
   `safelist_exes`, `block_cmdline`; cmdline recebe objeto executable/contains.
+- `remove_rules(field: str, indices: Iterable[int]) -> int` remove posições
+  originais em lote, após consumir/validar toda seleção; dedup de índices,
+  não de valores. Uma validação/publicação e uma edição Undo/Redo; vazio
+  retorna zero antes de serialização/revalidação, conservando redo. Campo
+  sempre validado; falha de iterable vira ConfigError com causa, sem mutação.
+  Contrato completo em [remoção em lote](RULE_BULK_REMOVE_CONTRACT.md).
 - Índices são zero-based internos, int estrito, não negativos e dentro da
   lista. Erro levanta ConfigError, mantendo rascunho anterior intacto.
 - Validação reutiliza `parse_config/config_to_dict`; preserves extras e ordem;

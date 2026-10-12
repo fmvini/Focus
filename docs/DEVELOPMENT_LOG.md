@@ -1,3 +1,28 @@
+## 2026-10-12 — Remoção de regras selecionadas em lote
+
+### Implementado
+- Modo explícito Selecionar regras com checkboxes, contador N selecionadas/M exibidas e ações Selecionar exibidas/Limpar seleção/Remover selecionadas/Fechar seleção. Somente resultados da categoria/filtro atual, incluindo fora do viewport; qualquer atualização da lista limpa seleção.
+- Remoção confirmada aplica posições originais em um lote validado, uma edição Undo/Redo e nenhum Save automático. Contexto/geração/modelo/linha revalidados antes/depois do prompt; flag finally impede reentrância e protege cancelamento/retorno tardio.
+
+### Arquivos principais alterados
+- `core/config_editor.py`, `tests/test_rule_bulk_remove.py`, `tests/test_rule_bulk_remove_integration.py`, `ui/config_gui.py`, `tests/test_config_gui.py`, `tests/test_config_gui_native.py`.
+- `README.md`, `docs/RULE_BULK_REMOVE_CONTRACT.md`, `docs/CONFIG_EDITOR_CONTRACT.md`, `docs/GUI_EDITOR_CONTRACT.md`, `docs/DATA_MODEL.md`, `docs/README.md`, `docs/TEST_PLAN.md`, `docs/DEVELOPMENT_LOG.md`.
+
+### Decisões técnicas
+- Uma operação no rascunho e uma edição Undo/Redo; validar todo iterable/índice antes de publicar. Vazio conserva redo; dedup somente de posições, nunca de valores de regras.
+- Seleção limitada aos resultados da categoria/filtro atual e resetada em toda atualização da lista. Modo desligado preserva layout existente. Geração/view/row identity e snapshot tipado antes e depois da confirmação impedem callback antigo ou seleção alterada.
+- Salvar/conflito/baseline continuam existentes, sem nova persistência, schema ou efeito no motor. Frontend/Banco não executarão fonte core em edição; freezes explícitos antes de integração.
+
+### Estado atual
+- Base `3cc801b`. Backend congelou núcleo e 15 testes novos: 50 núcleo/editor/history/comparison aprovados nos dois runtimes, 0,880 s/1,270 s. Banco congelou quatro integrações e passou nos dois runtimes, 0,217 s/0,197 s. Maestro revisou ambas as fontes sem achados.
+- GUI final congelada após corrigir chamada de teste nativo `invoke` para `toggle` e eliminar configure(state) redundante dos checkboxes no polling (CTk redesenha mesmo em valor igual). O último ajuste inclui regressão de polling/disabled/enabled sem alterar dados/geração.
+- Frontend validou fonte final em 124 GUI/main/três novos native nos dois runtimes, 119,048 s/116,961 s. Backend revisão sem achados, 13 GUI relevantes em 3.14/112,058 s e somente nova regressão polling em 3.12/0,041 s; Banco fonte final 11 novos GUI/nativos nos dois runtimes, 112,393 s/111,544 s, sem achados. Runs anteriores com invoke/sem ajuste polling não representam fonte final.
+- Suíte completa final Maestro: **793 descobertos, 792 aprovados e um skip conhecido** symlink/WinError 1314 nos dois runtimes Windows AMD64: Python 3.14.6/213,791 s e Python 3.12.14/231,287 s. Quarenta nativeGUI, ícone real e guardas passaram. AST 3.12/UTF-8 nos 73 arquivos, links/diff conferidos. Sem efeitos em processos/hosts/configuração do usuário; visual/DPI/acessibilidade permanece pendente.
+
+### Próximos passos
+- Próxima revisão de integridade: validar callbacks e confirmação de remoção individuais e formulários de edição perante troca de modelo/formulário. Backend/Banco fazem probes somente leitura após fontes congeladas; qualquer correção será próxima unidade após este commit.
+- Visual/DPI/acessibilidade e respostas de sites/pausa/avisos continuam pendentes.
+
 ## 2026-10-12 — Busca de regras pelo teclado
 
 ### Implementado

@@ -216,6 +216,130 @@ class NativeConfigGuiTests(unittest.TestCase):
     def native_rule_indices(self, field):
         return [index for row_field, index in self.app.review_rows if row_field == field]
 
+    def test_rule_bulk_selection_native_compact_mode_offviewport_all_and_close_view_only(self):
+        self.app.geometry("880x660")
+        self.app.tabs.set("Jogos / Apps")
+        for index in range(30):
+            self.session.draft.add_rule("block_exes", f"match-{index:02}.exe")
+        self.session.draft.add_rule("block_exes", "hidden.exe")
+        self.app.render()
+        self.app.change_rule_order("Nome Z–A")
+        self.app.rule_search.set("match")
+        draft, snapshot, config = self.session.draft, self.session.snapshot, self.session.draft.config
+        original = self.path.read_bytes()
+        history = self.session.dirty, draft.can_undo, draft.can_redo
+        self.assertEqual(self.app.rules_list._parent_frame.grid_info()["row"], 4)
+        self.assertFalse(self.app.rule_selection_bar.grid_info())
+        self.assertEqual(self.app.rule_selection_begin.grid_info()["row"], 2)
+        self.assertEqual(self.app.rule_selection_begin.grid_info()["column"], 1)
+        self.assertFalse(any(isinstance(child, self.ctk.CTkCheckBox) for child in self.descendants(self.app.rules_list)))
+        self.button(self.app, "Selecionar regras").invoke()
+        self.assertEqual(self.app.rules_list._parent_frame.grid_info()["row"], 5)
+        self.assertEqual(self.app.rule_selection_bar.grid_info()["row"], 4)
+        self.assertEqual(self.app.rule_area.grid_rowconfigure(5)["weight"], 1)
+        self.assertEqual(self.app.rule_order_picker.master.grid_info()["row"], 3)
+        self.assertEqual(len(self.app.rule_selection_boxes), 30)
+        self.assertEqual(self.app.rule_selection_context[2], tuple(reversed(range(30))))
+        with patch.object(self.app, "render_rules", side_effect=AssertionError("selection render")), \
+                patch.object(Path, "read_bytes", side_effect=AssertionError("IO")), \
+                patch.object(self.controller, "start", side_effect=AssertionError("motor")), \
+                patch.object(self.controller, "stop", side_effect=AssertionError("motor")):
+            self.button(self.app, "Selecionar exibidas").invoke()
+            self.assertEqual(self.app.rule_selection_indices, set(range(30)))
+            self.assertIn("30 selecionadas / 30 exibidas", self.app.rule_selection_count.cget("text"))
+            self.assertNotIn(30, self.app.rule_selection_indices)
+            self.button(self.app, "Limpar seleção").invoke()
+            self.app.rule_selection_boxes[29][2].toggle()
+            self.assertEqual(self.app.rule_selection_indices, {29})
+        self.button(self.app, "Fechar seleção").invoke()
+        self.assertEqual(self.app.rules_list._parent_frame.grid_info()["row"], 4)
+        self.assertEqual(self.app.rule_area.grid_rowconfigure(4)["weight"], 1)
+        self.assertEqual(self.app.rule_area.grid_rowconfigure(5)["weight"], 0)
+        self.assertFalse(self.app.rule_selection_bar.grid_info())
+        self.assertIs(self.session.draft, draft)
+        self.assertIs(self.session.snapshot, snapshot)
+        self.assertEqual(draft.config, config)
+        self.assertEqual((self.session.dirty, draft.can_undo, draft.can_redo), history)
+        self.assertEqual(self.path.read_bytes(), original)
+        self.assertEqual(self.background_errors, [])
+
+    def test_rule_bulk_selection_native_cancel_reset_old_commands_and_one_undo_original_duplicates(self):
+        self.path.write_text(json.dumps({"windows": [], "block_exes": ["z.exe", "dup.exe", "hidden.exe", "DUP.exe"],
+                                         "typed": [True, 1, 1.0]}), encoding="utf-8")
+        self.session.reload()
+        self.app.render()
+        original, config, snapshot = self.path.read_bytes(), self.session.draft.config, self.session.snapshot
+        self.app.rule_search.set("dup")
+        self.app.change_rule_order("Nome Z–A")
+        self.app.begin_rule_selection()
+        self.button(self.app, "Selecionar exibidas").invoke()
+        self.assertEqual(self.app.rule_selection_indices, {1, 3})
+        commands = [control.cget("command") for control in self.app.rule_selection_actions.values()]
+        old_checkbox = self.app.rule_selection_boxes[3][2].cget("command")
+        self.assertFalse(self.app.selection_remove(self.app.rule_selection_context))
+        self.assertEqual(self.app.rule_selection_indices, {1, 3})
+        self.app.change_rule_order("Nome A–Z")
+        self.assertEqual(self.app.rule_selection_indices, set())
+        for command in commands + [old_checkbox]:
+            self.assertFalse(command())
+        old_close = self.app.rule_selection_actions["close"].cget("command")
+        self.assertTrue(old_close())
+        self.app.begin_rule_selection()
+        self.assertFalse(old_close())
+        self.button(self.app, "Selecionar exibidas").invoke()
+        self.messages.askyesno.return_value = True
+        with patch.object(self.session.draft, "remove_rules", wraps=self.session.draft.remove_rules) as remove:
+            self.assertTrue(self.app.selection_remove(self.app.rule_selection_context))
+            remove.assert_called_once_with("block_exes", (1, 3))
+        self.assertEqual(self.session.draft.config.block_exes, ("z.exe", "hidden.exe"))
+        self.assertIs(self.session.snapshot, snapshot)
+        self.assertEqual(self.path.read_bytes(), original)
+        self.assertEqual(self.app.rule_selection_indices, set())
+        self.assertTrue(self.app.undo_draft())
+        self.assertEqual(self.session.draft.config, config)
+        self.assertFalse(self.session.draft.can_undo)
+        self.assertTrue(self.app.redo_draft())
+        self.assertEqual(self.session.draft.config.block_exes, ("z.exe", "hidden.exe"))
+        self.assertEqual(self.background_errors, [])
+
+    def test_rule_bulk_selection_native_prompt_change_reentry_picker_and_close_no_tk_after_teardown(self):
+        self.path.write_text(json.dumps({"windows": [], "block_exes": ["one.exe", "two.exe"]}), encoding="utf-8")
+        self.session.reload()
+        self.app.render()
+        self.app.begin_rule_selection()
+        context = self.app.rule_selection_context
+        self.app.selection_select_all(context)
+        def changed_prompt(*args, **kwargs):
+            self.assertTrue(self.app.confirming_rule_removal)
+            self.assertFalse(self.app.selection_remove(context))
+            self.assertFalse(self.app.selection_clear(context))
+            self.app.rule_search.set("two")
+            return True
+        self.messages.askyesno.side_effect = changed_prompt
+        with patch.object(self.session.draft, "remove_rules", side_effect=AssertionError("stale remove")):
+            self.assertFalse(self.app.selection_remove(context))
+        self.assertFalse(self.app.confirming_rule_removal)
+        self.assertEqual(self.session.draft.config.block_exes, ("one.exe", "two.exe"))
+        self.app.selection_select_all(self.app.rule_selection_context)
+        context = self.app.rule_selection_context
+        self.messages.askyesno.side_effect = lambda *a, **k: (setattr(self.app, "picker_active", True) or True)
+        with patch.object(self.session.draft, "remove_rules", side_effect=AssertionError("picker remove")):
+            self.assertFalse(self.app.selection_remove(context))
+        self.app.picker_active = False
+        self.app.update_runtime()
+        commands = [control.cget("command") for control in self.app.rule_selection_actions.values()]
+        commands.append(next(iter(self.app.rule_selection_boxes.values()))[2].cget("command"))
+        self.messages.askyesno.side_effect = lambda *a, **k: (self.app.close_editor() or True)
+        with patch.object(self.session.draft, "remove_rules", side_effect=AssertionError("closed remove")):
+            self.assertFalse(self.app.selection_remove(context))
+        self.assertTrue(self.app.closed)
+        self.assertFalse(self.app.confirming_rule_removal)
+        for command in commands:
+            self.assertFalse(command())
+        self.assertEqual(self.app.tk.splitlist(self.app.tk.call("after", "info")), ())
+        self.app.tk.call("update")
+        self.assertEqual(self.background_errors, [])
+
     def test_rule_search_keyboard_native_focus_selection_categories_and_compact_layout(self):
         self.app.geometry("880x660")
         entry = self.app.rule_search_entry
