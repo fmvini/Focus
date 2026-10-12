@@ -37,6 +37,13 @@ Agendador puro, sem ler relógio real, disco ou Windows. Evitar falsa interrupç
 
 Diagnóstico da fase 1 por CLI com `--config PATH` opcional (padrão APPDATA), `--init-config` explícito para criar configuração vazia sem sobrescrever existente, `--check`, `--status`, `--at ISO` para consulta reproduzível e `--watch` para reavaliar a cada 5 s até Ctrl+C. Não apresentar estado calculado como bloqueio aplicado ao Windows. Falha deve retornar código não zero com mensagem compreensível e preservar dados. Não criar configurações no perfil real durante testes.
 
+Complemento de diagnóstico: `--review` combina somente com `--config` e revisa
+estaticamente o JSON salvo por `ui/config_review_cli.py`/`core/config_review.py`.
+Sem GUI, psutil, relógio, workers ou criação/gravação. Exibe todos os apontamentos
+com índices humanos; não certifica instalações ou encerramentos. Retornos:
+0 configuração válida/apontamentos informativos/Ctrl+C; 1 leitura/validação;
+2 modos incompatíveis, rejeitados antes de acesso ao caminho/import do reviewer.
+
 ## Propriedade dos arquivos nesta entrega
 
 - Maestro: `core/models.py`, `core/__init__.py`, `tests/__init__.py`, `tests/test_scheduler_reference.py`, `.gitignore`, README e documentação/commit final.

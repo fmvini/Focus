@@ -59,6 +59,8 @@ def _parser() -> argparse.ArgumentParser:
             "Códigos: 0 sucesso/Ctrl+C; 1 erro global/configuração/IO; "
             "2 argumentos inválidos. --init-config cria exclusivamente; falha "
             "durante a escrita pode deixar o arquivo novo incompleto."
+            " --review revisa o JSON salvo sem alterar arquivos ou iniciar motor; "
+            "combina somente com --config. Apontamentos informativos retornam 0."
         ),
     )
     parser.add_argument("--config", type=Path, metavar="PATH", help="JSON (padrão: %%APPDATA%%/FocusBlocker/config.json)")
@@ -70,6 +72,7 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--apply-processes", action="store_true", help="encerra processos elegíveis; exige --watch e relógio real")
     parser.add_argument("--edit-config", action="store_true", help="abre editor interativo de horários e regras de processos")
     parser.add_argument("--gui", action="store_true", help="abre configuração e controle de processos; motor inicia parado; combina somente com --config")
+    parser.add_argument("--review", action="store_true", help="revisa duplicatas/proteções no JSON salvo; somente diagnóstico, combina com --config")
     return parser
 
 
@@ -197,6 +200,11 @@ def _watch_processes(path: Path, config) -> int:
 def main(argv: list[str] | None = None) -> int:
     parser = _parser()
     args = parser.parse_args(argv)
+    if args.review and (
+        args.init_config or args.check or args.status or args.at is not None
+        or args.watch or args.apply_processes or args.edit_config or args.gui
+    ):
+        parser.error("--review pode ser combinado somente com --config")
     if args.gui and (
         args.init_config or args.check or args.status or args.at is not None
         or args.watch or args.apply_processes or args.edit_config
@@ -216,6 +224,10 @@ def main(argv: list[str] | None = None) -> int:
     show_status = args.status or args.at is not None or not (args.init_config or args.check)
     try:
         path = args.config if args.config is not None else default_config_path()
+        if args.review:
+            from ui.config_review_cli import run_config_review
+
+            return run_config_review(path)
         if args.gui:
             from ui.config_gui import run_config_gui
 
@@ -256,7 +268,7 @@ def main(argv: list[str] | None = None) -> int:
             message = "Diagnóstico encerrado por Ctrl+C."
         print(f"\n{message}", flush=True)
         return 0
-    except (ConfigError, OSError, OverflowError) as exc:
+    except (ConfigError, OSError, OverflowError, UnicodeError) as exc:
         suffix = "; novas ações interrompidas." if args.apply_processes else ""
         print(f"Erro: {exc}{suffix}", file=sys.stderr, flush=True)
         return 1

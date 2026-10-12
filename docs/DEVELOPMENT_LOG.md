@@ -1,3 +1,25 @@
+## 2026-10-11 — Revisão da configuração pela CLI
+
+### Implementado
+- `--review` revisa o JSON salvo com índices humanos, contagens e todos os apontamentos estáticos, sem GUI/psutil/relógio/workers ou gravação. Combina somente com --config; validade com apontamentos retorna 0, erro de arquivo/validação 1 e modos incompatíveis 2.
+- Reutiliza reviewer/catálogo puro da GUI. Import sob demanda preserva outros modos; arquivo inválido/ausente é preservado, sem recuperação automática ou primeiro rascunho. Erro de encoding da saída agora retorna 1 com mensagem, inclusive caminhos Unicode em stream cp1252.
+
+### Arquivos principais alterados
+- `main.py`, `ui/config_review_cli.py`, `tests/test_config_review_cli.py`.
+- `README.md`, `docs/PHASE1_CONTRACT.md`, `docs/TEST_PLAN.md`, `docs/DEVELOPMENT_LOG.md`.
+
+### Decisões técnicas
+- Diagnóstico humano independente, não simulação de processos; stdout para apontamentos informativos e stderr de erro via dispatch existente. Interrupção segue retorno normal dos diagnósticos.
+- Unidade implementada pelo Maestro. Equipe recebeu nova revisão somente leitura dos lotes integrados, com proibição de retomar edições anteriores durante quota.
+
+### Estado atual
+- Oito novos testes e regressões de flags/dispatch: 79 aprovados em 3,122 s. Backend revisou somente leitura; achado UnicodeError corrigido com TextIOWrapper/UTF-8 e preservação dos bytes. A suíte completa anterior descobriu 610 testes: 608 aprovados, um skip conhecido e um erro no smoke nativo de fechamento, devido à inicialização CTk/mainloop que processa o fechamento antes de restaurar wm state (64,432 s). Frontend recebeu correção separada; nenhum teste CLI falhou e nenhum processo/hosts/configuração do usuário foi alterado.
+- AST 3.12/UTF-8 nos 60 arquivos Python e diff conferidos. Base `f22f6f5`; runtime 3.12 e visual/DPI seguem pendentes.
+
+### Próximos passos
+- Integrar correções revisadas de igualdade JSON no dirty/history, retorno tardio dos seletores e estabilização do smoke nativo; repetir suíte completa após os edits congelarem.
+- Próxima melhoria independente: apresentação e navegação das regras com listas extensas; medir antes de otimizar.
+
 ## 2026-10-11 — Desfazer e refazer edições do rascunho
 
 ### Implementado

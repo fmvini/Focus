@@ -2,6 +2,12 @@
 
 Fonte: [escopo](Focus%20Blocker_%20escopo%20do%20projeto.md), [requisitos](REQUIREMENTS.md) e [decisões](DECISIONS.md). Fases 1/2: 206 testes OK em Python 3.14.6/psutil 7.2.2 por `.venv/Scripts/python.exe -B -m unittest discover -s tests` (10,542 s). Sintaxe 3.12 dos 18 arquivos Python conferida; runtime 3.12 ainda não executado. Encerramentos reais e fases posteriores continuam pendentes.
 
+## Evidência da revisão pela CLI — 2026-10-11
+
+- Oito testes novos verificam `--review` somente leitura, contagens/índices humanos, apontamentos informativos com retorno 0, JSON inválido/ausente sem recuperação, modos incompatíveis antes de IO/import, caminho padrão/callback, interrupção e import lazy em subprocesso sem GUI/psutil/controller. Saída cp1252 com caminho Unicode retorna erro explícito 1, preservando JSON UTF-8. Seleção relevante de 79 testes passou em 3,122 s; revisão independente Backend concluída e achado de encoding corrigido.
+- Suíte completa: 610 descobertos, 608 aprovados, um skip conhecido e um erro no smoke nativo de fechamento em 64,432 s. O erro CTk/mainloop já foi reproduzido na revisão Frontend e não envolve dispatch/reviewer CLI; correção e nova validação completa serão registradas no lote de seletores. Nenhum erro foi suprimido ou convertido em skip.
+- Arquivos/configuração/processos/hosts do usuário intactos; runtime 3.12 e visual/DPI permanecem pendentes.
+
 ## Evidência do histórico de edição — 2026-10-11
 
 - Suíte completa escalada: **603 descobertos, 602 aprovados, um skip** symlink/WinError 1314, 47,046 s. Dezesseis nativeGUI e ícone real passaram; AST 3.12/UTF-8 nos 58 arquivos e links/diff conferidos.

@@ -12,6 +12,7 @@ python -m venv .venv
 python main.py --config .\data\config.json --init-config
 python main.py --config .\data\config.json --edit-config
 python main.py --config .\data\config.json --check
+python main.py --config .\data\config.json --review
 python main.py --config .\data\config.json --status
 python main.py --config .\data\config.json --status --at 2026-10-05T09:00:00
 python main.py --config .\data\config.json --watch
@@ -53,6 +54,8 @@ As sugestões de jogos e launchers começam desmarcadas. Escolha quais adicionar
 **Visão geral** mostra os horários planejados da semana atual, de segunda a domingo, com total por dia e por semana. A prévia acompanha o rascunho e identifica alterações não salvas; horários sobrepostos são contados uma vez e trechos após meia-noite aparecem no dia correspondente. Esses totais representam planejamento, sem medição de foco. A tela também orienta o primeiro uso e oferece atalhos para configurar horários e aplicativos.
 
 A **Revisão do rascunho** aponta horários/regras repetidos, nomes de bloqueio que também são protegidos e a abrangência de `javaw.exe` por nome. Os apontamentos usam somente a configuração; não verificam processos ou instalações, não alteram listas e não impedem salvar ou iniciar. Corrija o que desejar nas abas correspondentes. As demais proteções do motor continuam valendo.
+
+O comando **`--review`** oferece essa revisão para o JSON salvo, sem depender da interface gráfica ou de psutil. Combina somente com `--config`, não altera o arquivo e apresenta todos os apontamentos. Configuração válida retorna 0 mesmo com apontamentos informativos; erros de leitura/validação retornam 1 e argumentos incompatíveis, 2.
 
 Em **Horários**, **Duplicar** copia uma janela para ajustar outra faixa rapidamente. Em **Jogos / Apps**, a busca filtra as regras da categoria selecionada. Em **Configuração**, **Importar JSON** substitui o rascunho após confirmação e validação; clique em **Salvar** para publicar. **Exportar JSON** cria uma cópia do rascunho em um arquivo novo, preservando alterações pendentes e recusando sobrescrever arquivos existentes. Ver [contrato desta evolução](docs/CONFIG_EVOLUTION_CONTRACT.md).
 
