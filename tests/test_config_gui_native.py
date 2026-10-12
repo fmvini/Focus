@@ -216,6 +216,111 @@ class NativeConfigGuiTests(unittest.TestCase):
     def native_rule_indices(self, field):
         return [index for row_field, index in self.app.review_rows if row_field == field]
 
+    def test_rule_search_keyboard_native_focus_selection_categories_and_compact_layout(self):
+        self.app.geometry("880x660")
+        entry = self.app.rule_search_entry
+        self.app.change_rule_order("Nome Z–A")
+        self.app.rule_search.set(" Existing query ")
+        self.assertEqual(entry.master.grid_info()["row"], 3)
+        self.assertEqual(entry.master.grid_info()["column"], 0)
+        self.assertIs(self.button(self.app, "Limpar").master, entry.master)
+        self.assertEqual(self.app.rule_order_picker.master.grid_info()["row"], 3)
+        self.assertEqual(self.app.rule_order_picker.master.grid_info()["column"], 1)
+        self.assertEqual(self.app.rules_list._parent_frame.grid_info()["row"], 4)
+        self.assertTrue(self.app.bind("<Control-f>"))
+        self.assertIn("clear_rule_search", self.app.tk.call("bind", str(entry._entry), "<Escape>"))
+        self.assertFalse(self.app.bind("<Escape>"))
+        for category in ("Executáveis", "Pastas", "Proteção adicional", "Linha de comando"):
+            self.app.rule_category.set(category)
+            self.app.tabs.set("Horários")
+            with patch.object(self.app, "render_rules", side_effect=AssertionError("render")), \
+                    patch.object(entry, "focus_set", wraps=entry.focus_set) as focus:
+                self.assertEqual(self.app.focus_rule_search(), "break")
+                focus.assert_called_once_with()
+            self.assertEqual(self.app.tabs.get(), "Jogos / Apps")
+            self.assertEqual(self.app.rule_category.get(), category)
+            self.assertEqual(self.app.rule_search.get(), " Existing query ")
+            self.assertEqual(self.app.rule_order.get(), "Nome Z–A")
+            self.assertTrue(entry.select_present())
+            self.assertEqual(entry.index("sel.first"), 0)
+            self.assertEqual(entry.index("sel.last"), len(" Existing query "))
+            self.assertEqual(entry.index("insert"), len(" Existing query "))
+        self.assertEqual(self.background_errors, [])
+
+    def test_rule_search_keyboard_native_clear_once_original_indices_history_and_no_io(self):
+        for value in ("z.exe", "a.exe", "A.exe", "redo.exe"):
+            self.session.draft.add_rule("block_exes", value)
+        self.session.draft.undo()
+        self.app.render()
+        draft, snapshot, config = self.session.draft, self.session.snapshot, self.session.draft.config
+        original = self.path.read_bytes()
+        state = self.session.dirty, draft.can_undo, draft.can_redo
+        generation = self.app.review_generation
+        self.app.change_rule_order("Nome Z–A")
+        self.app.rule_search.set("a.exe")
+        self.assertEqual(self.native_rule_indices("block_exes"), [1, 2])
+        with patch.object(self.app, "render_rules", wraps=self.app.render_rules) as render, \
+                patch.object(Path, "read_bytes", side_effect=AssertionError("IO")), \
+                patch.object(self.session, "save", side_effect=AssertionError("Save")), \
+                patch.object(self.controller, "start", side_effect=AssertionError("motor")), \
+                patch.object(self.controller, "stop", side_effect=AssertionError("motor")):
+            self.assertEqual(self.app.clear_rule_search(SimpleNamespace()), "break")
+            render.assert_called_once_with()
+            render.reset_mock()
+            self.button(self.app, "Limpar").invoke()
+            render.assert_not_called()
+            self.app.rule_search.set("missing")
+            render.reset_mock()
+            self.button(self.app, "Limpar").invoke()
+            render.assert_called_once_with()
+        self.assertEqual(self.native_rule_indices("block_exes"), [0, 1, 2])
+        self.assertEqual(self.app.rule_order.get(), "Nome Z–A")
+        self.assertIs(self.session.draft, draft)
+        self.assertIs(self.session.snapshot, snapshot)
+        self.assertEqual(draft.config, config)
+        self.assertEqual((self.session.dirty, draft.can_undo, draft.can_redo), state)
+        self.assertEqual(self.app.review_generation, generation)
+        self.assertEqual(self.path.read_bytes(), original)
+        self.button(self.app.review_rows[("block_exes", 2)], "Editar").invoke()
+        self.app.modal.withdraw()
+        self.assertEqual(self.entries()[0].get(), "A.exe")
+        self.button(self.app.modal, "Cancelar").invoke()
+        self.assertEqual(self.background_errors, [])
+
+    def test_rule_search_keyboard_native_modal_picker_and_captured_callbacks_after_teardown(self):
+        focus, clear = self.app.focus_rule_search, self.app.clear_rule_search
+        button_command = self.button(self.app, "Limpar").cget("command")
+        self.app.rule_search.set("keep")
+        config = self.session.draft.config
+        self.app.edit_window()
+        self.app.modal.withdraw()
+        dialog = self.app.modal
+        for action in (focus, clear):
+            self.assertIsNone(action(SimpleNamespace()))
+        self.assertFalse(button_command())
+        self.assertIs(self.app.modal, dialog)
+        # Escape continua registrado no formulário; só a Entry busca limpa query.
+        self.assertTrue(dialog.bind("<Escape>"))
+        self.button(dialog, "Cancelar").invoke()
+        for flag in ("picker_active", "selecting_executables", "closing", "closed"):
+            setattr(self.app, flag, True)
+            with patch.object(self.app.tabs, "set", side_effect=AssertionError("Tk")), \
+                    patch.object(self.app.rule_search, "get", side_effect=AssertionError("Tk")):
+                self.assertIsNone(focus(SimpleNamespace()))
+                self.assertIsNone(clear(SimpleNamespace()))
+                self.assertFalse(button_command())
+            setattr(self.app, flag, False)
+        self.assertEqual(self.app.rule_search.get(), "keep")
+        self.app.close_editor()
+        self.assertTrue(self.app.closed)
+        self.assertIsNone(focus(SimpleNamespace()))
+        self.assertIsNone(clear(SimpleNamespace()))
+        self.assertFalse(button_command())
+        self.assertEqual(self.session.draft.config, config)
+        self.assertEqual(self.app.tk.splitlist(self.app.tk.call("after", "info")), ())
+        self.app.tk.call("update")
+        self.assertEqual(self.background_errors, [])
+
     def test_visual_rule_order_native_compact_layout_stable_ties_and_crud_indices(self):
         self.app.geometry("880x660")
         self.app.tabs.set("Jogos / Apps")

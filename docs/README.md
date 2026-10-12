@@ -32,6 +32,7 @@ Status: fases 1/2, editor CLI, painel/configuração gráfica, controle explíci
 | [REVIEW_NAVIGATION_CONTRACT.md](REVIEW_NAVIGATION_CONTRACT.md) | Navegação dos apontamentos às categorias/linhas originais sem editar dados |
 | [RULE_LIST_VIEW_CONTRACT.md](RULE_LIST_VIEW_CONTRACT.md) | Busca e ordenação visual das regras com cadastro/índices originais preservados |
 | [WINDOW_DAYS_CONTRACT.md](WINDOW_DAYS_CONTRACT.md) | Atalhos locais de seleção dos dias e preservação da ordem na edição de horários |
+| [RULE_SEARCH_KEYBOARD_CONTRACT.md](RULE_SEARCH_KEYBOARD_CONTRACT.md) | Busca de regras por Ctrl+F e limpeza local por Escape/botão |
 | [PROCESS_GUI_CONTRACT.md](PROCESS_GUI_CONTRACT.md) | Motor gráfico: início/parada, worker, snapshots, recarga e saída ordenada |
 | [TRAY_CONTRACT.md](TRAY_CONTRACT.md) | Bandeja explícita, fila de comandos Tk e uma GUI por configuração/sessão |
 | [INITIAL_SETUP_CONTRACT.md](INITIAL_SETUP_CONTRACT.md) | Primeira configuração gráfica, sugestões opt-in e criação exclusiva ao Salvar |

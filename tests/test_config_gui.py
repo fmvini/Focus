@@ -379,6 +379,114 @@ class ConfigGuiFlowTests(unittest.TestCase):
     def displayed_rule_indices(self, field):
         return [index for row_field, index in self.app.review_rows if row_field == field]
 
+    def test_rule_search_keyboard_focus_preserves_each_category_query_order_without_render(self):
+        entry = self.app.rule_search_entry
+        entry.focus_set, entry.select_range, entry.icursor = Mock(), Mock(), Mock()
+        self.app.change_rule_order("Nome Z–A")
+        self.app.rule_search.set(" Existing query ")
+        for category in ("Executáveis", "Pastas", "Proteção adicional", "Linha de comando"):
+            self.app.rule_category.set(category)
+            self.app.tabs.set("Horários")
+            with patch.object(self.app, "render_rules", side_effect=AssertionError("render")), \
+                    patch.object(self.app, "after", side_effect=AssertionError("timer")):
+                self.assertEqual(self.app.callbacks["<Control-f>"](SimpleNamespace()), "break")
+            self.assertEqual(self.app.tabs.options["selected_tab"], "Jogos / Apps")
+            self.assertEqual(self.app.rule_category.get(), category)
+            self.assertEqual(self.app.rule_search.get(), " Existing query ")
+            self.assertEqual(self.app.rule_order.get(), "Nome Z–A")
+        self.assertEqual(entry.focus_set.call_count, 4)
+        self.assertEqual(entry.select_range.call_args_list, [unittest.mock.call(0, "end")] * 4)
+        self.assertEqual(entry.icursor.call_args_list, [unittest.mock.call("end")] * 4)
+
+    def test_rule_search_keyboard_clear_once_original_indices_and_empty_noop(self):
+        for value in ("z.exe", "a.exe", "A.exe", "b.exe"):
+            self.session.draft.add_rule("block_exes", value)
+        self.app.render()
+        self.app.change_rule_order("Nome Z–A")
+        self.app.rule_search.set("a.exe")
+        self.assertEqual(self.displayed_rule_indices("block_exes"), [1, 2])
+        escape = self.app.rule_search_entry.callbacks["<Escape>"]
+        self.assertNotIn("<Escape>", self.app.callbacks)
+        with patch.object(self.app, "render_rules", wraps=self.app.render_rules) as render:
+            self.assertEqual(escape(SimpleNamespace()), "break")
+            render.assert_called_once_with()
+            render.reset_mock()
+            self.assertFalse(button(self.app, "Limpar").invoke())
+            self.assertEqual(escape(SimpleNamespace()), "break")
+            render.assert_not_called()
+            self.app.rule_search.set("missing")
+            render.reset_mock()
+            self.assertTrue(button(self.app, "Limpar").invoke())
+            render.assert_called_once_with()
+        self.assertEqual(self.displayed_rule_indices("block_exes"), [0, 3, 1, 2])
+        button(self.app.review_rows[("block_exes", 2)], "Editar").invoke()
+        self.assertEqual(self.entries()[0].get(), "A.exe")
+        self.app.modal.callbacks["<Escape>"](None)
+        self.assertIsNone(self.app.modal)
+        self.assertEqual(self.session.draft.config.block_exes, ("z.exe", "a.exe", "A.exe", "b.exe"))
+
+    def test_rule_search_keyboard_view_only_preserves_history_baseline_bytes_and_motor(self):
+        for value in ("z.exe", "Code.exe", "Code.exe"):
+            self.session.draft.add_rule("block_exes", value)
+        self.app.save_config()
+        self.app.undo_draft()
+        draft, snapshot, config = self.session.draft, self.session.snapshot, self.session.draft.config
+        original = self.path.read_bytes()
+        state = self.session.dirty, draft.can_undo, draft.can_redo
+        generation, review_snapshot = self.app.review_generation, self.app.review_snapshot
+        entry = self.app.rule_search_entry
+        entry.focus_set, entry.select_range, entry.icursor = Mock(), Mock(), Mock()
+        self.app.change_rule_order("Nome A–Z")
+        self.app.rule_search.set("code")
+        with patch.object(Path, "read_bytes", side_effect=AssertionError("IO")), \
+                patch.object(self.session, "save", side_effect=AssertionError("Save")), \
+                patch.object(self.controller, "start", side_effect=AssertionError("motor")), \
+                patch.object(self.controller, "stop", side_effect=AssertionError("motor")):
+            self.app.focus_rule_search()
+            button(self.app, "Limpar").invoke()
+        self.assertIs(self.session.draft, draft)
+        self.assertIs(self.session.snapshot, snapshot)
+        self.assertEqual(draft.config, config)
+        self.assertEqual((self.session.dirty, draft.can_undo, draft.can_redo), state)
+        self.assertEqual(self.path.read_bytes(), original)
+        self.assertEqual(self.app.review_generation, generation)
+        self.assertIs(self.app.review_snapshot, review_snapshot)
+        self.assertEqual(self.app.rule_order.get(), "Nome A–Z")
+
+    def test_rule_search_keyboard_guards_captured_callbacks_before_tk_and_preserves_form_escape(self):
+        focus = self.app.callbacks["<Control-f>"]
+        escape = self.app.rule_search_entry.callbacks["<Escape>"]
+        clear = button(self.app, "Limpar").options["command"]
+        event = SimpleNamespace()
+        self.app.rule_search.set("keep")
+        draft = self.session.draft.config
+        self.app.edit_window()
+        dialog = self.app.modal
+        with patch.object(self.app.tabs, "set", side_effect=AssertionError("Tk")), \
+                patch.object(self.app.rule_search, "get", side_effect=AssertionError("Tk")):
+            self.assertIsNone(focus(event))
+            self.assertIsNone(escape(event))
+            self.assertFalse(clear())
+        self.assertIs(self.app.modal, dialog)
+        dialog.callbacks["<Escape>"](None)
+        self.assertIsNone(self.app.modal)
+        for flag in ("picker_active", "selecting_executables", "closing", "closed"):
+            setattr(self.app, flag, True)
+            with patch.object(self.app.tabs, "set", side_effect=AssertionError("Tk")), \
+                    patch.object(self.app.rule_search, "get", side_effect=AssertionError("Tk")):
+                self.assertIsNone(focus(event))
+                self.assertIsNone(escape(event))
+                self.assertFalse(clear())
+            setattr(self.app, flag, False)
+        self.assertEqual(self.app.rule_search.get(), "keep")
+        self.app.close_editor()
+        with patch.object(self.app.tabs, "set", side_effect=AssertionError("destroyed Tk")), \
+                patch.object(self.app.rule_search, "get", side_effect=AssertionError("destroyed Tk")):
+            self.assertIsNone(focus(event))
+            self.assertIsNone(escape(event))
+            self.assertFalse(clear())
+        self.assertEqual(self.session.draft.config, draft)
+
     def test_visual_rule_order_default_stable_ties_search_and_original_crud_indices(self):
         for value in ("z.exe", "a.exe", "A.exe", "b.exe"):
             self.session.draft.add_rule("block_exes", value)
@@ -1895,7 +2003,7 @@ class ConfigGuiFlowTests(unittest.TestCase):
         self.session.draft.add_rule("block_exes", "other.exe")
         self.app.render_rules()
         self.assertIn("corresponde à busca", self.labels(self.app.rules_list))
-        self.assertIn("Buscar regras nesta categoria", self.labels(self.app))
+        self.assertIn("Buscar regras · Ctrl+F · Esc limpa", self.labels(self.app))
 
     def test_import_always_confirms_even_clean_and_waits_for_explicit_save(self):
         self.import_source(windows=[{"start": "09:00", "end": "10:00", "days": [0]}],

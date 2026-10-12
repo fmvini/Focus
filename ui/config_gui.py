@@ -293,10 +293,16 @@ def _build_app(ctk, tk, filedialog, messagebox, session, controller=None, tray=N
             self.rule_description = ctk.CTkLabel(processes, text="", text_color=muted, anchor="w", wraplength=760)
             self.rule_description.grid(row=1, column=0, columnspan=2, sticky="ew", padx=14, pady=10)
             self.rule_search = ctk.StringVar(value="")
-            ctk.CTkLabel(processes, text="Buscar regras nesta categoria", anchor="w", text_color=muted
+            ctk.CTkLabel(processes, text="Buscar regras · Ctrl+F · Esc limpa", anchor="w", text_color=muted
                          ).grid(row=2, column=0, sticky="ew", padx=14)
-            ctk.CTkEntry(processes, textvariable=self.rule_search).grid(
-                row=3, column=0, sticky="ew", padx=14, pady=(0, 10))
+            search_controls = ctk.CTkFrame(processes, fg_color="transparent")
+            search_controls.grid(row=3, column=0, sticky="ew", padx=14, pady=(0, 10))
+            search_controls.grid_columnconfigure(0, weight=1)
+            self.rule_search_entry = ctk.CTkEntry(search_controls, textvariable=self.rule_search)
+            self.rule_search_entry.grid(row=0, column=0, sticky="ew")
+            self.rule_search_entry.bind("<Escape>", self.clear_rule_search)
+            ctk.CTkButton(search_controls, text="Limpar", width=65, fg_color=accent,
+                          command=self.clear_rule_search).grid(row=0, column=1, padx=(8, 0))
             order_controls = ctk.CTkFrame(processes, fg_color="transparent")
             order_controls.grid(row=3, column=1, sticky="w", padx=14, pady=(0, 10))
             ctk.CTkLabel(order_controls, text="Ordem visual", text_color=muted).pack(side="left", padx=(0, 10))
@@ -391,6 +397,7 @@ def _build_app(ctk, tk, filedialog, messagebox, session, controller=None, tray=N
             self.bind("<Control-r>", lambda _: self.reload_config() if self.modal is None else None)
             self.bind("<Control-z>", lambda event: self.history_shortcut(event, redo=False))
             self.bind("<Control-y>", lambda event: self.history_shortcut(event, redo=True))
+            self.bind("<Control-f>", self.focus_rule_search)
             self.render()
             self.refresh_status()
             if session.is_new:
@@ -873,6 +880,23 @@ def _build_app(ctk, tk, filedialog, messagebox, session, controller=None, tray=N
                 return
             self.render()
             self.notify("Horário duplicado no rascunho. Clique em Salvar para gravar.")
+
+        def focus_rule_search(self, event=None):
+            if not self.navigation_available():
+                return None
+            self.tabs.set("Jogos / Apps")
+            self.rule_search_entry.focus_set()
+            self.rule_search_entry.select_range(0, "end")
+            self.rule_search_entry.icursor("end")
+            return "break"
+
+        def clear_rule_search(self, event=None):
+            if not self.navigation_available():
+                return None if event is not None else False
+            changed = bool(self.rule_search.get())
+            if changed:
+                self.rule_search.set("")  # o trace reconstrói a lista uma única vez
+            return "break" if event is not None else changed
 
         def change_rule_order(self, label):
             if self.closing or self.closed:

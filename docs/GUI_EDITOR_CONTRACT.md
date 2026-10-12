@@ -61,6 +61,13 @@ no [contrato de bandeja](TRAY_CONTRACT.md); fechar pelo X continua sair.
   linha de comando. Cmdline mantém executável e trecho juntos, preservando
   espaços do trecho literal. Seletor de pastas opcional. Nenhuma lista
   predefinida ou executável inferido.
+- Ctrl+F abre Jogos / Apps na categoria atual e foca/seleciona a busca existente,
+  sem novo timer. Escape somente nessa entrada e botão Limpar retiram o filtro
+  por uma reconstrução via trace; vazio é no-op. Ordem visual, índices, histórico
+  e dados permanecem intactos. Guardas de modal/seletor/saída antecedem Tk;
+  Escape dos formulários continua fechando o formulário. Rótulo Buscar regras ·
+  Ctrl+F · Esc limpa e controle compacto na linha existente, conforme
+  [contrato da busca por teclado](RULE_SEARCH_KEYBOARD_CONTRACT.md).
 - Diálogos aplicam alterações ao rascunho; Cancelar/Escape/fechar o diálogo
   descartam somente os campos desse formulário. Remover exige confirmação.
 - Salvar/Ctrl+S publica pelo repositório existente. Erro/conflito preserva

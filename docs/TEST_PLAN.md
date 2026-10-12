@@ -2,6 +2,12 @@
 
 Fonte: [escopo](Focus%20Blocker_%20escopo%20do%20projeto.md), [requisitos](REQUIREMENTS.md) e [decisões](DECISIONS.md). Fases 1/2: 206 testes OK em Python 3.14.6/psutil 7.2.2 por `.venv/Scripts/python.exe -B -m unittest discover -s tests` (10,542 s). Sintaxe 3.12 dos 18 arquivos Python conferida; runtime 3.12 ainda não executado. Encerramentos reais e fases posteriores continuam pendentes.
 
+## Evidência da busca pelo teclado — 2026-10-12
+
+- Quatro fake/três native novos verificam quatro categorias/query/ordem, APIs públicas de foco/seleção, ausência de timer/render ao focar, limpeza única por trace/empty no-op, índices originais/duplicatas/CRUD, histórico/redo/baseline/bytes/revisão/motor preservados, guards antes de Tk e Escape separado do formulário.
+- Uma asserção legada do rótulo anterior falhou nas execuções inicialmente importadas. Foi ajustada ao texto aprovado, sem alterar produção/nativos. Frontend: 113 GUI/main finais aprovados em 3.14/6,567 s e 3.12/6,512 s; 37 nativos das fontes inalteradas também aprovados. Backend/Banco revisaram sem achados e aprovaram 25/25 e 54/54 nos dois runtimes.
+- Suíte completa final Maestro: **763 descobertos, 762 aprovados e um skip conhecido** symlink/WinError 1314 nos dois runtimes Windows AMD64: Python 3.14.6/173,387 s e Python 3.12.14/200,022 s. Trinta e sete nativeGUI, ícone real e guardas passaram. AST 3.12/UTF-8 nos 71 arquivos e links/diff conferidos. Sem efeitos em processos/hosts/configuração do usuário; widgets ocultos não comprovam visual/DPI/foco físico/acessibilidade.
+
 ## Evidência dos atalhos de dias e edição fiel — 2026-10-12
 
 - Seis fakeGUI/três nativeGUI novos cobrem presets locais, cancelamento/Escape, novo/desativado, Apply inválido e retry, dias retidos/novos/remoção/toggle, no-op em `(6, 0)` preservando redo/dirty/extras tipados, única edição Undo/Redo, horário editado e conflito externo, callbacks antigos recusados antes de Tk/finish_edit, teardown sem bgerrors.

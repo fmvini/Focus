@@ -1,3 +1,26 @@
+## 2026-10-12 — Busca de regras pelo teclado
+
+### Implementado
+- Ctrl+F abre Jogos / Apps na categoria atual, foca a busca e seleciona texto existente. Escape somente na entrada e botão Limpar retiram o filtro; vazio não reconstrói a lista. Categoria, ordem visual e índices originais preservados.
+
+### Arquivos principais alterados
+- `ui/config_gui.py`, `tests/test_config_gui.py`, `tests/test_config_gui_native.py`.
+- `README.md`, `docs/RULE_SEARCH_KEYBOARD_CONTRACT.md`, `docs/GUI_EDITOR_CONTRACT.md`, `docs/README.md`, `docs/TEST_PLAN.md`, `docs/DEVELOPMENT_LOG.md`.
+
+### Decisões técnicas
+- Ações somente de visualização, sem novos timers, dados ou confirmação. Preservar consulta/ordem ao focar e usar trace para uma reconstrução ao limpar.
+- Frontend possui três arquivos GUI/testes; Backend/Banco somente leitura; Maestro docs/integração/commit. Não retomar lotes antigos após recuperação de cota.
+
+### Estado atual
+- Base `8d040af`. Sete novos testes verificam categorias/consulta/ordem/foco/seleção, clear único/vazio, duplicatas/CRUD, noIO/history/draft/baseline/motor, guards/callbacks antigos e Escape dos formulários preservado.
+- Frontend congelou GUI/testes com quatro fake e três native novos. Rótulo intencionalmente atualizado exigiu corrigir uma asserção legada; produção/nativos permaneceram iguais. Seleção final 113 GUI/main passou nos dois runtimes (6,567 s/6,512 s), e os 37 nativos das execuções anteriores passaram. Não atribuir uma seleção 150 verde a um único run.
+- Backend e Banco revisaram a fonte final sem achados, com 25/25 (30,414 s/32,795 s) e 54/54 (33,836 s/32,313 s) aprovados nos dois runtimes. AST 3.12/UTF-8 nos 71 arquivos, links/diff conferidos.
+- Suíte completa final Maestro: **763 descobertos, 762 aprovados e um skip conhecido** symlink/WinError 1314 nos dois runtimes Windows AMD64: Python 3.14.6/173,387 s e Python 3.12.14/200,022 s. Trinta e sete nativeGUI, ícone real e guardas passaram. Sem efeitos em processos/hosts/configuração do usuário; visual/DPI/foco físico/acessibilidade permanecem pendentes.
+
+### Próximos passos
+- Próxima melhoria: remoção em lote de regras selecionadas, somente draft e uma edição Undo/Redo. Design revisado pelos três agentes, ainda sem implementação. Iniciar depois do commit desta unidade.
+- Sites/pausa/avisos continuam dependendo das respostas abertas; visual/DPI/acessibilidade pendentes.
+
 ## 2026-10-12 — Atalhos dos dias e edição fiel de horários
 
 ### Implementado
