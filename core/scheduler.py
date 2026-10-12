@@ -140,3 +140,26 @@ def next_block_start(
             candidate += timedelta(days=7)
         candidates.append(candidate)
     return min(candidates)
+
+
+def current_block_end(
+    windows: Iterable[ScheduleWindow], now: datetime,
+) -> datetime | None:
+    """End of the effective interval containing now, in the local calendar.
+
+    None means no current interval or continuous weekly coverage; use
+    is_blocking to distinguish these cases. Overlaps/adjacency and the Sunday
+    continuation are united before finding the first blocked-to-free transition.
+    """
+    _require_local(now)
+    intervals = _weekly_intervals(windows)
+    if not intervals or intervals == ((0, _WEEK_MINUTES),):
+        return None
+    week_start = datetime.combine(now.date() - timedelta(days=now.weekday()), time.min)
+    elapsed = now - week_start
+    for start, end in intervals:
+        if timedelta(minutes=start) <= elapsed < timedelta(minutes=end):
+            if end == _WEEK_MINUTES and intervals[0][0] == 0:
+                end += intervals[0][1]
+            return week_start + timedelta(minutes=end)
+    return None

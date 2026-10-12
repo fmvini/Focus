@@ -176,8 +176,10 @@ def _build_app(ctk, tk, filedialog, messagebox, session, controller=None, tray=N
             self.agenda_label.grid(row=0, column=0, sticky="ew", padx=18, pady=(12, 0))
             self.next_label = ctk.CTkLabel(summary, text="", anchor="w", text_color=muted)
             self.next_label.grid(row=1, column=0, sticky="ew", padx=18)
+            self.end_label = ctk.CTkLabel(summary, text="", anchor="w", text_color=muted)
+            self.end_label.grid(row=2, column=0, sticky="ew", padx=18)
             self.agenda_hint = ctk.CTkLabel(summary, text="", text_color=muted, anchor="w")
-            self.agenda_hint.grid(row=2, column=0, sticky="ew", padx=18, pady=(0, 12))
+            self.agenda_hint.grid(row=3, column=0, sticky="ew", padx=18, pady=(0, 12))
 
             self.tabs = ctk.CTkTabview(self, fg_color="white", segmented_button_selected_color=accent,
                                        segmented_button_selected_hover_color="#10645F")
@@ -912,6 +914,15 @@ def _build_app(ctk, tk, filedialog, messagebox, session, controller=None, tray=N
                                              "Agenda carregada: dentro da janela" if status.active else "Agenda carregada: fora da janela"))
             self.next_label.configure(text=("Salvar cria o arquivo; Iniciar continua exigindo confirmação." if session.is_new else
                 "Próximo início: " + (status.next_start.strftime("%d/%m/%Y às %H:%M") if status.next_start else "nenhum horário ativo")))
+            if session.is_new:
+                ending = "Nenhuma janela salva em andamento."
+            elif not status.active:
+                ending = "Nenhuma janela carregada em andamento."
+            elif status.current_end is None:
+                ending = "Agenda carregada: cobertura semanal contínua, sem fim previsto."
+            else:
+                ending = "Fim da janela carregada: " + status.current_end.strftime("%d/%m/%Y às %H:%M")
+            self.end_label.configure(text=ending)
             self.agenda_hint.configure(text=("Prévia do rascunho abaixo; motor parado até salvar e confirmar Iniciar." if session.is_new else
                                               "Consulta da agenda carregada; o estado do motor aparece acima."))
             self.update_runtime()

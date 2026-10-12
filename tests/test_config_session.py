@@ -43,8 +43,10 @@ class ConfigSessionTests(unittest.TestCase):
         self.session.draft.add_window("22:00", "02:00", [0])
         self.assertFalse(self.session.agenda_status(inside).active)
         self.assertIsNone(self.session.agenda_status(inside).next_start)
+        self.assertIsNone(self.session.agenda_status(inside).current_end)
         self.session.save()
         self.assertTrue(self.session.agenda_status(inside).active)
+        self.assertEqual(self.session.agenda_status(inside).current_end, datetime(2026, 10, 6, 2))
         self.assertFalse(self.session.agenda_status(datetime(2026, 10, 6, 2)).active)
         self.assertEqual(self.session.agenda_status(inside).next_start, datetime(2026, 10, 12, 22))
 

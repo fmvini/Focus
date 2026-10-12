@@ -2,6 +2,12 @@
 
 Fonte: [escopo](Focus%20Blocker_%20escopo%20do%20projeto.md), [requisitos](REQUIREMENTS.md) e [decisões](DECISIONS.md). Fases 1/2: 206 testes OK em Python 3.14.6/psutil 7.2.2 por `.venv/Scripts/python.exe -B -m unittest discover -s tests` (10,542 s). Sintaxe 3.12 dos 18 arquivos Python conferida; runtime 3.12 ainda não executado. Encerramentos reais e fases posteriores continuam pendentes.
 
+## Evidência do fim da agenda — 2026-10-11
+
+- Suíte completa fora do sandbox: **575 descobertos, 574 aprovados, um skip** de symlink/WinError 1314, 41,137 s. Quatorze nativeGUI e ícone real passaram em Python 3.14.6/Windows; AST 3.12/UTF-8 nos 54 arquivos conferidos.
+- Oito testes em `test_schedule_end` verificam limite exclusivo/subminuto, noites, união/adjacência/gap de um minuto, domingo/segunda com união de mais de 24h, virada anual/bissexto, cobertura contínua, generator one-shot e rejeição de timezone. Referência independente por minuto: 12 cenários fixos/aleatórios determinísticos, amostras em toda a semana.
+- Dois fluxos GUI e nativeGUI em 880×660 verificam baseline versus rascunho/save, agenda inativa/contínua/nova, noite e motor parado. Nenhum encerramento real; retorno é previsão da agenda carregada. Runtime 3.12 e visual/DPI pendentes.
+
 ## Evidência da seleção de executáveis — 2026-10-11
 
 - Suíte completa escalada no desktop Windows: **564 descobertos, 563 aprovados e um skip** symlink/WinError 1314, 39,227 s, Python 3.14.6. Treze nativeGUI e ícone real passaram.

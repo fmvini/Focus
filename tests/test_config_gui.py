@@ -301,6 +301,31 @@ class ConfigGuiFlowTests(unittest.TestCase):
         self.assertEqual(self.session.draft.config.safelist_exes, ())
         self.assertIn("rascunho de bloqueio", self.app.feedback.options["text"])
 
+    def test_current_agenda_end_uses_saved_union_not_draft_and_updates_after_save(self):
+        now = real_datetime(2026, 10, 12, 10)
+        self.session.draft.add_window("09:00", "11:00", [0])
+        self.session.draft.add_window("11:00", "12:00", [0])
+        self.session.save()
+        with patch("ui.config_gui.datetime", SimpleNamespace(now=lambda: now)):
+            self.app.refresh_status(schedule=False)
+            self.assertIn("12/10/2026 às 12:00", self.app.end_label.options["text"])
+            self.session.draft.update_window(1, "11:00", "13:00", [0])
+            self.app.refresh_status(schedule=False)
+            self.assertIn("às 12:00", self.app.end_label.options["text"])
+            self.app.save_config()
+            self.assertIn("às 13:00", self.app.end_label.options["text"])
+        self.assertEqual(self.controller.starts, 0)
+
+    def test_current_agenda_end_distinguishes_inactive_continuous_and_new(self):
+        self.assertIn("Nenhuma janela carregada", self.app.end_label.options["text"])
+        self.session.draft.add_window("00:00", "12:00")
+        self.session.draft.add_window("12:00", "00:00")
+        self.session.save()
+        self.app.refresh_status(schedule=False)
+        self.assertIn("cobertura semanal contínua", self.app.end_label.options["text"])
+        self.make_new()
+        self.assertIn("Nenhuma janela salva", self.app.end_label.options["text"])
+
     def add_window(self, start="22:00", end="02:00"):
         button(self.app, "Adicionar horário").invoke()
         first, second = self.entries()

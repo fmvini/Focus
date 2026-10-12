@@ -1,3 +1,26 @@
+## 2026-10-11 — Fim da janela na agenda carregada
+
+### Implementado
+- Consulta da agenda na GUI mostra o fim efetivo da janela em andamento, unindo horários sobrepostos/adjacentes e continuação noturna/semanal. Cobertura semanal contínua aparece explicitamente, distinta de agenda inativa ou ainda não salva.
+- `current_block_end(windows, now)` puro e `AgendaStatus.current_end` consultam apenas baseline carregado/salvo, separados do rascunho e do estado do motor. Não mudam gates, bloqueadores, schema ou política de pausa/avisos.
+
+### Arquivos principais alterados
+- `core/scheduler.py`, `core/config_session.py`, `ui/config_gui.py`, `tests/test_schedule_end.py`, `tests/test_config_session.py`, `tests/test_config_gui.py`, `tests/test_config_gui_native.py`.
+- `README.md`, `docs/GUI_EDITOR_CONTRACT.md`, `docs/TEST_PLAN.md`, `docs/DEVELOPMENT_LOG.md`.
+
+### Decisões técnicas
+- Reutiliza união semanal recorrente, incluindo domingo/segunda, sem inferir fim pela lista finita de ocorrências. None representa intervalo ausente ou cobertura total; active distingue os casos. Horários locais ingênuos e precisão de minuto conforme scheduler.
+- Implementação pelo Maestro; agentes seguem parados por cota. Desenvolvimento contínuo autorizado pelo usuário; próximos lotes independentes seguem após esta unidade.
+
+### Estado atual
+- Suíte completa: **575 descobertos, 574 aprovados e 1 skip conhecido** symlink/WinError 1314, 41,137 s, Python 3.14.6/Windows. Quatorze nativeGUI e ícone real passaram. Núcleo/sessão anterior: 38 testes em 1,246 s, com referência independente por minuto em cenários fixos/aleatórios.
+- Oito novos testes scheduler, dois fluxos GUI e um nativeGUI; testes de sessão estendidos. AST 3.12/UTF-8 nos 54 arquivos, diff conferido. Unidade validada para commit conjunto; nenhum motor real ou processo/hosts do usuário alterado.
+- Runtime 3.12 e visual/DPI pendentes. Base anterior `b2ce8c6`.
+
+### Próximos passos
+- Próximo lote: revisão de regras para duplicatas/conflitos, sem alterar regras automaticamente.
+- Avisos/pausa/sites aguardam respostas em USER_ANSWERS.
+
 ## 2026-10-11 — Seleção múltipla de executáveis
 
 ### Implementado

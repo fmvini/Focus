@@ -5,12 +5,12 @@ Janelas ficam ocultas. Estes testes não substituem inspeção visual ou DPI.
 
 import importlib.util
 import json
-from datetime import date
+from datetime import date, datetime
 from pathlib import Path
 import shutil
 from types import SimpleNamespace
 import unittest
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 from uuid import uuid4
 
 from core.config import load_config
@@ -111,6 +111,17 @@ class NativeConfigGuiTests(unittest.TestCase):
         self.button(self.app, "Salvar").invoke()
         self.assertEqual(load_config(self.path).block_exes, ("game.exe",))
         self.assertEqual(load_config(self.path).extra, {"future": {"keep": True}})
+
+    def test_saved_agenda_end_with_real_widgets_and_stopped_motor(self):
+        self.app.geometry("880x660")
+        self.session.draft.add_window("22:00", "02:00", [6])
+        self.session.save()
+        with patch("ui.config_gui.datetime", SimpleNamespace(now=lambda: datetime(2026, 10, 12, 1))):
+            self.app.refresh_status(schedule=False)
+            self.app.update_idletasks()
+            self.assertEqual(self.app.end_label.cget("text"), "Fim da janela carregada: 12/10/2026 às 02:00")
+            self.assertEqual(self.app.runtime_title.cget("text"), "Motor parado")
+        self.assertEqual(self.controller.starts, 0)
 
     def test_first_setup_selected_suggestions_create_only_on_save_with_real_widgets(self):
         self.app.geometry("880x660")

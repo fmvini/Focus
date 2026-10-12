@@ -50,6 +50,10 @@ no [contrato de bandeja](TRAY_CONTRACT.md); fechar pelo X continua sair.
 - Consulta da agenda por timer Tk usa exclusivamente a última versão
   carregada/salva. Não representa confirmação de bloqueio aplicado, nem
   observa automaticamente alterações externas; Recarregar atualiza a leitura.
+- `AgendaStatus.current_end` identifica o fim da união em andamento pelo
+  calendário local. None com active false significa fora de janela; None com
+  active true significa cobertura semanal contínua. A GUI mostra o fim ou
+  essa distinção, separado do estado efetivo do motor e da prévia do rascunho.
 - Um watcher separado poderá ler o arquivo salvo no próximo ciclo. O editor
   não interrompe nem controla esse watcher, e fechá-lo não encerra o watcher.
 
@@ -84,10 +88,10 @@ a conferência final e o replace; não equivale a CAS/lock de escritores externo
 - `tests/test_config_gui.py`: callbacks de CRUD, validação e correção,
   categorias, salvamento, recarga e saída usando widgets simulados com JSON
   e repositório reais. Não valida renderização ou compatibilidade dos widgets.
-- `tests/test_config_gui_native.py`: treze smoke tests com CustomTkinter real
+- `tests/test_config_gui_native.py`: quatorze smoke tests com CustomTkinter real
   quando instalado, com janelas ocultas; não substituem inspeção visual.
 
-Na retomada de 2026-10-11, as dependências foram instaladas no `.venv` e os treze
+Na retomada de 2026-10-11, as dependências foram instaladas no `.venv` e os quatorze
 smoke tests nativos passaram sem erros de callbacks Tk. Controlador simulado,
 sem encerramentos reais. A janela de QA abriu com JSON isolado e alvos vazios,
 mas a captura falhou duas vezes por timeout; inspeção visual, DPI e rolagem em

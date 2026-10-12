@@ -8,13 +8,14 @@ from core.config import ConfigError, default_config
 from core.config_editor import ConfigDraft
 from core.config_portability import _new_destination, create_new_config, export_new_config
 from core.config_repository import read_snapshot, save_snapshot
-from core.scheduler import is_blocking, next_block_start
+from core.scheduler import current_block_end, is_blocking, next_block_start
 
 
 @dataclass(frozen=True)
 class AgendaStatus:
     active: bool
     next_start: datetime | None
+    current_end: datetime | None = None
 
 
 class ConfigSession:
@@ -71,4 +72,4 @@ class ConfigSession:
         if self.is_new:
             return AgendaStatus(False, None)
         windows = self.snapshot.config.windows
-        return AgendaStatus(is_blocking(windows, now), next_block_start(windows, now))
+        return AgendaStatus(is_blocking(windows, now), next_block_start(windows, now), current_block_end(windows, now))
