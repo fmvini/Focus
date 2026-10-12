@@ -10,6 +10,7 @@ from unittest.mock import patch
 from uuid import uuid4
 
 from core.config import ConfigError, load_config
+from core.models import AppConfig
 from core.config_repository import ConfigConflictError
 from core.config_session import ConfigSession
 
@@ -22,6 +23,153 @@ class ConfigSessionTests(unittest.TestCase):
         self.path = self.root / "config.json"
         self.path.write_text(json.dumps({"windows": [], "future": {"keep": ["ação", 12]}}), encoding="utf-8")
         self.session = ConfigSession(self.path)
+
+    def test_import_changed_json_types_is_dirty_keeps_baseline_and_saves_exact_types(self):
+        source = self.root / "import.json"
+        for before, after in ((True, 1), (False, 0), (1, 1.0), (0, 0.0), (1.0, True)):
+            with self.subTest(before=before, after=after):
+                self.path.write_text(json.dumps({"windows": [], "future": [{"value": before}]}), encoding="utf-8")
+                session = ConfigSession(self.path)
+                baseline = session.snapshot
+                original = self.path.read_bytes()
+                session.draft.add_rule("block_exes", "pending.exe")
+                session.draft.undo()
+                self.assertTrue(session.draft.can_redo)
+                source.write_text(json.dumps({"windows": [], "future": [{"value": after}]}), encoding="utf-8")
+                source_bytes = source.read_bytes()
+                session.import_config(source)
+                self.assertTrue(session.dirty)
+                self.assertFalse(session.is_new)
+                self.assertIs(session.snapshot, baseline)
+                self.assertIs(type(baseline.config.extra["future"][0]["value"]), type(before))
+                self.assertIs(type(session.draft.config.extra["future"][0]["value"]), type(after))
+                self.assertFalse(session.draft.can_undo)
+                self.assertFalse(session.draft.can_redo)
+                self.assertEqual(self.path.read_bytes(), original)
+                session.save()
+                self.assertFalse(session.dirty)
+                self.assertIs(type(load_config(self.path).extra["future"][0]["value"]), type(after))
+                self.assertIs(type(session.snapshot.config.extra["future"][0]["value"]), type(after))
+                self.assertEqual(session.snapshot.contents, self.path.read_bytes())
+                self.assertEqual(source.read_bytes(), source_bytes)
+
+    def test_typed_import_conflict_preserves_external_bytes_baseline_and_history(self):
+        self.path.write_bytes(b'{"windows":[],"future":{"flag":true}}')
+        session = ConfigSession(self.path)
+        baseline = session.snapshot
+        source = self.root / "import.json"
+        source.write_bytes(b'{"windows":[],"future":{"flag":1}}')
+        session.import_config(source)
+        draft = session.draft
+        draft.add_rule("block_exes", "redo.exe")
+        draft.undo()
+        external = b'{"windows":[],"future":{"external":0}}'
+        self.path.write_bytes(external)
+        with self.assertRaises(ConfigConflictError):
+            session.save()
+        self.assertTrue(session.dirty)
+        self.assertIs(session.snapshot, baseline)
+        self.assertIs(session.draft, draft)
+        self.assertTrue(draft.can_redo)
+        self.assertIs(type(draft.config.extra["future"]["flag"]), int)
+        self.assertIs(type(baseline.config.extra["future"]["flag"]), bool)
+        self.assertEqual(self.path.read_bytes(), external)
+        draft.redo()
+        self.assertEqual(draft.config.block_exes, ("redo.exe",))
+        session.reload()
+        self.assertFalse(session.dirty)
+        self.assertFalse(session.draft.can_redo)
+        self.assertFalse(session.draft.can_undo)
+        self.assertEqual(session.snapshot.contents, external)
+
+    def test_failed_typed_save_keeps_history_and_success_keeps_undo_dirty_against_saved_type(self):
+        self.path.write_bytes(b'{"windows":[],"future":{"flag":false}}')
+        session = ConfigSession(self.path)
+        baseline = session.snapshot
+        original = self.path.read_bytes()
+        draft = session.draft
+        draft.replace_config(AppConfig(extra={"future": {"flag": 0}}))
+        self.assertTrue(session.dirty)
+        with patch("core.config.os.replace", side_effect=PermissionError("denied")):
+            with self.assertRaises(ConfigError):
+                session.save()
+        self.assertIs(session.snapshot, baseline)
+        self.assertIs(session.draft, draft)
+        self.assertTrue(session.dirty)
+        self.assertEqual(self.path.read_bytes(), original)
+        draft.undo()
+        self.assertFalse(session.dirty)
+        self.assertIs(type(draft.config.extra["future"]["flag"]), bool)
+        draft.redo()
+        self.assertTrue(session.dirty)
+        session.save()
+        saved = self.path.read_bytes()
+        self.assertFalse(session.dirty)
+        self.assertTrue(draft.can_undo)
+        self.assertIs(type(session.snapshot.config.extra["future"]["flag"]), int)
+        draft.undo()
+        self.assertTrue(session.dirty)
+        self.assertEqual(self.path.read_bytes(), saved)
+        draft.redo()
+        self.assertFalse(session.dirty)
+        self.assertIs(type(draft.config.extra["future"]["flag"]), int)
+
+    def test_dirty_ignores_dict_order_but_preserves_list_order_and_json_types(self):
+        self.path.write_bytes(b'{"windows":[],"future":{"a":true,"b":[1,1.0]}}')
+        session = ConfigSession(self.path)
+        source = self.root / "import.json"
+        source.write_bytes(b'{"future":{"b":[1,1.0],"a":true},"windows":[]}')
+        session.import_config(source)
+        self.assertFalse(session.dirty)
+        source.write_bytes(b'{"future":{"b":[1.0,1],"a":true},"windows":[]}')
+        session.import_config(source)
+        self.assertTrue(session.dirty)
+
+    def test_dirty_never_revalidates_folder_environment_or_serializes(self):
+        variable = "FOCUS_DIRTY_ROOT"
+        with patch.dict(os.environ, {variable: r"C:\Games"}):
+            self.path.write_text(json.dumps({"windows": [], "block_folders": [rf"%{variable}%\Library"]}), encoding="utf-8")
+            session = ConfigSession(self.path)
+            session.draft.add_rule("block_exes", "game.exe")
+            session.draft.undo()
+        with patch.dict(os.environ, {}, clear=True), \
+                patch("core.config.config_to_dict", side_effect=AssertionError("validation")), \
+                patch("core.config.parse_config", side_effect=AssertionError("validation")), \
+                patch("core.config._serialize_config", side_effect=AssertionError("serialization")), \
+                patch.object(Path, "open", side_effect=AssertionError("IO")), \
+                patch.object(Path, "resolve", side_effect=AssertionError("discovery")):
+            self.assertFalse(session.dirty)
+            self.assertTrue(session.draft.can_redo)
+        # O restante das APIs mantém a validação de ambiente original.
+        with patch.dict(os.environ, {variable: r"C:\Games"}):
+            session.draft.redo()
+        with patch.dict(os.environ, {}, clear=True):
+            self.assertTrue(session.dirty)
+
+    def test_failed_import_and_reload_preserve_typed_draft_and_redo(self):
+        self.path.write_bytes(b'{"windows":[],"future":{"flag":true}}')
+        session = ConfigSession(self.path)
+        baseline = session.snapshot
+        draft = session.draft
+        draft.replace_config(AppConfig(extra={"future": {"flag": 1}}))
+        draft.add_rule("block_exes", "redo.exe")
+        draft.undo()
+        source = self.root / "invalid.json"
+        source.write_bytes(b"invalid")
+        with self.assertRaises(ConfigError):
+            session.import_config(source)
+        self.assertIs(session.draft, draft)
+        self.assertTrue(session.dirty)
+        self.assertTrue(draft.can_redo)
+        self.path.write_bytes(b"invalid external")
+        with self.assertRaises(ConfigError):
+            session.reload()
+        self.assertIs(session.snapshot, baseline)
+        self.assertIs(session.draft, draft)
+        self.assertTrue(session.dirty)
+        self.assertTrue(draft.can_redo)
+        self.assertIs(type(draft.config.extra["future"]["flag"]), int)
+        self.assertIs(type(baseline.config.extra["future"]["flag"]), bool)
 
     def test_edit_and_save_preserve_extras_and_publish_no_unrequested_fields(self):
         original = self.path.read_bytes()

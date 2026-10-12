@@ -70,6 +70,11 @@ class NativeConfigGuiTests(unittest.TestCase):
         self.app.tk.createcommand("bgerror", self.background_errors.append)
         self.app.report_callback_exception = lambda *error: self.background_errors.append(str(error))
         self.addCleanup(self.cleanup_app)
+        # Inicializa CTk antes de qualquer teste agendar parada/destruição.
+        # Seu primeiro mainloop prepara a barra de título com update interno;
+        # uma raiz já inicializada não reentra nessa etapa durante fechamento.
+        self.app.update()
+        self.assertEqual(self.background_errors, [])
 
     def cleanup_app(self):
         if self.app.modal is not None:
@@ -228,6 +233,125 @@ class NativeConfigGuiTests(unittest.TestCase):
         self.button(self.app, "Salvar").invoke()
         self.assertEqual(load_config(self.path).safelist_exes, ("Code.exe",))
         self.assertEqual(load_config(self.path).block_exes, ("game.exe",))
+
+    def test_folder_picker_cancel_error_and_late_modal_return_with_real_widgets(self):
+        import tkinter as tk
+
+        self.app.rule_category.set("Pastas")
+        self.app.edit_rule()
+        dialog = self.app.modal
+        dialog.withdraw()
+        entry = self.entries()[0]
+        entry.insert(0, r"C:\Keep")
+        choose = self.button(dialog, "Escolher pasta…")
+        original = self.session.draft.config
+        choose.invoke()
+        self.assertEqual(entry.get(), r"C:\Keep")
+        self.filedialog.askdirectory.side_effect = tk.TclError("dialog indisponível")
+        choose.invoke()
+        self.assertEqual(entry.get(), r"C:\Keep")
+        self.assertTrue(any("Não foi possível abrir o seletor de pasta" in widget.cget("text")
+                            for widget in self.descendants(dialog) if isinstance(widget, self.ctk.CTkLabel)))
+
+        def replace_modal(**kwargs):
+            self.button(dialog, "Cancelar").invoke()
+            self.app.edit_rule()
+            self.app.modal.withdraw()
+            return r"C:\Late"
+
+        self.filedialog.askdirectory.side_effect = replace_modal
+        choose.invoke()
+        self.assertIsNot(self.app.modal, dialog)
+        self.assertEqual(self.entries()[0].get(), "")
+        self.assertFalse(self.app.picker_active)
+        self.assertEqual(self.session.draft.config, original)
+        self.assertEqual(self.background_errors, [])
+
+    def test_folder_picker_late_return_after_close_has_no_tcl_error(self):
+        self.app.rule_category.set("Pastas")
+        self.app.edit_rule()
+        self.app.modal.withdraw()
+        choose = self.button(self.app.modal, "Escolher pasta…")
+
+        def close_during_picker(**kwargs):
+            self.assertTrue(self.app.picker_active)
+            self.app.close_editor()
+            return r"C:\Late"
+
+        self.filedialog.askdirectory.side_effect = close_during_picker
+        choose.invoke()
+        self.assertTrue(self.app.closed)
+        self.assertFalse(self.app.picker_active)
+        self.assertEqual(self.session.draft.config.block_folders, ())
+        self.assertEqual(self.background_errors, [])
+
+    def test_import_bool_to_int_extra_prompts_on_close_and_saves_integer_with_real_widgets(self):
+        original = self.path.read_bytes()
+        source = self.root / "import.json"
+        source.write_text(json.dumps({"windows": [], "future": {"keep": 1}}), encoding="utf-8")
+        self.filedialog.askopenfilename.return_value = str(source)
+        self.messages.askyesno.return_value = True
+        self.button(self.app, "Importar JSON").invoke()
+        self.assertTrue(self.session.dirty)
+        self.assertIs(type(self.session.draft.config.extra["future"]["keep"]), int)
+        self.assertIn("Alterações não salvas", self.app.dirty_label.cget("text"))
+        self.messages.askyesnocancel.return_value = None
+        self.app.close_editor()
+        self.messages.askyesnocancel.assert_called_once()
+        self.assertFalse(self.app.closed)
+        self.assertEqual(self.path.read_bytes(), original)
+        self.button(self.app, "Salvar").invoke()
+        self.assertFalse(self.session.dirty)
+        self.assertIs(type(load_config(self.path).extra["future"]["keep"]), int)
+        self.assertEqual(self.controller.starts, 0)
+        self.assertEqual(self.background_errors, [])
+
+    def test_pending_tray_ready_during_file_pickers_keeps_native_root_visible_intent(self):
+        self.app.geometry("880x660")
+        original = self.path.read_bytes()
+        for kind in ("exe", "import", "export", "folder"):
+            with self.subTest(kind=kind):
+                self.app.tray_ready = False
+                self.tray.alive = False
+                self.app.send_to_tray()
+                self.assertTrue(self.app.tray_pending)
+
+                def nested_picker(**kwargs):
+                    self.assertTrue(self.app.picker_active)
+                    self.mailbox.post("ready")
+                    self.app.refresh_status(schedule=False)
+                    self.app.send_to_tray()
+                    self.assertFalse(self.app.tray_hidden)
+                    self.assertFalse(self.app.tray_pending)
+                    self.assertTrue(self.app.restore_requested)
+                    self.assertIn("Termine a seleção", self.app.feedback.cget("text"))
+                    self.assertEqual(self.app.start_button.cget("state"), "disabled")
+                    self.assertEqual(self.app.undo_button.cget("state"), "disabled")
+                    return () if kind == "exe" else ""
+
+                if kind == "exe":
+                    self.filedialog.askopenfilenames.side_effect = nested_picker
+                    self.app.select_executables()
+                elif kind == "import":
+                    self.filedialog.askopenfilename.side_effect = nested_picker
+                    self.app.import_config()
+                elif kind == "export":
+                    self.filedialog.asksaveasfilename.side_effect = nested_picker
+                    self.app.export_config()
+                else:
+                    self.app.rule_category.set("Pastas")
+                    self.app.edit_rule()
+                    self.app.modal.withdraw()
+                    self.filedialog.askdirectory.side_effect = nested_picker
+                    self.button(self.app.modal, "Escolher pasta…").invoke()
+                    self.button(self.app.modal, "Cancelar").invoke()
+                self.assertFalse(self.app.picker_active)
+                self.mailbox.post("ready")
+                self.app.refresh_status(schedule=False)
+                self.assertFalse(self.app.tray_hidden)
+                self.assertEqual(self.path.read_bytes(), original)
+                self.assertEqual(self.controller.starts, 0)
+        self.assertEqual(self.background_errors, [])
 
     def test_modal_validation_and_window_edit_roundtrip(self):
         self.button(self.app, "Adicionar horário").invoke()

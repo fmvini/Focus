@@ -15,6 +15,40 @@ from core.models import AppConfig
 
 
 class ConfigHistoryTests(unittest.TestCase):
+    def test_replace_changes_numeric_json_types_and_undo_redo_restore_exact_types(self):
+        for before, after in ((True, 1), (False, 0), (1, 1.0), (0, 0.0), (1.0, True)):
+            with self.subTest(before=before, after=after):
+                draft = ConfigDraft(AppConfig(extra={"future": {"values": [before]}}))
+                draft.replace_config(AppConfig(extra={"future": {"values": [after]}}))
+                self.assertIs(type(draft.config.extra["future"]["values"][0]), type(after))
+                self.assertTrue(draft.can_undo)
+                self.assertFalse(draft.can_redo)
+                self.assertTrue(draft.undo())
+                self.assertIs(type(draft.config.extra["future"]["values"][0]), type(before))
+                self.assertTrue(draft.redo())
+                self.assertIs(type(draft.config.extra["future"]["values"][0]), type(after))
+
+    def test_real_dict_reorder_noop_preserves_redo_but_type_change_creates_branch(self):
+        draft = ConfigDraft(AppConfig(extra={"future": {"a": True, "b": [0.0]}}))
+        draft.add_rule("block_exes", "old-branch.exe")
+        draft.undo()
+        reordered = AppConfig(extra={"future": {"b": [0.0], "a": True}})
+        draft.replace_config(reordered)
+        self.assertTrue(draft.can_redo)
+        self.assertFalse(draft.can_undo)
+        with self.assertRaises(ConfigError):
+            draft.replace_config(AppConfig(extra=reordered.extra, block_exes=("invalid",)))
+        self.assertTrue(draft.can_redo)
+        draft.replace_config(AppConfig(extra={"future": {"b": [0.0], "a": 1}}))
+        self.assertFalse(draft.can_redo)
+        self.assertFalse(draft.redo())
+        self.assertTrue(draft.can_undo)
+        draft.undo()
+        self.assertIs(type(draft.config.extra["future"]["a"]), bool)
+        draft.redo()
+        self.assertIs(type(draft.config.extra["future"]["a"]), int)
+        self.assertEqual(draft.config.block_exes, ())
+
     def test_initial_history_empty_and_public_copies_cannot_mutate_restored_state(self):
         source = AppConfig(extra={"future": {"values": [1]}})
         draft = ConfigDraft(source)

@@ -5,6 +5,7 @@ from datetime import datetime
 from pathlib import Path
 
 from core.config import ConfigError, default_config
+from core.config_comparison import configs_equal
 from core.config_editor import ConfigDraft
 from core.config_portability import _new_destination, create_new_config, export_new_config
 from core.config_repository import read_snapshot, save_snapshot
@@ -44,7 +45,7 @@ class ConfigSession:
 
     @property
     def dirty(self) -> bool:
-        return self.is_new or self.draft.config != self.snapshot.config
+        return self.is_new or not configs_equal(self.draft.config, self.snapshot.config)
 
     def save(self) -> None:
         # Mesmo sem alterações, conferir o baseline: não ocultar conflito externo.

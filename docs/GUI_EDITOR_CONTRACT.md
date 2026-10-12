@@ -81,6 +81,15 @@ adota somente o snapshot retornado após sucesso; `reload()` só publica a nova
 sessão após leitura/validação completas. `agenda_status(now)` retorna estado
 e próximo início do baseline, sem efeitos de sistema.
 
+A comparação de conteúdo distingue os tipos JSON em extras aninhados:
+importar `true` para `1` indica alteração pendente e fechar pede a decisão
+de salvar/descartar/cancelar. Ordem de chaves não cria alteração artificial.
+Todos os seletores mantêm uma guarda durante seu loop nativo, impedindo
+ocultação na bandeja e início/restauração do rascunho. Abrir um seletor cancela
+a intenção anterior de ocultar; um ready tardio exige novo Enviar à bandeja.
+O seletor de pastas descarta retorno após fechar/substituir seu formulário,
+antes de acessar os campos; falha de abertura é informada sem alterar draft.
+
 `ui/config_gui.py` importa CustomTkinter/Tk somente na execução de `--gui`.
 A fábrica `_build_app` recebe toolkit, diálogos, sessão e controlador opcional
 para testar os callbacks com arquivos reais sem dependência gráfica. Abertura
@@ -104,10 +113,10 @@ a conferência final e o replace; não equivale a CAS/lock de escritores externo
 - `tests/test_config_gui.py`: callbacks de CRUD, validação e correção,
   categorias, salvamento, recarga e saída usando widgets simulados com JSON
   e repositório reais. Não valida renderização ou compatibilidade dos widgets.
-- `tests/test_config_gui_native.py`: dezesseis smoke tests com CustomTkinter real
+- `tests/test_config_gui_native.py`: vinte smoke tests com CustomTkinter real
   quando instalado, com janelas ocultas; não substituem inspeção visual.
 
-Na retomada de 2026-10-11, as dependências foram instaladas no `.venv` e os dezesseis
+Na retomada de 2026-10-11, as dependências foram instaladas no `.venv` e os vinte
 smoke tests nativos passaram sem erros de callbacks Tk. Controlador simulado,
 sem encerramentos reais. A janela de QA abriu com JSON isolado e alvos vazios,
 mas a captura falhou duas vezes por timeout; inspeção visual, DPI e rolagem em

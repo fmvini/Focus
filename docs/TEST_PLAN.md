@@ -2,6 +2,22 @@
 
 Fonte: [escopo](Focus%20Blocker_%20escopo%20do%20projeto.md), [requisitos](REQUIREMENTS.md) e [decisões](DECISIONS.md). Fases 1/2: 206 testes OK em Python 3.14.6/psutil 7.2.2 por `.venv/Scripts/python.exe -B -m unittest discover -s tests` (10,542 s). Sintaxe 3.12 dos 18 arquivos Python conferida; runtime 3.12 ainda não executado. Encerramentos reais e fases posteriores continuam pendentes.
 
+## Evidência das correções do editor e runtime 3.12 — 2026-10-11
+
+- Suíte integrada em ambos runtimes: **636 descobertos, 635 aprovados e um skip conhecido** symlink/WinError 1314. Python 3.14.6: 79,903 s; Python 3.12.14: 103,041 s, Windows AMD64. Vinte nativeGUI/ícone real/guardas passaram. Carregamento explícito dos `test_*.py` com exceção apenas de `test_config_diff.py`, ainda em implementação; todas as unidades já integradas foram executadas.
+- Quinze novos testes comparison/history/session cobrem tipos JSON aninhados, dict reorder, listas ordenadas, no-op/branch, Undo/Redo, baseline/import/save/conflito/falha/retry e comparação sem IO/serialização/revalidação ambiental. Dez novos GUI (seis fake/quatro nativos) cobrem tipo importado/dirty/prompt/save, pasta com retorno após fechar/substituir modal/root, falha/retry e ready durante/depois de todos os seletores.
+- Fixture nativeGUI inicializa CTk por `update` antes de agendar destruição, mantendo asserts de bgerrors/after. Duas falhas intermitentes anteriores foram repetidas três vezes cada e passaram; as suítes integradas passaram sem suprimir erro ou adicionar skip.
+- Python 3.12.14 foi provisionado dentro de `.qa/`, sem alterar registro/PATH, conforme [documentação do uv](https://docs.astral.sh/uv/concepts/python-versions/). As dependências vêm do mesmo `requirements.txt`; `.venv` continua em 3.14.6. Reprodução no PowerShell, a partir da raiz:
+
+```powershell
+uv python install 3.12.14 --install-dir .qa\python --cache-dir .qa\cache --no-bin --no-registry --no-config
+uv venv .qa\venv312 --python .qa\python\cpython-3.12.14-windows-x86_64-none\python.exe --no-python-downloads --no-project --no-config --cache-dir .qa\cache
+uv pip install --python .qa\venv312\Scripts\python.exe -r requirements.txt --cache-dir .qa\cache --link-mode copy --no-config
+.qa\venv312\Scripts\python.exe -B -m unittest discover -s tests
+```
+
+- Nenhum processo/hosts/configuração do usuário alterado. QA usa fixtures UUID próprias e controladores/adaptadores fake, salvo smoke isolado do ícone/mutexes. Runtime 3.12 comprovado para esses testes; interação visual/DPI permanece pendente.
+
 ## Evidência da revisão pela CLI — 2026-10-11
 
 - Oito testes novos verificam `--review` somente leitura, contagens/índices humanos, apontamentos informativos com retorno 0, JSON inválido/ausente sem recuperação, modos incompatíveis antes de IO/import, caminho padrão/callback, interrupção e import lazy em subprocesso sem GUI/psutil/controller. Saída cp1252 com caminho Unicode retorna erro explícito 1, preservando JSON UTF-8. Seleção relevante de 79 testes passou em 3,122 s; revisão independente Backend concluída e achado de encoding corrigido.

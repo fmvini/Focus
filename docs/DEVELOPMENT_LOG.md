@@ -1,3 +1,29 @@
+## 2026-10-11 — Preservação de edições JSON e seletores seguros
+
+### Implementado
+- Comparação estrutural tipada compartilhada entre dirty e no-op: diferenças bool/int/float em extras aninhados são edições reais, com Undo/Redo e prompt de saída corretos. Ordem de chaves continua irrelevante; listas, regras e dias mantêm ordem/duplicatas.
+- Guarda única durante todos os seletores impede ocultação na bandeja, início e restauração do histórico. Abrir seletor cancela intenção pendente de ocultar, inclusive ready tardio. Retorno de pasta após fechar/substituir formulário é descartado antes de tocar widgets; falhas TclError são informadas no contexto ainda válido.
+- Fixture nativa inicializa CTk antes de agendar fechamento; mantém assertions de bgerror/after e não suprime exceções.
+
+### Arquivos principais alterados
+- `core/config_comparison.py`, `core/config_editor.py`, `core/config_session.py`.
+- `ui/config_gui.py`, `tests/test_config_comparison.py`, `tests/test_config_history.py`, `tests/test_config_session.py`, `tests/test_config_gui.py`, `tests/test_config_gui_native.py`.
+- `.gitignore`, `README.md`, `docs/CONFIG_EDITOR_CONTRACT.md`, `docs/GUI_EDITOR_CONTRACT.md`, `docs/TEST_PLAN.md`, `docs/DEVELOPMENT_LOG.md`.
+
+### Decisões técnicas
+- Comparador puro de modelos/extras JSON acíclicos, sem serialização, validação ambiental, IO ou descoberta. Validação e conflito por bytes continuam nas APIs existentes; não há igualdade redefinida globalmente em AppConfig.
+- Banco e Frontend implementaram arquivos exclusivos; Maestro revisa/integra e mantém docs/commit. Backend já desenvolve diff em dois arquivos separados, fora desta unidade e das suítes de integração em andamento.
+- Python 3.12.14 instalado por uv em `.qa/`, sem registro/PATH, com ambiente virtual e dependências fixadas do projeto; diretório de QA ignorado. O `.venv` Python 3.14.6 permanece disponível.
+
+### Estado atual
+- Banco: 122 testes, 121 aprovados e um skip conhecido, 7,688 s. Frontend: 104 aprovados/zero skips, incluindo 20 nativeGUI, 35,428 s; os dois smokes instáveis passaram três vezes cada, 6 testes/17,199 s.
+- Suítes integradas: **636 descobertos, 635 aprovados e um skip conhecido** em ambos runtimes: Python 3.14.6/79,903 s e Python 3.12.14/103,041 s, Windows AMD64. Todos os 20 nativeGUI, ícone real e mutexes passaram; apenas diff ainda não entregue foi excluído antes de carregar módulos. A compatibilidade runtime 3.12 foi verificada, além de AST/UTF-8.
+- Nenhum processo/hosts/configuração do usuário alterado; inspeção visual/DPI permanece pendente. Base `83d78cc`; arquivos desta unidade revisados e preparados para commit conjunto.
+
+### Próximos passos
+- Integrar diff legível do baseline para o rascunho em nova unidade e repetir a suíte com o módulo novo após congelamento.
+- Avisos/pausa/sites continuam aguardando decisões em USER_ANSWERS.
+
 ## 2026-10-11 — Revisão da configuração pela CLI
 
 ### Implementado

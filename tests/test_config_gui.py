@@ -301,6 +301,145 @@ class ConfigGuiFlowTests(unittest.TestCase):
         self.assertEqual(self.session.draft.config.safelist_exes, ())
         self.assertIn("rascunho de bloqueio", self.app.feedback.options["text"])
 
+    def test_pending_tray_ready_during_any_picker_and_after_return_never_hides_root(self):
+        original = self.path.read_bytes()
+        for kind in ("exe", "import", "export", "folder"):
+            with self.subTest(kind=kind):
+                self.app.tray_ready = False
+                self.tray.alive = False
+                self.app.send_to_tray()
+
+                def nested_picker(**kwargs):
+                    self.assertTrue(self.app.picker_active)
+                    self.mailbox.post("ready")
+                    self.fire_timer(self.app.status_timer)
+                    self.app.send_to_tray()
+                    self.assertFalse(self.app.options["hidden"])
+                    self.assertFalse(self.app.tray_pending)
+                    self.assertIn("Termine a seleção", self.app.feedback.options["text"])
+                    self.assertEqual(self.app.start_button.options["state"], "disabled")
+                    self.assertEqual(self.app.undo_button.options["state"], "disabled")
+                    return () if kind == "exe" else ""
+
+                if kind == "exe":
+                    self.filedialog.askopenfilenames.side_effect = nested_picker
+                    self.app.select_executables()
+                elif kind == "import":
+                    self.filedialog.askopenfilename.side_effect = nested_picker
+                    self.app.import_config()
+                elif kind == "export":
+                    self.filedialog.asksaveasfilename.side_effect = nested_picker
+                    self.app.export_config()
+                else:
+                    self.app.rule_category.set("Pastas")
+                    self.app.edit_rule()
+                    self.filedialog.askdirectory.side_effect = nested_picker
+                    button(self.app.modal, "Escolher pasta…").invoke()
+                    button(self.app.modal, "Cancelar").invoke()
+                self.assertFalse(self.app.picker_active)
+                self.mailbox.post("ready")
+                self.fire_timer(self.app.status_timer)
+                self.assertFalse(self.app.options["hidden"])
+                self.assertEqual(self.path.read_bytes(), original)
+                self.assertEqual(self.controller.starts, 0)
+        self.app.send_to_tray()
+        self.assertTrue(self.app.tray_hidden)
+
+    def test_folder_picker_error_preserves_entry_and_draft_then_retry_succeeds(self):
+        self.app.rule_category.set("Pastas")
+        self.app.edit_rule()
+        entry = self.entries()[0]
+        entry.insert(0, r"C:\Keep")
+        before = self.session.draft.config
+        self.filedialog.askdirectory.side_effect = self.tk.TclError("dialog unavailable")
+        button(self.app.modal, "Escolher pasta…").invoke()
+        self.assertEqual(entry.get(), r"C:\Keep")
+        self.assertEqual(self.session.draft.config, before)
+        self.assertIn("Não foi possível abrir o seletor de pasta", self.labels(self.app.modal))
+        self.assertFalse(self.app.picker_active)
+        self.filedialog.askdirectory.side_effect = None
+        button(self.app.modal, "Escolher pasta…").invoke()
+        self.assertEqual(entry.get(), r"C:\Games")
+        self.assertEqual(self.session.draft.config, before)
+
+    def test_folder_picker_discards_return_when_modal_was_closed_or_replaced(self):
+        self.app.rule_category.set("Pastas")
+        for replace in (False, True):
+            with self.subTest(replace=replace):
+                self.app.edit_rule()
+                dialog = self.app.modal
+                entry = self.entries()[0]
+                entry.insert(0, r"C:\Keep")
+
+                def close_modal(**kwargs):
+                    button(dialog, "Cancelar").invoke()
+                    if replace:
+                        self.app.edit_rule()
+                    return r"C:\Late"
+
+                self.filedialog.askdirectory.side_effect = close_modal
+                button(dialog, "Escolher pasta…").invoke()
+                self.assertEqual(entry.get(), r"C:\Keep")
+                self.assertFalse(self.app.picker_active)
+                self.assertEqual(self.session.draft.config.block_folders, ())
+                if replace:
+                    self.assertIsNot(self.app.modal, dialog)
+                    self.assertEqual(self.entries()[0].get(), "")
+                    button(self.app.modal, "Cancelar").invoke()
+
+    def test_folder_picker_late_return_after_close_never_touches_entry(self):
+        self.app.rule_category.set("Pastas")
+        self.app.edit_rule()
+        dialog = self.app.modal
+        entry = self.entries()[0]
+        entry.insert(0, r"C:\Keep")
+
+        def close_app(**kwargs):
+            self.app.close_editor()
+            return r"C:\Late"
+
+        self.filedialog.askdirectory.side_effect = close_app
+        button(dialog, "Escolher pasta…").invoke()
+        self.assertTrue(self.app.closed)
+        self.assertEqual(entry.get(), r"C:\Keep")
+        self.assertFalse(self.app.picker_active)
+        self.assertEqual(self.session.draft.config.block_folders, ())
+
+    def test_import_export_picker_errors_preserve_draft_feedback_and_busy_state(self):
+        before = self.session.draft.config
+        for choose, action in ((self.filedialog.askopenfilename, self.app.import_config),
+                               (self.filedialog.asksaveasfilename, self.app.export_config)):
+            with self.subTest(action=action.__name__):
+                choose.side_effect = self.tk.TclError("dialog unavailable")
+                action()
+                self.assertIn("Não foi possível abrir o seletor", self.app.feedback.options["text"])
+                self.assertEqual(self.session.draft.config, before)
+                self.assertFalse(self.app.picker_active)
+
+    def test_import_extra_bool_to_int_is_dirty_and_prompts_before_close_then_saves_type(self):
+        self.path.write_text(json.dumps({"windows": [], "future": {"keep": True}}), encoding="utf-8")
+        self.session.reload()
+        self.app.render()
+        original = self.path.read_bytes()
+        self.import_source(future={"keep": 1})
+        self.app.import_config()
+        self.assertTrue(self.session.dirty)
+        self.assertIs(type(self.session.draft.config.extra["future"]["keep"]), int)
+        self.assertIn("Alterações não salvas", self.app.dirty_label.options["text"])
+        self.messages.askyesnocancel.return_value = None
+        self.app.close_editor()
+        self.messages.askyesnocancel.assert_called_once()
+        self.assertFalse(self.app.closed)
+        self.assertEqual(self.path.read_bytes(), original)
+        self.assertEqual(self.controller.starts, 0)
+        self.assertTrue(self.app.save_config())
+        self.assertFalse(self.session.dirty)
+        self.assertIs(type(load_config(self.path).extra["future"]["keep"]), int)
+        self.messages.askyesnocancel.reset_mock()
+        self.app.close_editor()
+        self.messages.askyesnocancel.assert_not_called()
+        self.assertTrue(self.app.closed)
+
     def test_current_agenda_end_uses_saved_union_not_draft_and_updates_after_save(self):
         now = real_datetime(2026, 10, 12, 10)
         self.session.draft.add_window("09:00", "11:00", [0])

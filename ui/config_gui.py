@@ -135,6 +135,7 @@ def _build_app(ctk, tk, filedialog, messagebox, session, controller=None, tray=N
             self.controller = controller
             self.stop_requested = False
             self.selecting_executables = False
+            self.picker_active = False
             self.tray = tray
             self.mailbox = mailbox
             self.tray_pending = self.tray_ready = self.tray_hidden = False
@@ -379,7 +380,7 @@ def _build_app(ctk, tk, filedialog, messagebox, session, controller=None, tray=N
             self.update_runtime()
 
         def update_history(self):
-            enabled = not self.closing and self.modal is None and not self.selecting_executables
+            enabled = not self.closing and self.modal is None and not self.picker_active and not self.selecting_executables
             self.undo_button.configure(state="normal" if enabled and session.draft.can_undo else "disabled")
             self.redo_button.configure(state="normal" if enabled and session.draft.can_redo else "disabled")
 
@@ -390,7 +391,7 @@ def _build_app(ctk, tk, filedialog, messagebox, session, controller=None, tray=N
             return self.change_history(redo=True)
 
         def change_history(self, *, redo):
-            if self.closing or self.closed or self.modal is not None or self.selecting_executables:
+            if self.closing or self.closed or self.modal is not None or self.picker_active or self.selecting_executables:
                 return False
             try:
                 changed = session.draft.redo() if redo else session.draft.undo()
@@ -406,7 +407,7 @@ def _build_app(ctk, tk, filedialog, messagebox, session, controller=None, tray=N
             return True
 
         def history_shortcut(self, event, *, redo):
-            if self.closing or self.closed or self.modal is not None or self.selecting_executables:
+            if self.closing or self.closed or self.modal is not None or self.picker_active or self.selecting_executables:
                 return None
             widget = getattr(event, "widget", None)
             if widget is not None:
@@ -472,7 +473,12 @@ def _build_app(ctk, tk, filedialog, messagebox, session, controller=None, tray=N
                 self.modal.lift()
 
         def send_to_tray(self):
-            if self.closing or self.closed or self.modal is not None or self.tray_pending:
+            if self.closing or self.closed:
+                return
+            if self.picker_active:
+                self.notify("Termine a seleção antes de enviar à bandeja.")
+                return
+            if self.modal is not None or self.tray_pending:
                 return
             if self.tray_stopping and tray.is_alive():
                 self.notify("Aguarde a bandeja terminar antes de tentar novamente.", error=True)
@@ -489,6 +495,10 @@ def _build_app(ctk, tk, filedialog, messagebox, session, controller=None, tray=N
 
         def hide_to_tray(self):
             if not self.tray_pending or not self.tray_ready or self.tray_stopping or self.closing:
+                return
+            if self.picker_active:
+                self.restore_window()
+                self.notify("Termine a seleção antes de enviar à bandeja.")
                 return
             if self.modal is not None:
                 self.restore_window()
@@ -546,14 +556,14 @@ def _build_app(ctk, tk, filedialog, messagebox, session, controller=None, tray=N
                 self.runtime_detail_text = view.detail
             self.start_button.configure(state="normal" if (
                 view.start_enabled and not alive and self.modal is None and not self.closing
-                and not session.is_new and not self.selecting_executables
+                and not session.is_new and not self.picker_active and not self.selecting_executables
             ) else "disabled")
             self.stop_button.configure(state="normal" if view.stop_enabled and not self.closing else "disabled")
             self.update_history()
 
         def start_runtime(self):
             if (self.closing or self.closed or self.modal is not None or controller.is_alive()
-                    or self.selecting_executables):
+                    or self.picker_active or self.selecting_executables):
                 return
             if session.is_new:
                 self.notify("Crie a configuração clicando em Salvar antes de iniciar.", error=True)
@@ -732,8 +742,23 @@ def _build_app(ctk, tk, filedialog, messagebox, session, controller=None, tray=N
                 ctk.CTkLabel(self.rules_list, text="Nenhuma regra corresponde à busca nesta categoria.",
                              text_color=muted).grid(row=0, column=0, pady=45)
 
+        def open_picker(self, choose, **options):
+            # Desfaz a intenção anterior de ocultar, inclusive ready que só
+            # chegar depois do retorno do seletor. Enviar continua explícito.
+            if self.tray_pending:
+                self.restore_window()
+                self.notify("Termine a seleção antes de enviar à bandeja.")
+            self.picker_active = True
+            self.update_runtime()
+            try:
+                return choose(**options)
+            finally:
+                self.picker_active = False
+                if not self.closing and not self.closed:
+                    self.update_runtime()
+
         def select_executables(self):
-            if self.closing or self.closed or self.modal is not None or self.selecting_executables:
+            if self.closing or self.closed or self.modal is not None or self.picker_active or self.selecting_executables:
                 return
             field = rule_fields[self.rule_category.get()]
             if field not in {"block_exes", "safelist_exes"}:
@@ -742,7 +767,7 @@ def _build_app(ctk, tk, filedialog, messagebox, session, controller=None, tray=N
             self.executable_picker.configure(state="disabled")
             self.update_runtime()
             try:
-                selected = filedialog.askopenfilenames(
+                selected = self.open_picker(filedialog.askopenfilenames,
                     parent=self,
                     title=("Selecionar executáveis para bloquear por nome" if field == "block_exes"
                            else "Selecionar executáveis para proteção adicional"),
@@ -888,12 +913,18 @@ def _build_app(ctk, tk, filedialog, messagebox, session, controller=None, tray=N
                     contains.insert(0, value.contains)
             elif field == "block_folders":
                 def choose_folder():
-                    if self.closing or self.closed:
+                    if self.closing or self.closed or self.modal is not dialog or self.picker_active:
                         return
-                    chosen = filedialog.askdirectory(parent=dialog, title="Selecionar pasta")
-                    if chosen:
-                        name.delete(0, "end")
-                        name.insert(0, str(Path(chosen)))
+                    try:
+                        chosen = self.open_picker(filedialog.askdirectory, parent=dialog, title="Selecionar pasta")
+                    except tk.TclError as exc:
+                        if not self.closing and not self.closed and self.modal is dialog:
+                            error.configure(text=f"Não foi possível abrir o seletor de pasta: {exc}")
+                        return
+                    if not chosen or self.closing or self.closed or self.modal is not dialog:
+                        return
+                    name.delete(0, "end")
+                    name.insert(0, str(Path(chosen)))
                 ctk.CTkButton(form, text="Escolher pasta…", fg_color=accent,
                               command=choose_folder).grid(row=2, column=0, sticky="w")
             ctk.CTkLabel(form, text=descriptions[field], text_color=muted, wraplength=500, justify="left"
@@ -913,10 +944,15 @@ def _build_app(ctk, tk, filedialog, messagebox, session, controller=None, tray=N
             dialog.startup_timers.append(dialog.after(150, name.focus_set))
 
         def import_config(self):
-            if self.closing or self.closed or self.modal is not None:
+            if self.closing or self.closed or self.modal is not None or self.picker_active:
                 return
-            selected = filedialog.askopenfilename(parent=self, title="Importar configuração JSON",
-                                                  filetypes=[("Configuração JSON", "*.json"), ("Todos os arquivos", "*.*")])
+            try:
+                selected = self.open_picker(filedialog.askopenfilename, parent=self, title="Importar configuração JSON",
+                                            filetypes=[("Configuração JSON", "*.json"), ("Todos os arquivos", "*.*")])
+            except tk.TclError as exc:
+                if not self.closing and not self.closed:
+                    self.notify(f"Não foi possível abrir o seletor de importação: {exc}", error=True)
+                return
             if not selected or self.closing or self.closed:
                 return
             if not messagebox.askyesno(
@@ -936,12 +972,17 @@ def _build_app(ctk, tk, filedialog, messagebox, session, controller=None, tray=N
             self.notify("JSON importado no rascunho. Clique em Salvar para gravar a configuração ativa.")
 
         def export_config(self):
-            if self.closing or self.closed or self.modal is not None:
+            if self.closing or self.closed or self.modal is not None or self.picker_active:
                 return
-            selected = filedialog.asksaveasfilename(
-                parent=self, title="Exportar rascunho para um novo JSON", defaultextension=".json",
-                filetypes=[("Configuração JSON", "*.json")], confirmoverwrite=False
-            )
+            try:
+                selected = self.open_picker(filedialog.asksaveasfilename,
+                    parent=self, title="Exportar rascunho para um novo JSON", defaultextension=".json",
+                    filetypes=[("Configuração JSON", "*.json")], confirmoverwrite=False
+                )
+            except tk.TclError as exc:
+                if not self.closing and not self.closed:
+                    self.notify(f"Não foi possível abrir o seletor de exportação: {exc}", error=True)
+                return
             if not selected or self.closing or self.closed:
                 return
             try:

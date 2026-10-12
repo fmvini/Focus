@@ -6,6 +6,7 @@ import ntpath
 import os
 
 from core.config import ConfigError, config_to_dict, parse_config
+from core.config_comparison import configs_equal
 from core.models import AppConfig
 
 
@@ -84,7 +85,7 @@ class ConfigDraft:
     def _accept(self, candidate: dict) -> None:
         # Publicar somente após validação completa: erros mantêm a versão atual.
         validated = parse_config(candidate)
-        if validated == self._config:
+        if configs_equal(validated, self._config):
             return
         self._undo.append(self._config)
         self._redo.clear()

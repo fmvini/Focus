@@ -26,6 +26,10 @@ Evolução de edição reversível: menu principal **6 desfazer / 7 refazer**, u
 Até 50 edições em memória; operações inválidas/no-op preservam histórico,
 edição nova após undo descarta redo, e restauração revalida antes de mover
 stacks. `replace_config(config)` publica lote como uma edição reversível.
+No-op e dirty usam `core.config_comparison.configs_equal`: comparação
+estrutural distingue bool/int/float nos extras, inclusive aninhados, ignora
+ordem de chaves de objetos e preserva ordem de listas. Não serializa nem
+revalida ambiente/caminhos; validação continua nas operações de edição.
 Save mantém histórico, reload bem-sucedido cria draft novo sem histórico.
 Restauração não grava; EOF/Ctrl+C/saída continuam descartando edições pendentes.
 
