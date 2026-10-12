@@ -2,6 +2,12 @@
 
 Fonte: [escopo](Focus%20Blocker_%20escopo%20do%20projeto.md), [requisitos](REQUIREMENTS.md) e [decisões](DECISIONS.md). Fases 1/2: 206 testes OK em Python 3.14.6/psutil 7.2.2 por `.venv/Scripts/python.exe -B -m unittest discover -s tests` (10,542 s). Sintaxe 3.12 dos 18 arquivos Python conferida; runtime 3.12 ainda não executado. Encerramentos reais e fases posteriores continuam pendentes.
 
+## Evidência da revisão do rascunho — 2026-10-11
+
+- Suíte completa escalada: **587 descobertos, 586 aprovados e um skip** symlink/WinError 1314, 42,744 s. Quinze nativeGUI e ícone real passaram; AST 3.12/UTF-8 nos 57 arquivos e links/diff conferidos.
+- Nove testes reviewer: índices/ordem original, duplicatas casefold das quatro listas/horários com dias reordenados, pares literais sem trim/alias de pasta presumido, proteções obrigatórias/adicionais, Java por nome, contagens cadastradas, invalid input, frozen/pureza/import lazy e catálogo idêntico ao motor.
+- Dois fluxos GUI e nativeGUI readonly/scroll em 880×660 verificam atualização do rascunho sem IO, limites de detalhes/lista longa e ausência de bloqueio de Save/Iniciar por apontamentos. Regressões de motor/adapter e dispatch/lazy passaram. Não consulta processos ou instalações; runtime 3.12 e visual/DPI permanecem pendentes.
+
 ## Evidência do fim da agenda — 2026-10-11
 
 - Suíte completa fora do sandbox: **575 descobertos, 574 aprovados, um skip** de symlink/WinError 1314, 41,137 s. Quatorze nativeGUI e ícone real passaram em Python 3.14.6/Windows; AST 3.12/UTF-8 nos 54 arquivos conferidos.

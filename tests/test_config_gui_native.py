@@ -123,6 +123,19 @@ class NativeConfigGuiTests(unittest.TestCase):
             self.assertEqual(self.app.runtime_title.cget("text"), "Motor parado")
         self.assertEqual(self.controller.starts, 0)
 
+    def test_config_review_readonly_scrollable_with_real_widgets(self):
+        self.app.geometry("880x660")
+        self.session.draft.add_rule("block_exes", "CODE.EXE")
+        self.session.draft.add_rule("block_exes", "code.exe")
+        self.app.render()
+        self.app.update_idletasks()
+        text = self.app.review_detail.get("1.0", "end")
+        self.assertIn("proteção obrigatória", text)
+        self.assertIn("Regra repetida", text)
+        self.assertEqual(self.app.review_detail.cget("state"), "disabled")
+        self.assertEqual(self.app.review_detail.cget("height"), 150)
+        self.assertEqual(self.controller.starts, 0)
+
     def test_first_setup_selected_suggestions_create_only_on_save_with_real_widgets(self):
         self.app.geometry("880x660")
         self.app.update_idletasks()

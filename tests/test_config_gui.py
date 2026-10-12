@@ -326,6 +326,36 @@ class ConfigGuiFlowTests(unittest.TestCase):
         self.make_new()
         self.assertIn("Nenhuma janela salva", self.app.end_label.options["text"])
 
+    def test_config_review_follows_draft_without_writing_or_blocking_save_start(self):
+        original = self.path.read_bytes()
+        self.session.draft.add_window("09:00", "12:00", [0])
+        self.session.draft.add_rule("block_exes", "code.exe")
+        self.session.draft.add_rule("safelist_exes", "game.exe")
+        self.session.draft.add_rule("block_exes", "GAME.EXE")
+        self.app.render()
+        detail = self.app.review_detail.get()
+        self.assertIn("proteção obrigatória", detail)
+        self.assertIn("Proteção adicional preserva", detail)
+        self.assertIn("sem verificar processos", detail)
+        self.assertEqual(self.app.review_detail.options["state"], "disabled")
+        self.assertEqual(self.path.read_bytes(), original)
+        self.assertIn("2 regras cadastradas", self.app.review_title.options["text"])
+        self.app.save_config()
+        self.app.start_runtime()
+        self.assertEqual(self.controller.starts, 1)
+
+    def test_config_review_bounds_long_lists_and_updates_after_removal(self):
+        for _ in range(18):
+            self.session.draft.add_rule("block_exes", "game.exe")
+        self.app.render()
+        self.assertIn("Mais", self.app.review_detail.get())
+        self.assertLessEqual(len(self.app.review_detail.get().splitlines()), 12)
+        for index in range(17, 0, -1):
+            self.session.draft.remove_rule("block_exes", index)
+        self.app.render()
+        self.assertNotIn("Regra repetida", self.app.review_detail.get())
+        self.assertNotIn("Mais", self.app.review_detail.get())
+
     def add_window(self, start="22:00", end="02:00"):
         button(self.app, "Adicionar horário").invoke()
         first, second = self.entries()

@@ -1,3 +1,27 @@
+## 2026-10-11 — Revisão estática do rascunho
+
+### Implementado
+- Painel de revisão na Visão geral aponta duplicatas de horários/regras, bloqueio de nomes já protegidos e abrangência de Java por nome. Mostra quantidade de horários ativos e regras cadastradas, sem confundir com encerramentos possíveis/confirmados.
+- Análise acompanha rascunho, sem consultas de processos/instalações, alterações automáticas, impedimento de save/start ou novas confirmações. Textbox readonly/rolável limita dez apontamentos/detalhes e informa excedentes.
+- Catálogo obrigatório extraído para fonte compartilhada entre revisão/motor, preservando conjuntos, nomes públicos e todas as guardas anteriores.
+
+### Arquivos principais alterados
+- `core/config_review.py`, `core/process_catalog.py`, `core/proc_blocker.py`, `ui/config_gui.py`, `tests/test_config_review.py`, `tests/test_config_gui.py`, `tests/test_config_gui_native.py`.
+- `README.md`, `docs/ARCHITECTURE_BACKEND.md`, `docs/GUI_EDITOR_CONTRACT.md`, `docs/TEST_PLAN.md`, `docs/DEVELOPMENT_LOG.md`.
+
+### Decisões técnicas
+- Dados frozen/puro sem importar controlador/bloqueador/psutil/Tk. Casefold reproduz igualdade de nomes/pares; pastas só texto, sem presumir aliases/junctions. Prioridade obrigatória/adicional é a já implementada, não decisão nova.
+- Desconhecidos/helpers/usuários/caminhos/ancestrais continuam dependentes de inspeção real do motor; revisão não promete classificação universal. Nenhuma persistência ou schema novo.
+
+### Estado atual
+- Suíte completa: **587 descobertos, 586 aprovados e 1 skip conhecido** symlink/WinError 1314, 42,744 s, Python 3.14.6/Windows. Quinze nativeGUI e ícone real passaram; guardas/adapter/controller/CLI e import lazy preservados. Seleção relevante anterior: 178 testes em 19,696 s.
+- Nove novos testes reviewer, dois fluxos GUI e um nativeGUI. Verificam pureza/frozen/índices/duplicatas/literais/proteções, catálogo compartilhado, rascunho sem IO e apontamentos sem bloquear save/start. AST 3.12/UTF-8 nos 57 arquivos, links locais e diff conferidos. Unidade integrada para commit conjunto, sem push ou efeitos em processos/hosts do usuário.
+- Maestro segue implementando diretamente com agentes parados por cota. Base `d952905`. Runtime 3.12 e visual/DPI pendentes.
+
+### Próximos passos
+- Próximo lote: edição reversível do rascunho com Desfazer/Refazer, preservando save explícito e histórico só em memória.
+- Avisos/pausa/sites aguardam respostas em USER_ANSWERS; não tratadas como aprovação.
+
 ## 2026-10-11 — Fim da janela na agenda carregada
 
 ### Implementado

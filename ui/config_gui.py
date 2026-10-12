@@ -8,6 +8,7 @@ from time import monotonic
 
 from core.config import ConfigError
 from core.config_editor import ConfigDraft
+from core.config_review import review_config
 from core.config_repository import ConfigConflictError
 from core.config_session import ConfigSession
 from core.agenda_preview import week_preview
@@ -236,6 +237,12 @@ def _build_app(ctk, tk, filedialog, messagebox, session, controller=None, tray=N
             ctk.CTkButton(overview, text="Escolher sugestões de aplicativos", fg_color=accent,
                           command=lambda: self.select_tab("Configuração")).grid(
                               row=7, column=0, sticky="w", padx=14, pady=(0, 14))
+            self.review_title = ctk.CTkLabel(overview, text="", anchor="w", justify="left",
+                                              font=ctk.CTkFont(size=18, weight="bold"))
+            self.review_title.grid(row=8, column=0, sticky="ew", padx=14, pady=(12, 8))
+            self.review_detail = ctk.CTkTextbox(overview, height=150, wrap="word", fg_color="#F3F6F5")
+            self.review_detail.grid(row=9, column=0, sticky="ew", padx=14, pady=(0, 14))
+            self.review_detail.configure(state="disabled")
 
             ctk.CTkLabel(schedules, text="Horários de foco", font=ctk.CTkFont(size=20, weight="bold"),
                          anchor="w").grid(row=0, column=0, sticky="w", padx=14, pady=(10, 0))
@@ -347,6 +354,7 @@ def _build_app(ctk, tk, filedialog, messagebox, session, controller=None, tray=N
             if self.closing or self.closed:
                 return
             self.render_preview()
+            self.render_review()
             self.render_windows()
             self.render_rules()
             self.dirty_label.configure(text=("Arquivo ainda não criado" if session.is_new else
@@ -357,6 +365,30 @@ def _build_app(ctk, tk, filedialog, messagebox, session, controller=None, tray=N
                 f"Destino: {session.path.absolute()}"
             ) if session.is_new else "Configuração carregada. Edite o rascunho e clique em Salvar para gravar alterações.")
             self.update_runtime()
+
+        def render_review(self):
+            review = review_config(session.draft.config)
+            self.review_title.configure(text=(
+                f"Revisão do rascunho · {review.active_windows} horários ativos · "
+                f"{review.target_rules} regras cadastradas de bloqueio"
+            ))
+            labels = {"windows": "Horários", "block_exes": "Executáveis", "block_folders": "Pastas",
+                      "safelist_exes": "Proteção adicional", "block_cmdline": "Linha de comando"}
+            lines = ["Análise estática, sem verificar processos ou instalações. Não altera suas regras."]
+            for item in review.items[:10]:
+                position = f", item {item.index + 1}" if item.index is not None else ""
+                detail = " ".join(item.detail.split())
+                if len(detail) > 260:
+                    detail = detail[:259] + "…"
+                lines.append(f"• {labels[item.field]}{position}: {detail}")
+            if not review.items:
+                lines.append("Nenhum apontamento estático. Proteções adicionais do motor também continuam valendo.")
+            elif len(review.items) > 10:
+                lines.append(f"Mais {len(review.items) - 10} apontamentos. Revise as listas em Jogos / Apps e Horários.")
+            self.review_detail.configure(state="normal")
+            self.review_detail.delete("1.0", "end")
+            self.review_detail.insert("1.0", "\n".join(lines))
+            self.review_detail.configure(state="disabled")
 
         def add_suggestions(self):
             if self.closing or self.closed or self.modal is not None:

@@ -22,6 +22,13 @@ completo exclusivamente. O catálogo puro em `core/initial_setup.py` oferece
 regras opt-in do escopo, sem descoberta de instalações. Motor continua parado
 até save e confirmação de Iniciar; [contrato](INITIAL_SETUP_CONTRACT.md).
 
+`core/config_review.py` faz revisão estática do rascunho em dados frozen, sem
+instanciar motor/adaptador ou consultar instalações. `core/process_catalog.py`
+é a fonte única dos mesmos conjuntos de nomes obrigatórios já usados pelo
+bloqueador; `proc_blocker` mantém esses nomes importáveis, sem alterar guardas.
+Duplicatas/proteções conhecidas são apontamentos informativos, não simulação de
+encerramentos nem validação universal de aplicativos.
+
 ## 1. Classificação e alcance
 
 - **Requisito explícito (R):** comportamento ou decisão escrito no escopo, com seção/RF citados.
