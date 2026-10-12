@@ -222,6 +222,160 @@ class ConfigGuiFlowTests(unittest.TestCase):
         return [widget for widget in descendants(self.app.modal)
                 if widget.__class__.__name__ == "CTkEntry"]
 
+    def window_day_variables(self):
+        return [widget.options["variable"] for widget in descendants(self.app.modal)
+                if widget.__class__.__name__ == "CTkCheckBox"]
+
+    def load_window_days(self, days=(6, 0)):
+        self.path.write_text(json.dumps({"windows": [{"start": "22:00", "end": "02:00", "days": days}],
+                                        "typed": [True, 1, 1.0]}), encoding="utf-8")
+        self.session.reload()
+        self.app.render()
+
+    def test_window_day_presets_are_local_and_cancel_escape_leave_all_state_intact(self):
+        snapshot, draft, config = self.session.snapshot, self.session.draft, self.session.draft.config
+        original = self.path.read_bytes()
+        self.app.edit_window()
+        variables = self.window_day_variables()
+        for title, expected in (("Nenhum", ()), ("Fim de semana", (5, 6)), ("Seg–Sex", tuple(range(5))),
+                                ("Todos", tuple(range(7)))):
+            with self.subTest(title=title):
+                button(self.app.modal, title).invoke()
+                self.assertEqual(tuple(day for day, variable in enumerate(variables) if variable.get()), expected)
+                self.assertEqual(draft.config, config)
+                self.assertFalse(draft.can_undo)
+                self.assertFalse(self.session.dirty)
+        self.app.modal.callbacks["<Escape>"](None)
+        self.assertIsNone(self.app.modal)
+        self.app.edit_window()
+        button(self.app.modal, "Nenhum").invoke()
+        button(self.app.modal, "Cancelar").invoke()
+        self.assertIs(self.session.snapshot, snapshot)
+        self.assertIs(self.session.draft, draft)
+        self.assertEqual(self.path.read_bytes(), original)
+        self.assertEqual(self.controller.starts, 0)
+
+    def test_window_days_noncanonical_noop_toggles_and_presets_preserve_redo_and_typed_extras(self):
+        self.load_window_days()
+        self.session.draft.add_rule("block_exes", "redo.exe")
+        self.app.undo_draft()
+        snapshot, config, original = self.session.snapshot, self.session.draft.config, self.path.read_bytes()
+        self.assertTrue(self.session.draft.can_redo)
+        self.assertFalse(self.session.dirty)
+        for mode in ("unchanged", "toggle", "presets"):
+            with self.subTest(mode=mode):
+                self.app.edit_window(0)
+                variables = self.window_day_variables()
+                if mode == "toggle":
+                    variables[6].set(0)
+                    variables[6].set(1)
+                elif mode == "presets":
+                    button(self.app.modal, "Todos").invoke()
+                    button(self.app.modal, "Nenhum").invoke()
+                    variables[0].set(1)
+                    variables[6].set(1)
+                button(self.app.modal, "Aplicar alteração").invoke()
+                self.assertEqual(self.session.draft.config.windows[0].days, (6, 0))
+                self.assertEqual(self.session.draft.config, config)
+                self.assertFalse(self.session.draft.can_undo)
+                self.assertTrue(self.session.draft.can_redo)
+                self.assertFalse(self.session.dirty)
+        self.assertIs(self.session.snapshot, snapshot)
+        self.assertEqual(self.path.read_bytes(), original)
+        self.assertEqual([type(value) for value in self.session.draft.config.extra["typed"]], [bool, int, float])
+        self.app.redo_draft()
+        self.assertEqual(self.session.draft.config.block_exes, ("redo.exe",))
+
+    def test_window_days_retained_removed_new_and_all_use_original_order(self):
+        expected_modes = (("remove", (0,)), ("add", (6, 0, 2)), ("Todos", (6, 0, 1, 2, 3, 4, 5)),
+                          ("Seg–Sex", (0, 1, 2, 3, 4)), ("Fim de semana", (6, 5)), ("Nenhum", ()))
+        for mode, expected in expected_modes:
+            with self.subTest(mode=mode):
+                self.load_window_days()
+                original = self.path.read_bytes()
+                self.app.edit_window(0)
+                variables = self.window_day_variables()
+                if mode == "remove":
+                    variables[6].set(0)
+                elif mode == "add":
+                    variables[2].set(1)
+                else:
+                    button(self.app.modal, mode).invoke()
+                button(self.app.modal, "Aplicar alteração").invoke()
+                self.assertEqual(self.session.draft.config.windows[0].days, expected)
+                self.assertTrue(self.session.dirty)
+                self.assertEqual(self.path.read_bytes(), original)
+                self.app.undo_draft()
+                self.assertEqual(self.session.draft.config.windows[0].days, (6, 0))
+                self.assertFalse(self.session.draft.can_undo)
+                self.app.redo_draft()
+                self.assertEqual(self.session.draft.config.windows[0].days, expected)
+
+    def test_window_days_new_presets_weekly_disabled_and_invalid_apply_remains_local(self):
+        for title, expected in (("Todos", tuple(range(7))), ("Seg–Sex", tuple(range(5))),
+                                ("Fim de semana", (5, 6)), ("Nenhum", ())):
+            with self.subTest(title=title):
+                self.app.edit_window()
+                start, end = self.entries()
+                start.insert(0, "09:00")
+                end.insert(0, "09:00")
+                button(self.app.modal, title).invoke()
+                before = self.session.draft.config
+                button(self.app.modal, "Adicionar").invoke()
+                self.assertIsNotNone(self.app.modal)
+                self.assertEqual(self.session.draft.config, before)
+                end.insert(0, "10:00")
+                button(self.app.modal, "Adicionar").invoke()
+                self.assertEqual(self.session.draft.config.windows[-1].days, expected)
+                self.app.undo_draft()
+                self.assertEqual(self.session.draft.config, before)
+
+    def test_window_days_time_edit_preserves_order_and_save_remains_conflict_checked(self):
+        self.load_window_days()
+        self.app.edit_window(0)
+        start, _ = self.entries()
+        start.insert(0, "21:00")
+        button(self.app.modal, "Aplicar alteração").invoke()
+        self.assertEqual(self.session.draft.config.windows[0].days, (6, 0))
+        self.assertEqual(self.session.draft.config.windows[0].start.hour, 21)
+        self.path.write_bytes(b'{"windows":[],"writer":"external"}')
+        external = self.path.read_bytes()
+        self.assertFalse(self.app.save_config())
+        self.assertEqual(self.path.read_bytes(), external)
+        self.assertTrue(self.session.dirty)
+
+    def test_window_day_old_callbacks_guard_before_any_variable_or_finish_edit_access(self):
+        self.load_window_days()
+        self.app.edit_window(0)
+        dialog = self.app.modal
+        preset = button(dialog, "Todos").options["command"]
+        apply = button(dialog, "Aplicar alteração").options["command"]
+        variables = self.window_day_variables()
+        button(dialog, "Cancelar").invoke()
+        self.app.edit_window()
+        replacement = self.app.modal
+        before = self.session.draft.config
+        with patch.object(variables[0], "set", side_effect=AssertionError("oldTk")), \
+                patch.object(variables[0], "get", side_effect=AssertionError("oldTk")), \
+                patch.object(self.app, "finish_edit", side_effect=AssertionError("oldfinish")):
+            self.assertFalse(preset())
+            self.assertFalse(apply())
+        self.assertIs(self.app.modal, replacement)
+        self.assertEqual(self.session.draft.config, before)
+        active_preset = button(replacement, "Nenhum").options["command"]
+        active_apply = button(replacement, "Adicionar").options["command"]
+        for flag in ("picker_active", "selecting_executables", "closing", "closed"):
+            setattr(self.app, flag, True)
+            self.assertFalse(active_preset())
+            self.assertFalse(active_apply())
+            setattr(self.app, flag, False)
+        self.assertIs(self.app.modal, replacement)
+        self.messages.askyesnocancel.return_value = False
+        self.app.close_editor()
+        self.assertFalse(active_preset())
+        self.assertFalse(active_apply())
+        self.assertEqual(self.session.draft.config, before)
+
     def displayed_rule_indices(self, field):
         return [index for row_field, index in self.app.review_rows if row_field == field]
 

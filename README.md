@@ -43,7 +43,7 @@ Após instalar as dependências, abra a janela:
 .\.venv\Scripts\python.exe main.py --config .\data\config.json --gui
 ```
 
-A aba **Horários** permite adicionar, editar e remover janelas com seleção dos dias da semana. Todos os dias vêm selecionados em um novo horário; desmarcar todos desativa a janela. **Jogos / Apps** reúne executáveis, pastas, proteção adicional e regras conjuntas de linha de comando; pastas também podem ser escolhidas pelo seletor. **Configuração** mostra o arquivo e explica o salvamento.
+A aba **Horários** permite adicionar, editar e remover janelas com seleção dos dias da semana. Todos os dias vêm selecionados em um novo horário. Os atalhos **Todos**, **Seg–Sex**, **Fim de semana** e **Nenhum** ajustam a seleção do formulário; **Aplicar alteração** atualiza o rascunho e **Salvar** grava. Nenhum desativa a janela quando aplicado; Cancelar descarta a seleção local. Editar preserva a ordem dos dias já cadastrados. Ver [contrato dos dias](docs/WINDOW_DAYS_CONTRACT.md). **Jogos / Apps** reúne executáveis, pastas, proteção adicional e regras conjuntas de linha de comando; pastas também podem ser escolhidas pelo seletor. **Configuração** mostra o arquivo e explica o salvamento.
 
 Em **Executáveis** ou **Proteção adicional**, **Selecionar .exe…** permite escolher vários arquivos e adicionar os nomes ao rascunho. A regra vale pelo nome em qualquer pasta, não apenas pelo caminho escolhido. O lote inteiro é validado antes da inclusão; nomes equivalentes não são duplicados. Cancelar mantém as regras. Clique em **Salvar** para gravar; selecionar arquivos não os executa nem inicia o motor.
 

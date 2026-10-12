@@ -1047,6 +1047,7 @@ def _build_app(ctk, tk, filedialog, messagebox, session, controller=None, tray=N
             if self.closing or self.closed or self.modal is not None:
                 return
             dialog, form, error, actions, close = self.new_dialog("Adicionar horário" if index is None else "Editar horário")
+            dialog.geometry("560x470")
             value = None if index is None else session.draft.config.windows[index]
             ctk.CTkLabel(form, text="Início (HH:MM)", anchor="w").grid(row=0, column=0, sticky="w")
             start = ctk.CTkEntry(form, placeholder_text="HH:MM")
@@ -1065,18 +1066,44 @@ def _build_app(ctk, tk, filedialog, messagebox, session, controller=None, tray=N
                 selected.append(variable)
                 ctk.CTkCheckBox(checks, text=label, variable=variable, width=62, checkbox_width=18,
                                 checkbox_height=18, fg_color=accent).grid(row=0, column=day, padx=(0, 6), pady=8)
+
+            def form_is_current():
+                return (not self.closing and not self.closed and not self.picker_active
+                        and not self.selecting_executables and self.modal is dialog)
+
+            def select_days(chosen):
+                if not form_is_current():
+                    return False
+                for day, variable in enumerate(selected):
+                    variable.set(int(day in chosen))
+                return True
+
+            presets = ctk.CTkFrame(form, fg_color="transparent")
+            presets.grid(row=5, column=0, sticky="w", pady=(0, 4))
+            for title, chosen, width in (("Todos", tuple(range(7)), 70), ("Seg–Sex", tuple(range(5)), 88),
+                                         ("Fim de semana", (5, 6), 120), ("Nenhum", (), 80)):
+                ctk.CTkButton(presets, text=title, width=width, fg_color=accent,
+                              command=lambda days=chosen: select_days(days)).pack(side="left", padx=(0, 8))
             ctk.CTkLabel(form, text="Sem dias selecionados, o horário fica desativado.", text_color=muted
-                         ).grid(row=5, column=0, sticky="w")
+                         ).grid(row=6, column=0, sticky="w")
 
             def apply():
-                chosen = [day for day, variable in enumerate(selected) if variable.get()]
+                final_days = {day for day, variable in enumerate(selected) if variable.get()}
+                original_days = () if value is None else value.days
+                chosen = [day for day in original_days if day in final_days]
+                chosen.extend(day for day in range(7) if day in final_days and day not in original_days)
                 if index is None:
                     session.draft.add_window(start.get().strip(), end.get().strip(), chosen)
                 else:
                     session.draft.update_window(index, start.get().strip(), end.get().strip(), chosen)
 
+            def apply_form():
+                if not form_is_current():
+                    return False
+                self.finish_edit(apply, error, close)
+
             ctk.CTkButton(actions, text="Adicionar" if index is None else "Aplicar alteração", fg_color=accent,
-                          command=lambda: self.finish_edit(apply, error, close)).pack(side="left")
+                          command=apply_form).pack(side="left")
             dialog.startup_timers.append(dialog.after(150, start.focus_set))
 
         def edit_rule(self, index=None, field=None):

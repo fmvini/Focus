@@ -49,8 +49,14 @@ no [contrato de bandeja](TRAY_CONTRACT.md); fechar pelo X continua sair.
   Iniciar fica indisponível durante o seletor. Categoria capturada antes do
   diálogo; retorno tardio depois de sair é descartado. Salvar permanece explícito.
 - Horários: adicionar/editar/remover; sete checkboxes, todos selecionados por
-  padrão. Dias vazios desativam. Mesma validação de horários noturnos,
-  igualdade inválida, dias e união já existente no núcleo.
+  padrão. Atalhos Todos/Seg–Sex/Fim de semana/Nenhum alteram somente a seleção
+  local até aplicar; dias vazios aplicados desativam. Edição conserva ordem
+  dos dias retidos e acrescenta novos em ordem semanal, evitando alteração
+  estrutural sem mudança efetiva. Cancelar/Escape descartam o formulário;
+  callbacks antigos são recusados antes de Tk/draft. Modal horário 560×470,
+  raiz mínima 880×660 preservada. Ver [contrato dos dias](WINDOW_DAYS_CONTRACT.md).
+  Mesma validação de horários noturnos, igualdade inválida, dias e união já
+  existente no núcleo.
 - Quatro categorias de processos: executáveis, pastas, proteção adicional e
   linha de comando. Cmdline mantém executável e trecho juntos, preservando
   espaços do trecho literal. Seletor de pastas opcional. Nenhuma lista

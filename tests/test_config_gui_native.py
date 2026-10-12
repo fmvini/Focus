@@ -105,6 +105,114 @@ class NativeConfigGuiTests(unittest.TestCase):
     def entries(self):
         return [child for child in self.descendants(self.app.modal) if isinstance(child, self.ctk.CTkEntry)]
 
+    def native_day_variables(self):
+        return [widget.cget("variable") for widget in self.descendants(self.app.modal)
+                if isinstance(widget, self.ctk.CTkCheckBox)]
+
+    def load_native_window_days(self):
+        self.path.write_text(json.dumps({"windows": [{"start": "22:00", "end": "02:00", "days": [6, 0]}],
+                                        "typed": [True, 1, 1.0]}), encoding="utf-8")
+        self.session.reload()
+        self.app.render()
+
+    def test_window_days_native_shortcuts_local_cancel_and_new_disabled_apply_in_880_window(self):
+        self.app.geometry("880x660")
+        original = self.path.read_bytes()
+        self.app.edit_window()
+        dialog = self.app.modal
+        dialog.withdraw()
+        variables = self.native_day_variables()
+        for title, expected in (("Nenhum", ()), ("Fim de semana", (5, 6)), ("Seg–Sex", tuple(range(5))),
+                                ("Todos", tuple(range(7)))):
+            self.button(dialog, title).invoke()
+            self.assertEqual(tuple(day for day, variable in enumerate(variables) if variable.get()), expected)
+            self.assertFalse(self.session.dirty)
+            self.assertFalse(self.session.draft.can_undo)
+        self.button(dialog, "Cancelar").invoke()
+        self.assertEqual(self.path.read_bytes(), original)
+        self.app.edit_window()
+        self.app.modal.withdraw()
+        start, end = self.entries()
+        start.insert(0, "09:00")
+        end.insert(0, "09:00")
+        self.button(self.app.modal, "Nenhum").invoke()
+        self.button(self.app.modal, "Adicionar").invoke()
+        self.assertIsNotNone(self.app.modal)
+        self.assertFalse(self.session.dirty)
+        end.delete(0, "end")
+        end.insert(0, "10:00")
+        self.button(self.app.modal, "Adicionar").invoke()
+        self.assertEqual(self.session.draft.config.windows[0].days, ())
+        self.assertEqual(self.path.read_bytes(), original)
+        self.app.undo_draft()
+        self.assertFalse(self.session.dirty)
+        self.assertFalse(self.session.draft.can_undo)
+        self.assertEqual(self.controller.starts, 0)
+        self.assertEqual(self.background_errors, [])
+
+    def test_window_days_native_noncanonical_noop_redo_then_retained_and_added_days(self):
+        self.load_native_window_days()
+        self.session.draft.add_rule("block_exes", "redo.exe")
+        self.app.undo_draft()
+        snapshot, original = self.session.snapshot, self.path.read_bytes()
+        for toggle in (False, True):
+            self.app.edit_window(0)
+            dialog = self.app.modal
+            dialog.withdraw()
+            variables = self.native_day_variables()
+            if toggle:
+                self.button(dialog, "Todos").invoke()
+                self.button(dialog, "Nenhum").invoke()
+                variables[6].set(1)
+                variables[0].set(1)
+            self.button(dialog, "Aplicar alteração").invoke()
+            self.assertEqual(self.session.draft.config.windows[0].days, (6, 0))
+            self.assertFalse(self.session.dirty)
+            self.assertFalse(self.session.draft.can_undo)
+            self.assertTrue(self.session.draft.can_redo)
+        self.assertIs(self.session.snapshot, snapshot)
+        self.assertEqual(self.path.read_bytes(), original)
+        self.assertEqual([type(value) for value in self.session.draft.config.extra["typed"]], [bool, int, float])
+        self.app.edit_window(0)
+        self.app.modal.withdraw()
+        self.native_day_variables()[2].set(1)
+        self.button(self.app.modal, "Aplicar alteração").invoke()
+        self.assertEqual(self.session.draft.config.windows[0].days, (6, 0, 2))
+        self.app.undo_draft()
+        self.assertEqual(self.session.draft.config.windows[0].days, (6, 0))
+        self.assertFalse(self.session.draft.can_undo)
+        self.app.redo_draft()
+        self.assertEqual(self.session.draft.config.windows[0].days, (6, 0, 2))
+        self.assertEqual(self.path.read_bytes(), original)
+        self.assertEqual(self.background_errors, [])
+
+    def test_window_days_native_old_apply_and_presets_do_not_touch_replacement_or_closed_tk(self):
+        self.load_native_window_days()
+        self.app.edit_window(0)
+        dialog = self.app.modal
+        dialog.withdraw()
+        preset = self.button(dialog, "Todos").cget("command")
+        apply = self.button(dialog, "Aplicar alteração").cget("command")
+        self.button(dialog, "Cancelar").invoke()
+        self.app.edit_window()
+        replacement = self.app.modal
+        replacement.withdraw()
+        original = self.session.draft.config
+        self.assertFalse(preset())
+        self.assertFalse(apply())
+        self.assertIs(self.app.modal, replacement)
+        self.assertEqual(self.session.draft.config, original)
+        active_preset = self.button(replacement, "Nenhum").cget("command")
+        active_apply = self.button(replacement, "Adicionar").cget("command")
+        self.messages.askyesnocancel.return_value = False
+        self.app.close_editor()
+        self.assertFalse(active_preset())
+        self.assertFalse(active_apply())
+        self.assertEqual(self.session.draft.config, original)
+        self.assertEqual(self.app.tk.splitlist(self.app.tk.call("after", "info")), ())
+        self.app.tk.call("update")
+        self.assertEqual(self.background_errors, [])
+
     def native_rule_indices(self, field):
         return [index for row_field, index in self.app.review_rows if row_field == field]
 

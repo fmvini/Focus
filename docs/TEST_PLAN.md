@@ -2,6 +2,12 @@
 
 Fonte: [escopo](Focus%20Blocker_%20escopo%20do%20projeto.md), [requisitos](REQUIREMENTS.md) e [decisões](DECISIONS.md). Fases 1/2: 206 testes OK em Python 3.14.6/psutil 7.2.2 por `.venv/Scripts/python.exe -B -m unittest discover -s tests` (10,542 s). Sintaxe 3.12 dos 18 arquivos Python conferida; runtime 3.12 ainda não executado. Encerramentos reais e fases posteriores continuam pendentes.
 
+## Evidência dos atalhos de dias e edição fiel — 2026-10-12
+
+- Seis fakeGUI/três nativeGUI novos cobrem presets locais, cancelamento/Escape, novo/desativado, Apply inválido e retry, dias retidos/novos/remoção/toggle, no-op em `(6, 0)` preservando redo/dirty/extras tipados, única edição Undo/Redo, horário editado e conflito externo, callbacks antigos recusados antes de Tk/finish_edit, teardown sem bgerrors.
+- Frontend congelou fontes e confirmou 143 GUI/main/native em 3.14/117,879 s. Agentes atingiram cota antes dos relatórios finais; não atribuir QA/revisão incompleta a eles.
+- Suíte completa Maestro: **756 descobertos, 755 aprovados e um skip conhecido** symlink/WinError 1314 nos dois runtimes Windows AMD64: Python 3.14.6/227,984 s e Python 3.12.14/240,553 s. Trinta e quatro nativeGUI, ícone real e guardas passaram. AST 3.12/UTF-8 nos 71 arquivos e diff conferidos. Sem encerramento de processos do usuário/hosts; widgets ocultos não aceitam visual/DPI/acessibilidade.
+
 ## Evidência da ordenação visual das regras — 2026-10-12
 
 - Helper: 14 testes aprovados nos dois runtimes, 0,222 s/0,639 s; quatro integrações de sessão/JSON reais, 0,182 s/0,141 s. Verificam índices originais, empates/duplicatas/casefold, cmdline/pastas literais, tipos/ordens/filtro/imutabilidade/pureza/lazy, CRUD por índice retornado, Undo/Redo, Save com cadastro original, import/reload e conflitos externos.

@@ -1,3 +1,25 @@
+## 2026-10-12 — Atalhos dos dias e edição fiel de horários
+
+### Implementado
+- Atalhos Todos/Seg–Sex/Fim de semana/Nenhum ajustam somente checkboxes até aplicar. Cancelar/Escape descartam seleção local; Nenhum aplicado desativa a janela.
+- Apply conserva a ordem dos dias retidos e acrescenta novos em ordem semanal, corrigindo o P3 que marcava dirty e perdia redo ao aplicar uma janela intacta `(6, 0)`. Callbacks antigos de presets/Apply são recusados antes de Tk/draft/finish_edit. Modal de horário 560×470; raiz mínima preservada.
+
+### Arquivos principais alterados
+- `ui/config_gui.py`, `tests/test_config_gui.py`, `tests/test_config_gui_native.py`.
+- `README.md`, `docs/WINDOW_DAYS_CONTRACT.md`, `docs/GUI_EDITOR_CONTRACT.md`, `docs/DELIVERY_PLAN.md`, `docs/README.md`, `docs/TEST_PLAN.md`, `docs/DEVELOPMENT_LOG.md`.
+
+### Decisões técnicas
+- Preservar dias retidos na ordem original e acrescentar dias novos em ordem semanal. Não normalizar core, comparação ou arquivo inteiro. Atalhos alteram somente o formulário até aplicar; nenhum novo comportamento de salvamento.
+- Frontend implementou/congelou três arquivos GUI/testes. Backend/Banco enviaram invariantes cedo; revisões finais interrompidas pelo limite de uso dos agentes, sem alegar conclusão. Maestro revisou fonte/testes e integrou suíte/docs/commit conjunto.
+
+### Estado atual
+- Base `ac2bb84`; seis fakeGUI e três nativeGUI novos. Frontend confirmou 143 GUI/main/native aprovados em 3.14 (117,879 s) e freeze explícito; relatório final de QA 3.12 interrompido pela cota. AST 3.12/UTF-8 nos 71 arquivos conferida pelo Maestro.
+- Suíte completa Maestro: **756 descobertos, 755 aprovados e um skip conhecido** symlink/WinError 1314 nos dois runtimes Windows AMD64: Python 3.14.6/227,984 s e Python 3.12.14/240,553 s. Trinta e quatro nativeGUI, ícone real e guardas passaram. Sem efeitos em processos/hosts/configuração do usuário; visual/DPI/acessibilidade permanece pendente.
+
+### Próximos passos
+- Próxima melhoria independente: Ctrl+F para alcançar a busca da categoria de regras e limpar filtro pelo teclado, preservando ordem visual, dados e guardas de modal/seletor/saída.
+- Visual/DPI e respostas sobre sites/pausa/avisos permanecem pendentes.
+
 ## 2026-10-12 — Ordenação visual das regras sem alterar o cadastro
 
 ### Implementado
