@@ -1,6 +1,7 @@
 """Rascunho de configuração em memória, sem gravação ou aplicação de regras."""
 
 from copy import deepcopy
+from collections import deque
 import ntpath
 import os
 
@@ -9,6 +10,7 @@ from core.models import AppConfig
 
 
 _RULE_FIELDS = ("block_exes", "block_folders", "safelist_exes", "block_cmdline")
+_HISTORY_LIMIT = 50
 
 
 class ConfigDraft:
@@ -20,11 +22,44 @@ class ConfigDraft:
 
     def __init__(self, config: AppConfig):
         self._config = parse_config(config_to_dict(config))
+        self._undo = deque(maxlen=_HISTORY_LIMIT)
+        self._redo = []
 
     @property
     def config(self) -> AppConfig:
         """Snapshot independente, inclusive dos objetos aninhados em extra."""
         return deepcopy(self._config)
+
+    @property
+    def can_undo(self) -> bool:
+        return bool(self._undo)
+
+    @property
+    def can_redo(self) -> bool:
+        return bool(self._redo)
+
+    def undo(self) -> bool:
+        """Restaura edição anterior em memória; não grava nem muda o baseline."""
+        if not self._undo:
+            return False
+        restored = parse_config(config_to_dict(self._undo[-1]))
+        self._redo.append(self._config)
+        self._config = restored
+        self._undo.pop()
+        return True
+
+    def redo(self) -> bool:
+        if not self._redo:
+            return False
+        restored = parse_config(config_to_dict(self._redo[-1]))
+        self._undo.append(self._config)
+        self._config = restored
+        self._redo.pop()
+        return True
+
+    def replace_config(self, config: AppConfig) -> None:
+        """Substitui o conteúdo como uma edição reversível, após validação."""
+        self._accept(config_to_dict(config))
 
     @staticmethod
     def _index(index, values) -> int:
@@ -49,6 +84,10 @@ class ConfigDraft:
     def _accept(self, candidate: dict) -> None:
         # Publicar somente após validação completa: erros mantêm a versão atual.
         validated = parse_config(candidate)
+        if validated == self._config:
+            return
+        self._undo.append(self._config)
+        self._redo.clear()
         self._config = validated
 
     def add_window(self, start: str, end: str, days=None) -> None:

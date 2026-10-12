@@ -1,3 +1,27 @@
+## 2026-10-11 — Desfazer e refazer edições do rascunho
+
+### Implementado
+- Desfazer/Refazer na GUI e menu 6/7 na CLI restauram até 50 edições em memória, incluindo CRUD, duplicação, sugestões e seleção de executáveis. Lotes são uma edição; nenhuma restauração grava arquivo ou altera estado do motor.
+- Ctrl+Z/Ctrl+Y fora de formulários/campos de texto, botões conforme disponibilidade e guardas para seletor/saída. Prévia, revisão e dirty atualizam após restauração.
+- Save mantém histórico e baseline continua determinando dirty; import/reload bem-sucedidos reiniciam histórico. Falhas/no-op não destroem redo; nova edição após undo inicia outro caminho.
+
+### Arquivos principais alterados
+- `core/config_editor.py`, `ui/config_gui.py`, `ui/config_cli.py`, `tests/test_config_history.py`, `tests/test_config_gui.py`, `tests/test_config_gui_native.py`, `tests/test_config_editor_integration.py`.
+- `README.md`, `docs/GUI_EDITOR_CONTRACT.md`, `docs/CONFIG_EDITOR_CONTRACT.md`, `docs/TEST_PLAN.md`, `docs/DEVELOPMENT_LOG.md`.
+
+### Decisões técnicas
+- Modelos históricos são privados; getters retornam cópias defensivas. Undo/redo revalidam modelo antes de alterar qualquer stack, inclusive variáveis de pasta que mudaram. Limite de 50 estados controla retenção; não há persistência/SQLite ou novo schema.
+- Sugestões agora usam `replace_config` no draft existente para preservar edições anteriores. Import/reload continuam substituindo draft após leitura válida, conforme contrato existente. Save/conflitos não são contornados pelo histórico.
+
+### Estado atual
+- Suíte completa: **603 descobertos, 602 aprovados e 1 skip conhecido**, 47,046 s, Python 3.14.6/Windows. Dezesseis nativeGUI e ícone real passaram; nenhum processo/hosts do usuário alterado. Seleções relevantes anteriores: 133 em 22,097 s e 34 CLI/integração/history em 2,233 s.
+- Nove novos testes history, cinco GUI, um nativeGUI e uma integração CLI por subprocesso. Cobrem limite/branch/no-op/falha de revalidação, cópias defensivas, CRUD/lotes, baseline/save/import/reload, foco/modal/seletor/saída e ausência de IO. AST 3.12/UTF-8 nos 58 arquivos, links locais e diff conferidos. Unidade integrada para commit conjunto, sem push; agentes seguem parados por cota.
+- Base `84e2ab8`; runtime 3.12 e visual/DPI pendentes.
+
+### Próximos passos
+- Próximo lote: disponibilizar a revisão estática por diagnóstico CLI independente.
+- Avisos/pausa/sites aguardam decisões em USER_ANSWERS.
+
 ## 2026-10-11 — Revisão estática do rascunho
 
 ### Implementado

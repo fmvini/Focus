@@ -136,6 +136,28 @@ class NativeConfigGuiTests(unittest.TestCase):
         self.assertEqual(self.app.review_detail.cget("height"), 150)
         self.assertEqual(self.controller.starts, 0)
 
+    def test_history_buttons_and_text_focus_with_real_widgets(self):
+        self.app.geometry("880x660")
+        original = self.path.read_bytes()
+        self.session.draft.add_rule("block_exes", "game.exe")
+        self.app.render()
+        self.assertEqual(self.app.undo_button.cget("state"), "normal")
+        entry = next(child for child in self.descendants(self.app) if child.winfo_class() == "Entry")
+        self.assertIsNone(self.app.history_shortcut(SimpleNamespace(widget=entry), redo=False))
+        self.assertEqual(self.session.draft.config.block_exes, ("game.exe",))
+        self.button(self.app, "Desfazer").invoke()
+        self.assertFalse(self.session.dirty)
+        self.assertIn("Nenhuma regra de bloqueio", self.app.review_detail.get("1.0", "end"))
+        self.button(self.app, "Refazer").invoke()
+        self.assertTrue(self.session.dirty)
+        self.assertEqual(self.path.read_bytes(), original)
+        self.button(self.app, "Salvar").invoke()
+        saved = self.path.read_bytes()
+        self.button(self.app, "Desfazer").invoke()
+        self.assertTrue(self.session.dirty)
+        self.assertEqual(self.path.read_bytes(), saved)
+        self.assertEqual(self.controller.starts, 0)
+
     def test_first_setup_selected_suggestions_create_only_on_save_with_real_widgets(self):
         self.app.geometry("880x660")
         self.app.update_idletasks()

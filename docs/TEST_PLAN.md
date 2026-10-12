@@ -2,6 +2,12 @@
 
 Fonte: [escopo](Focus%20Blocker_%20escopo%20do%20projeto.md), [requisitos](REQUIREMENTS.md) e [decisões](DECISIONS.md). Fases 1/2: 206 testes OK em Python 3.14.6/psutil 7.2.2 por `.venv/Scripts/python.exe -B -m unittest discover -s tests` (10,542 s). Sintaxe 3.12 dos 18 arquivos Python conferida; runtime 3.12 ainda não executado. Encerramentos reais e fases posteriores continuam pendentes.
 
+## Evidência do histórico de edição — 2026-10-11
+
+- Suíte completa escalada: **603 descobertos, 602 aprovados, um skip** symlink/WinError 1314, 47,046 s. Dezesseis nativeGUI e ícone real passaram; AST 3.12/UTF-8 nos 58 arquivos e links/diff conferidos.
+- Nove testes history verificam restauração de CRUD/lotes/sugestões, limite de 50, branching/no-op/inválidos, cópias defensivas, revalidação de variável de pasta/restauração falha atômica, save/dirty/baseline/import/reload e pureza. Cinco GUI e nativeGUI em 880×660 verificam botões/atalhos/foco, seletor/modal/saída, erro e atualizações da revisão.
+- Integração CLI real em subprocesso usa menu 6/7 com JSON isolado: sair após restaurar não grava; Save aplica versão escolhida; Reload limpa histórico. Não há persistência do histórico, threads ou efeitos em processos/hosts. Runtime 3.12 e visual/DPI pendentes.
+
 ## Evidência da revisão do rascunho — 2026-10-11
 
 - Suíte completa escalada: **587 descobertos, 586 aprovados e um skip** symlink/WinError 1314, 42,744 s. Quinze nativeGUI e ícone real passaram; AST 3.12/UTF-8 nos 57 arquivos e links/diff conferidos.

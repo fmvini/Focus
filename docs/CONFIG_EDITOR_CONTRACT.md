@@ -21,6 +21,14 @@ Safelist adicional não remove proteções obrigatórias. Cmdline exige executá
 e trecho literal juntos, com validação já existente. Não preencher sugestões
 ou alterar campos opacos como sites/dev_apps/pausa.
 
+Evolução de edição reversível: menu principal **6 desfazer / 7 refazer**, usando
+`ConfigDraft.undo()/redo() -> bool` e propriedades `can_undo/can_redo`.
+Até 50 edições em memória; operações inválidas/no-op preservam histórico,
+edição nova após undo descarta redo, e restauração revalida antes de mover
+stacks. `replace_config(config)` publica lote como uma edição reversível.
+Save mantém histórico, reload bem-sucedido cria draft novo sem histórico.
+Restauração não grava; EOF/Ctrl+C/saída continuam descartando edições pendentes.
+
 ## APIs e responsáveis
 
 ### Banco de dados — core/config_repository.py

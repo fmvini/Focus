@@ -356,6 +356,83 @@ class ConfigGuiFlowTests(unittest.TestCase):
         self.assertNotIn("Regra repetida", self.app.review_detail.get())
         self.assertNotIn("Mais", self.app.review_detail.get())
 
+    def test_undo_redo_buttons_shortcuts_and_save_keep_file_explicit(self):
+        original = self.path.read_bytes()
+        self.assertEqual(self.app.undo_button.options["state"], "disabled")
+        self.filedialog.askopenfilenames.return_value = (r"C:\Games\one.exe", r"C:\Games\two.exe")
+        self.app.select_executables()
+        self.assertEqual(self.app.undo_button.options["state"], "normal")
+        self.assertEqual(self.app.callbacks["<Control-z>"](None), "break")
+        self.assertFalse(self.session.dirty)
+        self.assertEqual(self.session.draft.config.block_exes, ())
+        self.assertEqual(self.path.read_bytes(), original)
+        self.assertEqual(self.app.redo_button.options["state"], "normal")
+        self.assertEqual(self.app.callbacks["<Control-y>"](None), "break")
+        self.app.save_config()
+        saved = self.path.read_bytes()
+        button(self.app, "Desfazer").invoke()
+        self.assertTrue(self.session.dirty)
+        self.assertEqual(self.path.read_bytes(), saved)
+        self.assertEqual(self.controller.starts, 0)
+
+    def test_suggestions_preserve_previous_history_and_undo_as_one_edit(self):
+        self.session.draft.add_rule("block_exes", "existing.exe")
+        self.app.suggestion_vars["steam"].set(1)
+        self.app.suggestion_vars["minecraft_java"].set(1)
+        self.app.add_suggestions()
+        self.app.undo_draft()
+        self.assertEqual(self.session.draft.config.block_exes, ("existing.exe",))
+        self.assertEqual(self.session.draft.config.block_cmdline, ())
+        self.app.undo_draft()
+        self.assertFalse(self.session.dirty)
+        self.app.redo_draft()
+        self.app.redo_draft()
+        self.assertEqual(self.session.draft.config.block_exes, ("existing.exe", "steam.exe"))
+
+    def test_history_guards_modal_picker_text_focus_and_late_close(self):
+        self.session.draft.add_rule("block_exes", "game.exe")
+        self.app.render()
+        before = self.session.draft.config
+        button(self.app, "Adicionar regra").invoke()
+        self.assertEqual(self.app.undo_button.options["state"], "disabled")
+        self.assertFalse(self.app.undo_draft())
+        button(self.app.modal, "Cancelar").invoke()
+        event = SimpleNamespace(widget=SimpleNamespace(winfo_class=lambda: "Entry"))
+        self.assertIsNone(self.app.callbacks["<Control-z>"](event))
+        self.assertEqual(self.session.draft.config, before)
+        def picker(**kwargs):
+            self.assertEqual(self.app.undo_button.options["state"], "disabled")
+            self.assertFalse(self.app.undo_draft())
+            return ()
+        self.filedialog.askopenfilenames.side_effect = picker
+        self.app.select_executables()
+        self.assertEqual(self.session.draft.config, before)
+        self.messages.askyesnocancel.return_value = False
+        self.app.close_editor()
+        self.assertFalse(self.app.undo_draft())
+        self.assertIsNone(self.app.callbacks["<Control-z>"](event))
+
+    def test_history_restore_failure_is_visible_and_keeps_draft(self):
+        self.session.draft.add_rule("block_exes", "game.exe")
+        before = self.session.draft.config
+        with patch.object(self.session.draft, "undo", side_effect=ConfigError("validation")):
+            self.assertFalse(self.app.undo_draft())
+        self.assertEqual(self.session.draft.config, before)
+        self.assertIn("Rascunho preservado", self.app.feedback.options["text"])
+
+    def test_import_reload_reset_history_but_save_preserves_it(self):
+        self.session.draft.add_rule("block_exes", "original.exe")
+        self.app.save_config()
+        self.assertEqual(self.app.undo_button.options["state"], "normal")
+        self.import_source(block_exes=["imported.exe"])
+        self.app.import_config()
+        self.assertEqual(self.app.undo_button.options["state"], "disabled")
+        self.assertEqual(self.app.redo_button.options["state"], "disabled")
+        self.session.draft.add_rule("block_exes", "next.exe")
+        self.app.reload_config()
+        self.assertEqual(self.app.undo_button.options["state"], "disabled")
+        self.assertEqual(self.session.draft.config.block_exes, ("original.exe",))
+
     def add_window(self, start="22:00", end="02:00"):
         button(self.app, "Adicionar horário").invoke()
         first, second = self.entries()

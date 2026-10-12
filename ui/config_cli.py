@@ -170,7 +170,7 @@ def run_config_editor(
         try:
             output_fn(
                 "\n1 horários  2 regras de processos  3 salvar  "
-                "4 recarregar (descarta rascunho)  5 sair"
+                "4 recarregar (descarta rascunho e histórico)  5 sair  6 desfazer  7 refazer"
             )
             action = input_fn("Editor > ").strip()
             if action == "1":
@@ -189,6 +189,13 @@ def run_config_editor(
             elif action == "5":
                 output_fn("Saindo; alterações não salvas descartadas.")
                 return 0
+            elif action in {"6", "7"}:
+                changed = draft.undo() if action == "6" else draft.redo()
+                if changed:
+                    label = "desfeita" if action == "6" else "refeita"
+                    output_fn(f"Alteração {label} no rascunho; Salvar continua explícito.")
+                else:
+                    output_fn("Não há edição disponível para restaurar.")
             else:
                 output_fn("Erro: opção inválida.")
         except (EOFError, KeyboardInterrupt):

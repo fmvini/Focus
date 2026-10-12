@@ -66,6 +66,20 @@ class ConfigEditorIntegrationTests(unittest.TestCase):
         self.assertIn("não salvas descartadas", result.stdout)
         self.assertEqual(self.path.read_bytes(), original)
 
+    def test_cli_history_restores_edits_only_when_saved_and_reload_clears_it(self):
+        original = self.path.read_bytes()
+        result = self.run_editor(["6", "1", "2", "09:00", "11:00", "0", "6", "7", "5"])
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("Não há edição disponível", result.stdout)
+        self.assertIn("Alteração desfeita", result.stdout)
+        self.assertIn("Alteração refeita", result.stdout)
+        self.assertEqual(self.path.read_bytes(), original)
+        result = self.run_editor(["1", "2", "09:00", "11:00", "0", "6", "7", "3", "6", "4", "6", "5"])
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(load_config(self.path).windows[0].days, (0,))
+        self.assertEqual(load_config(self.path).windows[0].start.hour, 9)
+        self.assertIn("Não há edição disponível", result.stdout)
+
     def test_invalid_entry_then_disabled_window_can_be_saved(self):
         result = self.run_editor([
             "1", "2", "08:00", "08:00", "",

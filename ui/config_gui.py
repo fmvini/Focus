@@ -7,7 +7,6 @@ import sys
 from time import monotonic
 
 from core.config import ConfigError
-from core.config_editor import ConfigDraft
 from core.config_review import review_config
 from core.config_repository import ConfigConflictError
 from core.config_session import ConfigSession
@@ -289,7 +288,9 @@ def _build_app(ctk, tk, filedialog, messagebox, session, controller=None, tray=N
             ctk.CTkLabel(settings, justify="left", anchor="nw", wraplength=730, text=(
                 "As alterações ficam em um rascunho até você clicar em Salvar. No primeiro uso, "
                 "Salvar cria o arquivo; fechar e descartar não cria nada. Salvar não inicia o motor.\n\n"
-                "Recarregar lê o arquivo novamente e descarta o rascunho. Se outro editor alterar "
+                "Desfazer/Refazer restaura até 50 edições do rascunho nesta sessão. Salvar mantém o histórico; "
+                "Importar e Recarregar o reiniciam.\n\n"
+                "Recarregar lê o arquivo novamente e descarta o rascunho e seu histórico. Se outro editor alterar "
                 "o arquivo, o Focus informa o conflito antes de salvar.\n\n"
                 "Iniciar exige confirmação e usa o JSON salvo. O motor pode ler alterações salvas no próximo ciclo. "
                 "Parar impede novas ações; uma chamada já iniciada pode terminar e aplicativos não são reabertos. "
@@ -340,8 +341,19 @@ def _build_app(ctk, tk, filedialog, messagebox, session, controller=None, tray=N
                           hover_color="#CEDAD7", command=self.reload_config).grid(row=0, column=2, padx=(0, 8))
             ctk.CTkButton(footer, text="Salvar", width=110, fg_color=accent,
                           command=self.save_config).grid(row=0, column=3)
+            history = ctk.CTkFrame(footer, fg_color="transparent")
+            history.grid(row=1, column=0, columnspan=4, sticky="w", pady=(8, 0))
+            self.undo_button = ctk.CTkButton(history, text="Desfazer", width=90, fg_color=accent,
+                                              command=self.undo_draft)
+            self.undo_button.pack(side="left", padx=(0, 8))
+            self.redo_button = ctk.CTkButton(history, text="Refazer", width=90, fg_color=accent,
+                                              command=self.redo_draft)
+            self.redo_button.pack(side="left", padx=(0, 12))
+            ctk.CTkLabel(history, text="Somente rascunho · Ctrl+Z / Ctrl+Y", text_color=muted).pack(side="left")
             self.bind("<Control-s>", lambda _: self.save_config() if self.modal is None else None)
             self.bind("<Control-r>", lambda _: self.reload_config() if self.modal is None else None)
+            self.bind("<Control-z>", lambda event: self.history_shortcut(event, redo=False))
+            self.bind("<Control-y>", lambda event: self.history_shortcut(event, redo=True))
             self.render()
             self.refresh_status()
             if session.is_new:
@@ -365,6 +377,45 @@ def _build_app(ctk, tk, filedialog, messagebox, session, controller=None, tray=N
                 f"Destino: {session.path.absolute()}"
             ) if session.is_new else "Configuração carregada. Edite o rascunho e clique em Salvar para gravar alterações.")
             self.update_runtime()
+
+        def update_history(self):
+            enabled = not self.closing and self.modal is None and not self.selecting_executables
+            self.undo_button.configure(state="normal" if enabled and session.draft.can_undo else "disabled")
+            self.redo_button.configure(state="normal" if enabled and session.draft.can_redo else "disabled")
+
+        def undo_draft(self):
+            return self.change_history(redo=False)
+
+        def redo_draft(self):
+            return self.change_history(redo=True)
+
+        def change_history(self, *, redo):
+            if self.closing or self.closed or self.modal is not None or self.selecting_executables:
+                return False
+            try:
+                changed = session.draft.redo() if redo else session.draft.undo()
+            except ConfigError as exc:
+                self.notify(f"Não foi possível restaurar a edição: {exc}. Rascunho preservado.", error=True)
+                return False
+            if not changed:
+                return False
+            self.render()
+            action = "refeita" if redo else "desfeita"
+            state = "Salve para aplicar ao arquivo." if session.dirty else "Rascunho corresponde à versão carregada."
+            self.notify(f"Alteração {action} no rascunho. {state}")
+            return True
+
+        def history_shortcut(self, event, *, redo):
+            if self.closing or self.closed or self.modal is not None or self.selecting_executables:
+                return None
+            widget = getattr(event, "widget", None)
+            if widget is not None:
+                try:
+                    if widget.winfo_class() in {"Entry", "Text", "Spinbox", "TEntry", "TSpinbox"}:
+                        return None
+                except tk.TclError:
+                    return None
+            return "break" if self.change_history(redo=redo) else None
 
         def render_review(self):
             review = review_config(session.draft.config)
@@ -398,11 +449,10 @@ def _build_app(ctk, tk, filedialog, messagebox, session, controller=None, tray=N
                 self.notify("Selecione os aplicativos que deseja adicionar ao rascunho.")
                 return
             try:
-                draft = ConfigDraft(with_process_suggestions(session.draft.config, keys))
+                session.draft.replace_config(with_process_suggestions(session.draft.config, keys))
             except ConfigError as exc:
                 self.notify(f"Não foi possível adicionar sugestões: {exc}. Rascunho preservado.", error=True)
                 return
-            session.draft = draft
             for variable in self.suggestion_vars.values():
                 variable.set(0)
             self.render()
@@ -499,6 +549,7 @@ def _build_app(ctk, tk, filedialog, messagebox, session, controller=None, tray=N
                 and not session.is_new and not self.selecting_executables
             ) else "disabled")
             self.stop_button.configure(state="normal" if view.stop_enabled and not self.closing else "disabled")
+            self.update_history()
 
         def start_runtime(self):
             if (self.closing or self.closed or self.modal is not None or controller.is_alive()
@@ -870,7 +921,8 @@ def _build_app(ctk, tk, filedialog, messagebox, session, controller=None, tray=N
                 return
             if not messagebox.askyesno(
                 "Substituir rascunho", "Substituir todo o rascunho pelo JSON selecionado?\n"
-                "Alterações não salvas serão descartadas. O arquivo ativo só muda ao clicar em Salvar.", parent=self
+                "Alterações não salvas e o histórico de edição serão descartados. "
+                "O arquivo ativo só muda ao clicar em Salvar.", parent=self
             ):
                 return
             if self.closing or self.closed:
@@ -921,7 +973,7 @@ def _build_app(ctk, tk, filedialog, messagebox, session, controller=None, tray=N
             if self.closing or self.closed:
                 return
             if session.dirty and not messagebox.askyesno(
-                "Recarregar configuração", "Descartar as alterações não salvas e recarregar o arquivo?", parent=self
+                "Recarregar configuração", "Descartar as alterações não salvas e o histórico de edição e recarregar o arquivo?", parent=self
             ):
                 return
             if self.closing or self.closed:
