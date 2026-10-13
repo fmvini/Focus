@@ -1,6 +1,7 @@
 """Editor e controle explícito de processos; widgets usados somente por Tk."""
 
 from datetime import datetime, timedelta
+from contextlib import contextmanager
 from dataclasses import replace
 from pathlib import Path
 import sys
@@ -157,6 +158,12 @@ def _build_app(ctk, tk, filedialog, messagebox, session, controller=None, tray=N
             self.rule_view_context = None
             self.rule_page_result = None
             self.rule_navigation_target = None
+            self.rule_search_timer = None
+            self.rule_search_ticket = 0
+            self.rule_search_revision = 0
+            self.rule_search_pending = False
+            self.rule_search_immediate = 0
+            self.rule_search_depth = 0
             self.rule_selection_indices = set()
             self.rule_selection_boxes = {}
             self.confirming_rule_removal = False
@@ -569,7 +576,8 @@ def _build_app(ctk, tk, filedialog, messagebox, session, controller=None, tray=N
             if not self.review_is_current():
                 self.notify("A revisão mudou. Escolha um apontamento atualizado.")
                 return False
-            values = getattr(session.draft.config, field)
+            config = session.draft.config
+            values = getattr(config, field)
             if not 0 <= index < len(values):
                 return False
             if field == "windows":
@@ -582,6 +590,10 @@ def _build_app(ctk, tk, filedialog, messagebox, session, controller=None, tray=N
                         if self.rule_view_is_current(self.rule_view_context) else None)
                 if page is not None:
                     self.render_rule_projection(page)
+                elif self.rule_search_pending and rule_page_for_index(
+                        rule_view_indices(config, field, query=self.rule_search.get(), order=self.visual_rule_order), index
+                ) is not None:
+                    self.render_rules(target_index=index)
                 elif self.rule_search.get():
                     self.rule_navigation_target = index
                     try:
@@ -770,18 +782,19 @@ def _build_app(ctk, tk, filedialog, messagebox, session, controller=None, tray=N
             if session.dirty:
                 self.notify("Salve as alterações ou descarte o rascunho com Recarregar antes de iniciar.", error=True)
                 return
-            if not messagebox.askyesno(
-                "Iniciar bloqueador de processos",
-                "Aplicativos elegíveis podem ser encerrados sem salvar seu estado.\n"
-                "O motor usará exclusivamente o JSON salvo, incluindo alterações externas.\n\nIniciar agora?", parent=self
-            ):
-                return
-            if self.closing or self.closed or session.dirty or session.is_new:
-                return
-            if controller.start():
-                self.stop_requested = False
-                self.notify("Motor iniciado com a configuração salva. Confira o resultado do último ciclo acima.")
-            self.update_runtime()
+            with self.rule_search_boundary():
+                if not self.rule_confirmation(messagebox.askyesno,
+                    "Iniciar bloqueador de processos",
+                    "Aplicativos elegíveis podem ser encerrados sem salvar seu estado.\n"
+                    "O motor usará exclusivamente o JSON salvo, incluindo alterações externas.\n\nIniciar agora?", parent=self
+                ):
+                    return
+                if self.closing or self.closed or session.dirty or session.is_new:
+                    return
+                if controller.start():
+                    self.stop_requested = False
+                    self.notify("Motor iniciado com a configuração salva. Confira o resultado do último ciclo acima.")
+                self.update_runtime()
 
         def stop_runtime(self):
             if self.closing or self.closed:
@@ -992,18 +1005,104 @@ def _build_app(ctk, tk, filedialog, messagebox, session, controller=None, tray=N
             self.rule_search_entry.icursor("end")
             return "break"
 
-        def rule_search_changed(self, *_):
-            if self.rule_navigation_target is None:
+        def cancel_rule_search(self):
+            self.rule_search_ticket += 1
+            timer, self.rule_search_timer = self.rule_search_timer, None
+            if timer is not None and not self.closed:
+                self.after_cancel(timer)
+
+        def rule_search_available(self):
+            return (self.navigation_available() and not self.confirming_rule_removal
+                    and self.rule_search_depth == 0)
+
+        def flush_rule_search(self, *, target_index=None):
+            if not self.rule_search_pending or not self.rule_search_available():
+                return False
+            if target_index is None:
                 self.render_rules()
             else:
-                self.render_rules(target_index=self.rule_navigation_target)
+                self.render_rules(target_index=target_index)
+            return True
+
+        @contextmanager
+        def rule_search_boundary(self):
+            self.rule_search_depth += 1
+            try:
+                self.cancel_rule_search()
+                yield
+            finally:
+                self.rule_search_depth -= 1
+                self.flush_rule_search()
+
+        def rule_confirmation(self, choose, *args, **options):
+            with self.rule_search_boundary():
+                revision = self.rule_search_revision
+                result = choose(*args, **options)
+                # Uma consulta forçada no loop do prompt invalida a ação,
+                # inclusive quando volta ao mesmo texto antes do retorno.
+                if self.closing or self.closed or revision != self.rule_search_revision:
+                    return None
+                return result
+
+        def rule_search_changed(self, *_):
+            if self.closing or self.closed:
+                return
+            was_pending = self.rule_search_pending
+            self.cancel_rule_search()
+            self.rule_search_pending = True
+            self.rule_search_revision += 1
+            self.rule_selection_generation += 1
+            self.row_generation["rules"] += 1
+            self.rule_view_context = self.rule_selection_context = None
+            self.rule_page_result = None
+            self.rule_selection_indices.clear()
+            row = self.highlighted_row
+            if row is not None and any(field != "windows" and current is row
+                                       for (field, _), current in self.review_rows.items()):
+                self.clear_review_highlight()
+            if not self.rule_search_available():
+                return
+            if self.rule_search_immediate or self.rule_navigation_target is not None:
+                if self.rule_navigation_target is None:
+                    self.render_rules()
+                else:
+                    self.render_rules(target_index=self.rule_navigation_target)
+                return
+            if not was_pending:
+                self.configure_if_changed(self.rule_description, text="Atualizando busca…")
+                for (field, _), current in self.review_rows.items():
+                    if field != "windows":
+                        for control in current.winfo_children():
+                            if isinstance(control, ctk.CTkButton):
+                                self.configure_if_changed(control, state="disabled")
+                for _, variable, _ in self.rule_selection_boxes.values():
+                    variable.set(0)
+                self.update_rule_selection_controls()
+            ticket = self.rule_search_ticket
+
+            def complete():
+                if (self.closing or self.closed or ticket != self.rule_search_ticket
+                        or self.rule_search_timer is None):
+                    return
+                self.rule_search_timer = None
+                if self.rule_search_available():
+                    self.render_rules()
+
+            self.rule_search_timer = self.after(200, complete)
 
         def clear_rule_search(self, event=None):
             if not self.navigation_available():
                 return None if event is not None else False
             changed = bool(self.rule_search.get())
             if changed:
-                self.rule_search.set("")  # o trace reconstrói a lista uma única vez
+                self.rule_search_immediate += 1
+                try:
+                    self.rule_search.set("")
+                finally:
+                    self.rule_search_immediate -= 1
+            elif self.rule_search_pending:
+                self.flush_rule_search()
+                changed = True
             return "break" if event is not None else changed
 
         def change_rule_order(self, label):
@@ -1052,10 +1151,13 @@ def _build_app(ctk, tk, filedialog, messagebox, session, controller=None, tray=N
 
         def update_rule_pager(self):
             page = self.rule_page_result
-            available = self.navigation_available() and not self.confirming_rule_removal and page is not None
+            available = (self.navigation_available() and not self.confirming_rule_removal
+                         and not self.rule_search_pending and page is not None)
             self.configure_if_changed(self.rule_page_previous, state="normal" if available and page.page > 0 else "disabled")
             self.configure_if_changed(self.rule_page_next, state="normal" if available and page.page + 1 < page.page_count else "disabled")
-            if page is not None:
+            if self.rule_search_pending:
+                self.configure_if_changed(self.rule_page_label, text="Atualizando busca…")
+            elif page is not None:
                 self.configure_if_changed(self.rule_page_label, text=(
                     f"Página {page.page + 1} de {page.page_count} · itens "
                     f"{page.start + 1 if page.total else 0}–{page.stop} de {page.total}"))
@@ -1072,10 +1174,17 @@ def _build_app(ctk, tk, filedialog, messagebox, session, controller=None, tray=N
             return True
 
         def update_rule_selection_controls(self):
-            available = self.navigation_available() and not self.confirming_rule_removal
+            available = self.navigation_available() and not self.confirming_rule_removal and not self.rule_search_pending
             self.configure_if_changed(self.rule_selection_begin, state="normal" if available and not self.rule_selection_mode else "disabled")
             context = self.rule_selection_context
             if self.rule_selection_count is None or context is None:
+                if self.rule_search_pending:
+                    if self.rule_selection_count is not None:
+                        self.configure_if_changed(self.rule_selection_count, text="0 selecionadas / busca pendente\nAtualizando busca…")
+                    for control in self.rule_selection_actions.values():
+                        self.configure_if_changed(control, state="disabled")
+                    for _, _, checkbox in self.rule_selection_boxes.values():
+                        self.configure_if_changed(checkbox, state="disabled")
                 self.update_rule_pager()
                 return
             selected, shown = len(self.rule_selection_indices), len(context[2])
@@ -1133,37 +1242,38 @@ def _build_app(ctk, tk, filedialog, messagebox, session, controller=None, tray=N
         def selection_remove(self, context):
             if not self.selection_is_current(context):
                 return False
-            indices = tuple(index for index in context[2] if index in self.rule_selection_indices)
-            if not indices:
-                return False
-            field, draft = context[1], context[3]
-            epoch = self.row_generation["rules"]
-            page_indices = self.rule_page_result.indices
-            rows = tuple((index, self.review_rows.get((field, index))) for index in page_indices)
-            category = next(label for label, value in rule_fields.items() if value == field)
-            self.confirming_rule_removal = True
-            try:
-                self.update_rule_selection_controls()
-                confirmed = messagebox.askyesno("Remover regras selecionadas",
-                    f"Remover {len(indices)} regra(s) de {category} do rascunho?\n"
-                    "A remoção pode ser desfeita. Clique em Salvar para gravar no arquivo.", parent=self)
-                if (not confirmed or not self.selection_is_current(context, during_confirmation=True)
-                        or indices != tuple(index for index in context[2] if index in self.rule_selection_indices)
-                        or epoch != self.row_generation["rules"] or page_indices != self.rule_page_result.indices
-                        or any(self.review_rows.get((field, index)) is not row for index, row in rows)):
+            with self.rule_search_boundary():
+                indices = tuple(index for index in context[2] if index in self.rule_selection_indices)
+                if not indices:
                     return False
+                field, draft = context[1], context[3]
+                epoch = self.row_generation["rules"]
+                page_indices = self.rule_page_result.indices
+                rows = tuple((index, self.review_rows.get((field, index))) for index in page_indices)
+                category = next(label for label, value in rule_fields.items() if value == field)
+                self.confirming_rule_removal = True
                 try:
-                    removed = draft.remove_rules(field, indices)
-                except ConfigError as exc:
-                    self.notify(f"Não foi possível remover as regras: {exc}. Rascunho preservado.", error=True)
-                    return False
-                self.render()
-                self.notify(f"{removed} regra(s) removida(s) do rascunho de {category}. Clique em Salvar para gravar.")
-                return True
-            finally:
-                self.confirming_rule_removal = False
-                if not self.closing and not self.closed:
                     self.update_rule_selection_controls()
+                    confirmed = self.rule_confirmation(messagebox.askyesno, "Remover regras selecionadas",
+                        f"Remover {len(indices)} regra(s) de {category} do rascunho?\n"
+                        "A remoção pode ser desfeita. Clique em Salvar para gravar no arquivo.", parent=self)
+                    if (not confirmed or not self.selection_is_current(context, during_confirmation=True)
+                            or indices != tuple(index for index in context[2] if index in self.rule_selection_indices)
+                            or epoch != self.row_generation["rules"] or page_indices != self.rule_page_result.indices
+                            or any(self.review_rows.get((field, index)) is not row for index, row in rows)):
+                        return False
+                    try:
+                        removed = draft.remove_rules(field, indices)
+                    except ConfigError as exc:
+                        self.notify(f"Não foi possível remover as regras: {exc}. Rascunho preservado.", error=True)
+                        return False
+                    self.render()
+                    self.notify(f"{removed} regra(s) removida(s) do rascunho de {category}. Clique em Salvar para gravar.")
+                    return True
+                finally:
+                    self.confirming_rule_removal = False
+                    if not self.closing and not self.closed:
+                        self.update_rule_selection_controls()
 
         def build_rule_selection_bar(self, context):
             self.rule_selection_count = ctk.CTkLabel(self.rule_selection_bar, text="", width=215,
@@ -1183,6 +1293,8 @@ def _build_app(ctk, tk, filedialog, messagebox, session, controller=None, tray=N
         def render_rules(self, *, target_index=None):
             if self.closing or self.closed:
                 return
+            self.cancel_rule_search()
+            self.rule_search_pending = False
             self.rule_selection_generation += 1
             self.rule_selection_indices.clear()
             self.rule_selection_boxes.clear()
@@ -1259,19 +1371,20 @@ def _build_app(ctk, tk, filedialog, messagebox, session, controller=None, tray=N
             self.update_rule_selection_controls()
 
         def open_picker(self, choose, **options):
-            # Desfaz a intenção anterior de ocultar, inclusive ready que só
-            # chegar depois do retorno do seletor. Enviar continua explícito.
-            if self.tray_pending:
-                self.restore_window()
-                self.notify("Termine a seleção antes de enviar à bandeja.")
-            self.picker_active = True
-            self.update_runtime()
-            try:
-                return choose(**options)
-            finally:
-                self.picker_active = False
-                if not self.closing and not self.closed:
-                    self.update_runtime()
+            with self.rule_search_boundary():
+                # Desfaz a intenção anterior de ocultar, inclusive ready que só
+                # chegar depois do retorno do seletor. Enviar continua explícito.
+                if self.tray_pending:
+                    self.restore_window()
+                    self.notify("Termine a seleção antes de enviar à bandeja.")
+                self.picker_active = True
+                self.update_runtime()
+                try:
+                    return choose(**options)
+                finally:
+                    self.picker_active = False
+                    if not self.closing and not self.closed:
+                        self.update_runtime()
 
         def select_executables(self):
             if self.closing or self.closed or self.modal is not None or self.picker_active or self.selecting_executables:
@@ -1279,40 +1392,46 @@ def _build_app(ctk, tk, filedialog, messagebox, session, controller=None, tray=N
             field = rule_fields[self.rule_category.get()]
             if field not in {"block_exes", "safelist_exes"}:
                 return
-            self.selecting_executables = True
-            self.executable_picker.configure(state="disabled")
-            self.update_runtime()
-            try:
-                selected = self.open_picker(filedialog.askopenfilenames,
-                    parent=self,
-                    title=("Selecionar executáveis para bloquear por nome" if field == "block_exes"
-                           else "Selecionar executáveis para proteção adicional"),
-                    filetypes=[("Executáveis Windows", "*.exe")],
-                )
-            except tk.TclError as exc:
-                if not self.closing and not self.closed:
-                    self.notify(f"Não foi possível abrir o seletor: {exc}", error=True)
-                return
-            finally:
-                self.selecting_executables = False
-                if not self.closing and not self.closed:
-                    self.update_runtime()
-                    self.render_rules()
-            if not selected or self.closing or self.closed or self.modal is not None:
-                return
-            try:
-                added = session.draft.add_executable_paths(field, selected)
-            except ConfigError as exc:
-                self.notify(f"Não foi possível adicionar executáveis: {exc}. Rascunho preservado.", error=True)
-                return
-            if not added:
-                self.notify("Os executáveis selecionados já estão nesta lista.")
-                return
-            self.render()
-            category = "bloqueio" if field == "block_exes" else "proteção adicional"
-            label = "executável adicionado" if added == 1 else "executáveis adicionados"
-            self.notify(f"{added} {label} ao rascunho de {category}, por nome em qualquer pasta. "
-                        "Clique em Salvar para gravar.")
+            with self.rule_search_boundary():
+                self.selecting_executables = True
+                self.executable_picker.configure(state="disabled")
+                self.update_runtime()
+                rendered = False
+                try:
+                    try:
+                        selected = self.open_picker(filedialog.askopenfilenames,
+                            parent=self,
+                            title=("Selecionar executáveis para bloquear por nome" if field == "block_exes"
+                                   else "Selecionar executáveis para proteção adicional"),
+                            filetypes=[("Executáveis Windows", "*.exe")],
+                        )
+                    except tk.TclError as exc:
+                        if not self.closing and not self.closed:
+                            self.notify(f"Não foi possível abrir o seletor: {exc}", error=True)
+                        return
+                    finally:
+                        self.selecting_executables = False
+                        if not self.closing and not self.closed:
+                            self.update_runtime()
+                    if not selected or self.closing or self.closed or self.modal is not None:
+                        return
+                    try:
+                        added = session.draft.add_executable_paths(field, selected)
+                    except ConfigError as exc:
+                        self.notify(f"Não foi possível adicionar executáveis: {exc}. Rascunho preservado.", error=True)
+                        return
+                    if not added:
+                        self.notify("Os executáveis selecionados já estão nesta lista.")
+                        return
+                    self.render()
+                    rendered = True
+                    category = "bloqueio" if field == "block_exes" else "proteção adicional"
+                    label = "executável adicionado" if added == 1 else "executáveis adicionados"
+                    self.notify(f"{added} {label} ao rascunho de {category}, por nome em qualquer pasta. "
+                                "Clique em Salvar para gravar.")
+                finally:
+                    if not rendered and not self.closing and not self.closed and self.modal is None:
+                        self.render_rules()
 
         def remove_item(self, field, index, *, context=None):
             if not self.navigation_available() or self.confirming_rule_removal or type(index) is not int:
@@ -1320,27 +1439,28 @@ def _build_app(ctk, tk, filedialog, messagebox, session, controller=None, tray=N
             context = self.action_context(field, index) if context is None else context
             if not self.action_is_current(context) or context[1:3] != (field, index):
                 return False
-            self.confirming_rule_removal = True
-            try:
-                if not messagebox.askyesno("Remover item", "Remover este item do rascunho?", parent=self):
-                    return False
-                if not self.action_is_current(context, during_confirmation=True):
-                    return False
+            with self.rule_search_boundary():
+                self.confirming_rule_removal = True
                 try:
-                    if field == "windows":
-                        context[5].remove_window(index)
-                    else:
-                        context[5].remove_rule(field, index)
-                except ConfigError as exc:
-                    self.notify(f"Não foi possível remover: {exc}. Rascunho preservado.", error=True)
-                    return False
-                self.render()
-                self.notify("Item removido do rascunho. Clique em Salvar para gravar.")
-                return True
-            finally:
-                self.confirming_rule_removal = False
-                if not self.closing and not self.closed:
-                    self.update_rule_selection_controls()
+                    if not self.rule_confirmation(messagebox.askyesno, "Remover item", "Remover este item do rascunho?", parent=self):
+                        return False
+                    if not self.action_is_current(context, during_confirmation=True):
+                        return False
+                    try:
+                        if field == "windows":
+                            context[5].remove_window(index)
+                        else:
+                            context[5].remove_rule(field, index)
+                    except ConfigError as exc:
+                        self.notify(f"Não foi possível remover: {exc}. Rascunho preservado.", error=True)
+                        return False
+                    self.render()
+                    self.notify("Item removido do rascunho. Clique em Salvar para gravar.")
+                    return True
+                finally:
+                    self.confirming_rule_removal = False
+                    if not self.closing and not self.closed:
+                        self.update_rule_selection_controls()
 
         def show_changes(self):
             if self.closing or self.closed or self.modal is not None or self.picker_active or self.selecting_executables:
@@ -1356,6 +1476,8 @@ def _build_app(ctk, tk, filedialog, messagebox, session, controller=None, tray=N
             dialog.startup_timers.append(dialog.after(150, dialog.diff_text.focus_set))
 
         def new_dialog(self, title, *, read_only=False):
+            self.flush_rule_search()
+            self.cancel_rule_search()
             dialog = ctk.CTkToplevel(self)
             dialog.read_only = read_only
             dialog.title(title)
@@ -1371,8 +1493,9 @@ def _build_app(ctk, tk, filedialog, messagebox, session, controller=None, tray=N
 
             def close():
                 if self.modal is dialog:
-                    self.dismiss_modal()
-                    self.update_runtime()
+                    with self.rule_search_boundary():
+                        self.dismiss_modal()
+                        self.update_runtime()
 
             dialog.protocol("WM_DELETE_WINDOW", close)
             dialog.bind("<Escape>", lambda _: close())
@@ -1394,14 +1517,15 @@ def _build_app(ctk, tk, filedialog, messagebox, session, controller=None, tray=N
         def finish_edit(self, operation, error_label, close):
             if self.closing or self.closed:
                 return
-            try:
-                operation()
-            except ConfigError as exc:
-                error_label.configure(text=str(exc))
-                return
-            close()
-            self.render()
-            self.notify("Rascunho atualizado. Clique em Salvar para gravar.")
+            with self.rule_search_boundary():
+                try:
+                    operation()
+                except ConfigError as exc:
+                    error_label.configure(text=str(exc))
+                    return
+                close()
+                self.render()
+                self.notify("Rascunho atualizado. Clique em Salvar para gravar.")
 
         def edit_window(self, index=None, *, context=None):
             if not self.navigation_available() or self.confirming_rule_removal:
@@ -1540,98 +1664,102 @@ def _build_app(ctk, tk, filedialog, messagebox, session, controller=None, tray=N
         def import_config(self):
             if self.closing or self.closed or self.modal is not None or self.picker_active:
                 return
-            try:
-                selected = self.open_picker(filedialog.askopenfilename, parent=self, title="Importar configuração JSON",
-                                            filetypes=[("Configuração JSON", "*.json"), ("Todos os arquivos", "*.*")])
-            except tk.TclError as exc:
-                if not self.closing and not self.closed:
-                    self.notify(f"Não foi possível abrir o seletor de importação: {exc}", error=True)
-                return
-            if not selected or self.closing or self.closed:
-                return
-            if not messagebox.askyesno(
-                "Substituir rascunho", "Substituir todo o rascunho pelo JSON selecionado?\n"
-                "Alterações não salvas e o histórico de edição serão descartados. "
-                "O arquivo ativo só muda ao clicar em Salvar.", parent=self
-            ):
-                return
-            if self.closing or self.closed:
-                return
-            try:
-                session.import_config(selected)
-            except ConfigError as exc:
-                self.notify(f"Não foi possível importar: {exc}. Rascunho preservado.", error=True)
-                return
-            self.render()
-            self.notify("JSON importado no rascunho. Clique em Salvar para gravar a configuração ativa.")
+            with self.rule_search_boundary():
+                try:
+                    selected = self.open_picker(filedialog.askopenfilename, parent=self, title="Importar configuração JSON",
+                                                filetypes=[("Configuração JSON", "*.json"), ("Todos os arquivos", "*.*")])
+                except tk.TclError as exc:
+                    if not self.closing and not self.closed:
+                        self.notify(f"Não foi possível abrir o seletor de importação: {exc}", error=True)
+                    return
+                if not selected or self.closing or self.closed:
+                    return
+                if not self.rule_confirmation(messagebox.askyesno,
+                    "Substituir rascunho", "Substituir todo o rascunho pelo JSON selecionado?\n"
+                    "Alterações não salvas e o histórico de edição serão descartados. "
+                    "O arquivo ativo só muda ao clicar em Salvar.", parent=self
+                ):
+                    return
+                if self.closing or self.closed:
+                    return
+                try:
+                    session.import_config(selected)
+                except ConfigError as exc:
+                    self.notify(f"Não foi possível importar: {exc}. Rascunho preservado.", error=True)
+                    return
+                self.render()
+                self.notify("JSON importado no rascunho. Clique em Salvar para gravar a configuração ativa.")
 
         def export_config(self):
             if self.closing or self.closed or self.modal is not None or self.picker_active:
                 return
-            try:
-                selected = self.open_picker(filedialog.asksaveasfilename,
-                    parent=self, title="Exportar rascunho para um novo JSON", defaultextension=".json",
-                    filetypes=[("Configuração JSON", "*.json")], confirmoverwrite=False
-                )
-            except tk.TclError as exc:
-                if not self.closing and not self.closed:
-                    self.notify(f"Não foi possível abrir o seletor de exportação: {exc}", error=True)
-                return
-            if not selected or self.closing or self.closed:
-                return
-            try:
-                session.export_config(selected)
-            except ConfigError as exc:
-                self.notify(f"Não foi possível exportar: {exc}. Escolha um destino novo.", error=True)
-                return
-            self.notify("Rascunho exportado. A exportação não salva a configuração ativa.")
+            with self.rule_search_boundary():
+                try:
+                    selected = self.open_picker(filedialog.asksaveasfilename,
+                        parent=self, title="Exportar rascunho para um novo JSON", defaultextension=".json",
+                        filetypes=[("Configuração JSON", "*.json")], confirmoverwrite=False
+                    )
+                except tk.TclError as exc:
+                    if not self.closing and not self.closed:
+                        self.notify(f"Não foi possível abrir o seletor de exportação: {exc}", error=True)
+                    return
+                if not selected or self.closing or self.closed:
+                    return
+                try:
+                    session.export_config(selected)
+                except ConfigError as exc:
+                    self.notify(f"Não foi possível exportar: {exc}. Escolha um destino novo.", error=True)
+                    return
+                self.notify("Rascunho exportado. A exportação não salva a configuração ativa.")
 
         def save_config(self):
             if self.closing or self.closed:
                 return False
-            creating = session.is_new
-            try:
-                session.save()
-            except ConfigConflictError as exc:
-                self.notify(f"Conflito: {exc}. Seu rascunho foi preservado.", error=True)
-                messagebox.showerror("Conflito de configuração", f"{exc}\n\nRecarregar descarta o rascunho e lê o arquivo atual.", parent=self)
-                return False
-            except ConfigError as exc:
-                self.notify(f"Não foi possível salvar: {exc}", error=True)
-                return False
-            self.render()
-            self.refresh_status(schedule=False)
-            self.notify("Arquivo de configuração criado. Motor permanece parado." if creating else "Configuração salva.")
-            return True
+            with self.rule_search_boundary():
+                creating = session.is_new
+                try:
+                    session.save()
+                except ConfigConflictError as exc:
+                    self.notify(f"Conflito: {exc}. Seu rascunho foi preservado.", error=True)
+                    self.rule_confirmation(messagebox.showerror, "Conflito de configuração", f"{exc}\n\nRecarregar descarta o rascunho e lê o arquivo atual.", parent=self)
+                    return False
+                except ConfigError as exc:
+                    self.notify(f"Não foi possível salvar: {exc}", error=True)
+                    return False
+                self.render()
+                self.refresh_status(schedule=False)
+                self.notify("Arquivo de configuração criado. Motor permanece parado." if creating else "Configuração salva.")
+                return True
 
         def reload_config(self):
             if not self.navigation_available() or self.confirming_rule_removal:
                 return False
-            draft, config = session.draft, session.draft.config
-            generation = self.review_generation
-            history = draft.can_undo, draft.can_redo
-            self.confirming_rule_removal = True
-            try:
-                if session.dirty and not messagebox.askyesno(
-                    "Recarregar configuração", "Descartar as alterações não salvas e o histórico de edição e recarregar o arquivo?", parent=self
-                ):
-                    return False
-                if (not self.navigation_available() or not self.model_is_current(draft, config)
-                        or generation != self.review_generation or history != (draft.can_undo, draft.can_redo)):
-                    return False
+            with self.rule_search_boundary():
+                draft, config = session.draft, session.draft.config
+                generation = self.review_generation
+                history = draft.can_undo, draft.can_redo
+                self.confirming_rule_removal = True
                 try:
-                    session.reload()
-                except ConfigError as exc:
-                    self.notify(f"Não foi possível recarregar: {exc}. Rascunho preservado.", error=True)
-                    return False
-                self.render()
-                self.refresh_status(schedule=False)
-                self.notify("Configuração recarregada.")
-                return True
-            finally:
-                self.confirming_rule_removal = False
-                if not self.closing and not self.closed:
-                    self.update_rule_selection_controls()
+                    if session.dirty and not self.rule_confirmation(messagebox.askyesno,
+                        "Recarregar configuração", "Descartar as alterações não salvas e o histórico de edição e recarregar o arquivo?", parent=self
+                    ):
+                        return False
+                    if (not self.navigation_available() or not self.model_is_current(draft, config)
+                            or generation != self.review_generation or history != (draft.can_undo, draft.can_redo)):
+                        return False
+                    try:
+                        session.reload()
+                    except ConfigError as exc:
+                        self.notify(f"Não foi possível recarregar: {exc}. Rascunho preservado.", error=True)
+                        return False
+                    self.render()
+                    self.refresh_status(schedule=False)
+                    self.notify("Configuração recarregada.")
+                    return True
+                finally:
+                    self.confirming_rule_removal = False
+                    if not self.closing and not self.closed:
+                        self.update_rule_selection_controls()
 
         def refresh_status(self, *, schedule=True):
             if self.closing or self.closed:
@@ -1666,23 +1794,26 @@ def _build_app(ctk, tk, filedialog, messagebox, session, controller=None, tray=N
         def close_editor(self):
             if self.closing or self.closed:
                 return
-            self.restore_window()
-            if session.dirty:
-                answer = messagebox.askyesnocancel("Alterações não salvas", "Salvar as alterações antes de sair?", parent=self)
-                if answer is None or (answer and not self.save_config()):
-                    return
-            self.closing = True
-            self.stop_requested = True
-            mailbox.close()
-            controller.stop()
-            tray.stop()
-            if self.status_timer is not None:
-                self.after_cancel(self.status_timer)
-                self.status_timer = None
-            self.dismiss_modal()
-            self.disable_actions(self)
-            self.notify("Fechando: aguardando motor e bandeja pararem…")
-            self.poll_close()
+            with self.rule_search_boundary():
+                self.restore_window()
+                if session.dirty:
+                    answer = self.rule_confirmation(messagebox.askyesnocancel, "Alterações não salvas", "Salvar as alterações antes de sair?", parent=self)
+                    if answer is None or (answer and not self.save_config()):
+                        return
+                self.closing = True
+                self.cancel_rule_search()
+                self.rule_search_pending = False
+                self.stop_requested = True
+                mailbox.close()
+                controller.stop()
+                tray.stop()
+                if self.status_timer is not None:
+                    self.after_cancel(self.status_timer)
+                    self.status_timer = None
+                self.dismiss_modal()
+                self.disable_actions(self)
+                self.notify("Fechando: aguardando motor e bandeja pararem…")
+                self.poll_close()
 
         def disable_actions(self, frame):
             for child in frame.winfo_children():
@@ -1704,6 +1835,8 @@ def _build_app(ctk, tk, filedialog, messagebox, session, controller=None, tray=N
             if controller.is_alive() or tray.is_alive():
                 return
             self.closing = True
+            self.cancel_rule_search()
+            self.rule_search_pending = False
             mailbox.close()
             for timer in (self.status_timer, self.close_timer):
                 if timer is not None:

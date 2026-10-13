@@ -144,6 +144,14 @@ Revisão revela a página pelo índice original e preserva um filtro que já
 inclua o alvo. Pager/rows usam épocas distintas do owner lógico para recusar
 callbacks antigos. Ver [RULE_PAGINATION_CONTRACT.md](RULE_PAGINATION_CONTRACT.md).
 
+A digitação na busca agrupa escritas por um timer Tk de 200 ms, invalidando
+seleção/owner/bindings imediatamente. Linhas antigas ficam inertes até a
+reconstrução da consulta atual. Clear/ordem/categoria/modelo/review continuam
+resolvendo o destino em uma reconstrução; fronteiras de diálogo suspendem o
+timer e retomam a pendência sem render duplicado. Token monotônico e
+cancelamento owned impedem callbacks tardios após saída. Detalhes em
+[RULE_SEARCH_DEBOUNCE_CONTRACT.md](RULE_SEARCH_DEBOUNCE_CONTRACT.md).
+
 `ui/config_gui.py` importa CustomTkinter/Tk somente na execução de `--gui`.
 A fábrica `_build_app` recebe toolkit, diálogos, sessão e controlador opcional
 para testar os callbacks com arquivos reais sem dependência gráfica. Abertura
@@ -179,7 +187,7 @@ atualização condicional de texto/estado no polling tem contrato próprio em
 - `tests/test_config_gui.py`: callbacks de CRUD, validação e correção,
   categorias, salvamento, recarga e saída usando widgets simulados com JSON
   e repositório reais. Não valida renderização ou compatibilidade dos widgets.
-- `tests/test_config_gui_native.py`: quarenta e oito smoke tests com CustomTkinter real
+- `tests/test_config_gui_native.py`: cinquenta smoke tests com CustomTkinter real
   quando instalado, com janelas ocultas; não substituem inspeção visual.
 
 As dependências estão instaladas no `.venv`/QA 3.12. Os smoke tests exercitam

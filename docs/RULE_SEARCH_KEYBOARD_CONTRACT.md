@@ -14,6 +14,10 @@ de sites, pausa e avisos.
   baseline, histórico, bytes ou motor. Salvar continua explícito.
 - Limpar filtro reutiliza trace e helper de visualização, mantendo ordem
   e índices originais de regras/CRUD/navegação; uma reconstrução por ação.
+  Limpar/Escape continuam síncronos com a busca diferida; consulta vazia
+  pendente é resolvida, enquanto vazia estável permanece noop. Ctrl+F apenas
+  foca e não antecipa a reconstrução. Ver
+  [RULE_SEARCH_DEBOUNCE_CONTRACT.md](RULE_SEARCH_DEBOUNCE_CONTRACT.md).
 - Layout compacto na linha da busca, ordem visual permanece ao lado,
   lista e footer preservados na raiz mínima 880×660. Rótulo informa Ctrl+F;
   Escape é documentado, sem ampliar a interface com instruções técnicas.

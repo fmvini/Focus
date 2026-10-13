@@ -55,7 +55,7 @@ As sugestões de jogos e launchers começam desmarcadas. Escolha quais adicionar
 
 A **Revisão do rascunho** aponta horários/regras repetidos, nomes de bloqueio que também são protegidos e a abrangência de `javaw.exe` por nome. Os apontamentos usam somente a configuração; não verificam processos ou instalações, não alteram listas e não impedem salvar ou iniciar. Corrija o que desejar nas abas correspondentes. As demais proteções do motor continuam valendo.
 
-Para localizar um item, escolha um apontamento numerado e clique em **Ir para item**. A interface abre a categoria, limpa a busca e destaca a linha original; use **Editar** se quiser alterá-la. Navegar não grava nem muda o rascunho. Escolhas antigas são recusadas após mudanças na edição. Ver [contrato da navegação](docs/REVIEW_NAVIGATION_CONTRACT.md).
+Para localizar um item, escolha um apontamento numerado e clique em **Ir para item**. A interface abre a categoria e destaca a linha original, preservando um filtro que já inclua o alvo; use **Editar** se quiser alterá-la. Navegar não grava nem muda o rascunho. Escolhas antigas são recusadas após mudanças na edição. Ver [contrato da navegação](docs/REVIEW_NAVIGATION_CONTRACT.md).
 
 O comando **`--review`** oferece essa revisão para o JSON salvo, sem depender da interface gráfica ou de psutil. Combina somente com `--config`, não altera o arquivo e apresenta todos os apontamentos. Configuração válida retorna 0 mesmo com apontamentos informativos; erros de leitura/validação retornam 1 e argumentos incompatíveis, 2.
 
@@ -66,6 +66,8 @@ Em **Jogos / Apps → Ordem visual**, escolha Cadastro, Nome A–Z ou Nome Z–A
 **Selecionar regras** abre o modo de remoção em lote. Marque linhas ou use **Selecionar exibidas** para selecionar todos os resultados da categoria/filtro atual, inclusive os que exigem rolagem. **Remover selecionadas** pede confirmação e atualiza somente o rascunho, como uma única edição de **Desfazer**; clique em **Salvar** para gravar. **Limpar seleção** e **Fechar seleção** preservam os dados. Atualizar a lista, mudar busca, ordem ou categoria limpa a seleção. Ver [contrato de remoção em lote](docs/RULE_BULK_REMOVE_CONTRACT.md).
 
 Listas extensas usam páginas de 25 regras. **Anterior/Próxima** mudam apenas a página e mantêm as regras selecionadas; **Selecionar exibidas** abrange todos os resultados do filtro, incluindo outras páginas. O contador informa esse total. Busca, ordem, categoria ou mudança da configuração reiniciam a seleção. **Ir para item** revela a página do índice original indicado pela revisão; um filtro que já inclui o alvo é preservado. Ver [contrato da paginação](docs/RULE_PAGINATION_CONTRACT.md).
+
+A busca aguarda uma breve pausa de digitação antes de reconstruir os resultados. Durante a espera, as linhas anteriores ficam desabilitadas e indicam atualização; a seleção é limpa imediatamente. **Limpar**, mudar categoria/ordem e navegar pela revisão resolvem a consulta atual sem esperar. O agendamento é cancelado ao sair e retomado se a saída for cancelada. Ver [contrato da busca](docs/RULE_SEARCH_DEBOUNCE_CONTRACT.md).
 
 **Desfazer** e **Refazer** restauram até 50 edições do rascunho nesta sessão, incluindo horários, regras, sugestões e seleção de arquivos. Os atalhos são **Ctrl+Z/Ctrl+Y** fora de formulários/campos de texto. **Salvar** mantém o histórico; **Importar** ou **Recarregar** bem-sucedidos o reiniciam. A versão restaurada só é gravada quando você salvar; o histórico não é persistido ao fechar.
 

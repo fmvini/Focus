@@ -2,6 +2,16 @@
 
 Fonte: [escopo](Focus%20Blocker_%20escopo%20do%20projeto.md), [requisitos](REQUIREMENTS.md) e [decisões](DECISIONS.md). Fases 1/2: 206 testes OK em Python 3.14.6/psutil 7.2.2 por `.venv/Scripts/python.exe -B -m unittest discover -s tests` (10,542 s). Sintaxe 3.12 dos 18 arquivos Python conferida; runtime 3.12 ainda não executado. Encerramentos reais e fases posteriores continuam pendentes.
 
+## Evidência da busca com reconstrução diferida — 2026-10-13
+
+Contrato em [RULE_SEARCH_DEBOUNCE_CONTRACT.md](RULE_SEARCH_DEBOUNCE_CONTRACT.md).
+
+- Cinco fake/dois native novos cobrem rajada com uma reconstrução, tokens e callbacks antigos antes de Tk, seleção FULL invalidada imediatamente, modelo atual lido uma vez sem IO, JSON tipado/history/baseline/bytes, clear/review/ordem/categoria/modelo sem projeção duplicada, modal/retry/picker/prompts/saída cancelada e cancelamento owned no teardown.
+- Frontend confirmou equivalência AST dos 121 fake/48 native legados normalizando somente o helper de consulta com flush, com oráculos preservados. Backend, Frontend e Banco revisaram a fonte congelada somente por leitura, sem achados funcionais; não executaram suítes nesta revisão.
+- Primeiro run Maestro no sandbox, Python 3.14.6: 842 descobertos, 840 aprovados, uma falha `NIM_ADD` do ícone real e um skip conhecido, 191,815 s. Os 14 testes de bandeja passaram fora do sandbox em 0,343 s, sem alterar fonte ou suprimir erro.
+- Suítes completas finais Maestro no desktop Windows AMD64: **842 descobertos, 841 aprovados e um skip conhecido** symlink/WinError 1314 em ambos runtimes, Python 3.14.6/172,998 s e Python 3.12.14/200,123 s. Cinquenta nativeGUI e ícone real aprovados; implementação/testes permaneceram congelados.
+- AST 3.12/UTF-8 dos 76 arquivos e links locais conferidos. Nenhum benchmark ou captura novo; janelas ocultas não concluem aceite visual/DPI/RNF01. Os testes usam arquivos isolados e controladores simulados.
+
 ## Evidência da paginação visual — 2026-10-13
 
 - Helper frozen: 14 novos/14 view existentes aprovados nos dois runtimes, 0,439 s/0,889 s. Limites 0/25/26/50/51/1000, offsets/clamp/lookup/duplicatas/reconstrução/tipos/frozen/source/pureza/lazy.

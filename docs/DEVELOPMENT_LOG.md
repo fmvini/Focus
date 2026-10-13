@@ -1,3 +1,32 @@
+## 2026-10-13 — Busca com reconstrução diferida
+
+### Implementado
+- Uma pendência Tk de 200 ms agrupa escritas da consulta, com invalidação lógica/seleção/callbacks imediata. Linhas anteriores desabilitadas indicam atualização; callback antigo não apaga timer novo e reconstrução usa o modelo atual.
+- Clear/Escape/ordem/categoria/modelo/review resolvem o destino em uma reconstrução. Boundaries aninhadas de modal/picker/prompts suspendem o timer e retomam uma vez; Apply/import/Save consomem a pendência no render existente. Saída aceita cancela owned timer; Cancel retoma a consulta.
+
+### Arquivos principais alterados
+- `ui/config_gui.py`, `tests/test_config_gui.py`, `tests/test_config_gui_native.py`.
+- `README.md`, `docs/RULE_SEARCH_DEBOUNCE_CONTRACT.md`, `docs/RULE_SEARCH_KEYBOARD_CONTRACT.md`, `docs/GUI_EDITOR_CONTRACT.md`, `docs/README.md`, `docs/DELIVERY_PLAN.md`, `docs/TEST_PLAN.md`, `docs/DEVELOPMENT_LOG.md`.
+
+### Decisões técnicas
+- Manter últimas linhas inertes com indicação de atualização; ações explícitas devem resolver o destino em uma reconstrução, sem flush anterior redundante. Timer único com token e cancelamento owned, sem worker novo, polling adicional ou cache de modelo.
+- Não renderizar sob modal/picker/confirmação, retomar sem perder consulta após cancelamento. Preservar universo completo/projeção25, JSON/history/motor e Save explícito.
+
+### Estado atual
+- Base `e314c22` limpa antes desta unidade; suíte 835/834 aprovados/um skip nos dois runtimes. Backend/Banco/Frontend alinhados por design somente leitura antes de autorizar implementação.
+- Sem novo benchmark ou captura. Duração de 200 ms é espera do event loop, não garantia de resposta nem melhora do render individual.
+- Fonte final congelada: sete fluxos novos (cinco fake/dois native) aprovados nos dois runtimes, Python 3.14.6/16,077 s e Python 3.12.14/26,323 s, zero skips. Cobrem rajada/token/oldcallbacks/sem cópia por tecla, modelo atual tipado/sem IO, ações explícitas/review, modal/retry/picker/prompts/exitCancel e teardown. Legados concluem a digitação por flush explícito sem retirar os oráculos de dados.
+- AST 3.12/UTF-8 dos 76 arquivos, links locais dos 31 documentos e diff conferidos pelo Maestro.
+- Retomada Maestro: Backend, Frontend e Banco concluíram revisão somente leitura sem achados funcionais. Frontend confirmou hashes estáveis dos três arquivos GUI/testes e equivalência AST dos 121 fake/48 native legados após normalizar somente o helper de consulta com flush; nenhum oráculo adicional mudou. Nesta revisão os agentes não executaram suítes nem importaram GUI.
+- Plano de entrega atualizado para refletir as unidades já integradas e a validação atual; perguntas de sites/pausa/avisos continuam sem resposta em `docs/USER_ANSWERS.md`.
+- Primeira suíte Maestro no sandbox, Python 3.14.6: 842 descobertos, 840 aprovados, um skip conhecido e uma falha de criação do ícone real da bandeja (`NIM_ADD`), 191,815 s. Os 14 testes de bandeja passaram fora do sandbox em 0,343 s, sem alteração de fonte ou supressão de falha.
+- Suítes completas finais Maestro no desktop Windows AMD64: **842 descobertos, 841 aprovados e um skip conhecido** de symlink/WinError 1314 em ambos runtimes, Python 3.14.6/172,998 s e Python 3.12.14/200,123 s. Cinquenta nativeGUI e ícone real aprovados; fonte/hash permaneceram congelados. Implementação, regressões e documentação formam uma unidade pronta para commit local conjunto.
+
+### Próximos passos
+- Preparar roteiro de aceite visual/DPI/acessibilidade: primeira configuração, Jogos / Apps em 880×660, busca pendente/concluída com e sem seleção, teclado, rolagem, diálogos e retorno da bandeja. Registrar ambiente e evidências reais; janelas ocultas não concluem esse aceite.
+- Definir proposta de protocolo de desempenho (hardware/carga, cenário idle, CPU/RAM e repetições), distinguindo medições exploratórias de aceite RNF01 e preservando decisões pendentes D18.
+- Não retomar lotes anteriores nem implementar sites/pausa/avisos enquanto respostas correspondentes permanecerem vazias.
+
 ## 2026-10-13 — Paginação visual de regras
 
 ### Implementado

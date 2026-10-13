@@ -106,6 +106,11 @@ class NativeConfigGuiTests(unittest.TestCase):
     def entries(self):
         return [child for child in self.descendants(self.app.modal) if isinstance(child, self.ctk.CTkEntry)]
 
+    def set_rule_query(self, value):
+        """Conclui a busca quando o fluxo legado exige a lista atualizada."""
+        self.app.rule_search.set(value)
+        self.app.flush_rule_search()
+
     def native_pagination_fixture(self, *, duplicates=False):
         values = [f"game-{index:03}.exe" for index in range(60)]
         if duplicates:
@@ -117,6 +122,128 @@ class NativeConfigGuiTests(unittest.TestCase):
         self.app.render()
         self.app.geometry("880x660")
         self.app.tabs.set("Jogos / Apps")
+
+    def test_rule_search_debounce_native_trailing_timer_old_callbacks_and_full_selection_reset(self):
+        self.native_pagination_fixture()
+        self.session.draft.add_rule("safelist_exes", "redo.exe")
+        self.session.draft.undo()
+        self.app.render()
+        self.set_rule_query("game-")
+        self.app.begin_rule_selection()
+        self.app.selection_select_all(self.app.rule_selection_context)
+        row, variable, checkbox = self.app.rule_selection_boxes[2]
+        old_commands = [checkbox.cget("command"), self.button(row, "Editar").cget("command"),
+                        self.button(row, "Remover").cget("command"), self.app.rule_page_next.cget("command")]
+        draft, snapshot, config = self.session.draft, self.session.snapshot, self.session.draft.config
+        original = self.path.read_bytes()
+        with patch.object(self.app, "after", wraps=self.app.after) as scheduled, \
+                patch.object(self.app, "render_rule_projection", wraps=self.app.render_rule_projection) as projected:
+            self.app.rule_search.set("game-")
+            old_timer, old_complete = self.app.rule_search_timer, scheduled.call_args.args[1]
+            self.app.rule_search.set("missing")
+            self.app.rule_search.set("game-")
+            current_timer = self.app.rule_search_timer
+            self.assertEqual(sum(call.args[0] == 200 for call in scheduled.call_args_list), 3)
+            self.assertNotIn(old_timer, self.app.tk.splitlist(self.app.tk.call("after", "info")))
+            self.assertIn(current_timer, self.app.tk.splitlist(self.app.tk.call("after", "info")))
+            self.assertIsNone(self.app.rule_view_context)
+            self.assertEqual(self.app.rule_selection_indices, set())
+            self.assertEqual(self.button(row, "Editar").cget("state"), "disabled")
+            self.assertEqual(checkbox.cget("state"), "disabled")
+            self.assertIn("Atualizando busca", self.app.rule_selection_count.cget("text"))
+            self.assertEqual(self.app.rule_page_next.cget("state"), "disabled")
+            with patch.object(variable, "get", side_effect=AssertionError("old native variable")):
+                for command in old_commands:
+                    self.assertFalse(command())
+            old_complete()
+            self.assertEqual(self.app.rule_search_timer, current_timer)
+            projected.assert_not_called()
+            self.app.after(350, self.app.quit)
+            self.app.mainloop()
+            projected.assert_called_once_with(0)
+        self.assertFalse(self.app.rule_search_pending)
+        self.assertIsNone(self.app.rule_search_timer)
+        self.assertEqual(self.app.rule_page_result.total, 60)
+        self.assertEqual(len(self.app.rule_selection_boxes), 25)
+        self.assertTrue(all(box.cget("state") == "normal" for _, _, box in self.app.rule_selection_boxes.values()))
+        self.assertIs(self.session.snapshot, snapshot)
+        self.assertEqual(draft.config, config)
+        self.assertFalse(self.session.dirty)
+        self.assertFalse(draft.can_undo)
+        self.assertTrue(draft.can_redo)
+        self.assertEqual(self.path.read_bytes(), original)
+        self.assertEqual((self.controller.starts, self.controller.stops), (0, 0))
+        self.assertEqual(self.background_errors, [])
+
+    def test_rule_search_debounce_native_review_modal_picker_exit_cancel_and_teardown(self):
+        import tkinter as tk
+        self.native_pagination_fixture()
+        self.app.change_rule_order("Nome Z–A")
+        original = self.path.read_bytes()
+        for query, expected in (("game-", "game-"), ("game-059", "")):
+            with self.subTest(query=query), patch.object(self.app, "render_rule_projection", wraps=self.app.render_rule_projection) as projected:
+                self.app.rule_search.set(query)
+                self.assertTrue(self.app.navigate_review("block_exes", 2))
+                projected.assert_called_once_with(2)
+                self.assertEqual(self.app.rule_search.get(), expected)
+                self.assertIs(self.app.highlighted_row, self.app.review_rows[("block_exes", 2)])
+        self.app.edit_rule()
+        self.app.modal.withdraw()
+        self.entries()[0].insert(0, "game-added.exe")
+        with patch.object(self.app, "render_rule_projection", wraps=self.app.render_rule_projection) as projected:
+            self.app.rule_search.set("game-")
+            self.assertIsNone(self.app.rule_search_timer)
+            projected.assert_not_called()
+            self.button(self.app.modal, "Adicionar").invoke()
+            projected.assert_called_once_with(0)
+        self.assertTrue(self.app.undo_draft())
+        self.assertFalse(self.session.dirty)
+        self.app.edit_rule()
+        self.app.modal.withdraw()
+        with patch.object(self.app, "render_rule_projection", wraps=self.app.render_rule_projection) as projected:
+            self.app.rule_search.set("game-00")
+            self.button(self.app.modal, "Cancelar").invoke()
+            projected.assert_called_once_with(0)
+        def failed_picker(**options):
+            self.app.rule_search.set("game-")
+            self.assertIsNone(self.app.rule_search_timer)
+            raise tk.TclError("picker failed")
+        with patch.object(self.app, "render_rule_projection", wraps=self.app.render_rule_projection) as projected:
+            with self.assertRaisesRegex(tk.TclError, "picker failed"):
+                self.app.open_picker(failed_picker)
+            projected.assert_called_once_with(0)
+        self.session.draft.add_rule("safelist_exes", "unsaved.exe")
+        self.app.render()
+        self.messages.askyesnocancel.return_value = None
+        with patch.object(self.app, "after", wraps=self.app.after) as scheduled, \
+                patch.object(self.app, "render_rule_projection", wraps=self.app.render_rule_projection) as projected:
+            self.app.rule_search.set("game-")
+            old_complete = scheduled.call_args.args[1]
+            self.app.close_editor()
+            projected.assert_called_once_with(0)
+            old_complete()
+            self.assertEqual(projected.call_count, 1)
+        self.assertFalse(self.app.closing)
+        self.assertFalse(self.app.closed)
+        self.assertFalse(self.app.rule_search_pending)
+        self.assertEqual(self.app.rule_search.get(), "game-")
+        self.assertEqual((self.controller.starts, self.controller.stops), (0, 0))
+        self.messages.askyesnocancel.return_value = False
+        with patch.object(self.app, "after", wraps=self.app.after) as scheduled:
+            self.app.rule_search.set("game-00")
+            old_complete = scheduled.call_args.args[1]
+        self.app.close_editor()
+        self.assertTrue(self.app.closed)
+        self.assertIsNone(self.app.rule_search_timer)
+        with patch.object(self.app.rule_search, "get", side_effect=AssertionError("Tk after destroy")):
+            old_complete()
+            self.assertFalse(self.app.flush_rule_search())
+        self.assertEqual(self.path.read_bytes(), original)
+        self.assertEqual(self.app.tk.splitlist(self.app.tk.call("after", "info")), ())
+        self.app.tk.call("update")
+        self.assertEqual(self.background_errors, [])
+        self.controller.wait.assert_not_called()
+        self.tray.wait.assert_not_called()
 
     def test_rule_pagination_native_layout_crosspage_old_callbacks_and_one_undo(self):
         self.native_pagination_fixture(duplicates=True)
@@ -159,7 +286,7 @@ class NativeConfigGuiTests(unittest.TestCase):
         self.assertEqual(draft.config, config)
         self.assertFalse(draft.can_undo)
         self.assertTrue(draft.can_redo)
-        self.app.rule_search.set("missing")
+        self.set_rule_query("missing")
         self.assertFalse(self.app.rule_pager.grid_info())
         self.assertEqual(self.app.rule_page_result.total, 0)
         self.app.update()
@@ -183,7 +310,7 @@ class NativeConfigGuiTests(unittest.TestCase):
         self.assertTrue(self.app.change_rule_page(0))
         self.assertNotIn(timer, self.app.tk.splitlist(self.app.tk.call("after", "info")))
         self.assertIsNone(self.app.highlighted_row)
-        self.app.rule_search.set("game-059")
+        self.set_rule_query("game-059")
         with patch.object(self.app, "render_rule_projection", wraps=self.app.render_rule_projection) as projected:
             self.assertTrue(self.app.navigate_review("block_exes", 2))
             projected.assert_called_once_with(2)
@@ -207,7 +334,7 @@ class NativeConfigGuiTests(unittest.TestCase):
         self.session.draft.add_rule("safelist_exes", "redo.exe")
         self.session.draft.undo()
         self.app.render()
-        self.app.rule_search.set("game-")
+        self.set_rule_query("game-")
         self.app.change_rule_order("Nome Z–A")
         self.app.begin_rule_selection()
         context, generation = self.app.rule_selection_context, self.app.rule_selection_generation
@@ -566,7 +693,7 @@ class NativeConfigGuiTests(unittest.TestCase):
         self.session.draft.add_rule("block_exes", "hidden.exe")
         self.app.render()
         self.app.change_rule_order("Nome Z–A")
-        self.app.rule_search.set("match")
+        self.set_rule_query("match")
         draft, snapshot, config = self.session.draft, self.session.snapshot, self.session.draft.config
         original = self.path.read_bytes()
         history = self.session.dirty, draft.can_undo, draft.can_redo
@@ -616,7 +743,7 @@ class NativeConfigGuiTests(unittest.TestCase):
         self.session.reload()
         self.app.render()
         original, config, snapshot = self.path.read_bytes(), self.session.draft.config, self.session.snapshot
-        self.app.rule_search.set("dup")
+        self.set_rule_query("dup")
         self.app.change_rule_order("Nome Z–A")
         self.app.begin_rule_selection()
         self.button(self.app, "Selecionar exibidas").invoke()
@@ -660,7 +787,7 @@ class NativeConfigGuiTests(unittest.TestCase):
             self.assertTrue(self.app.confirming_rule_removal)
             self.assertFalse(self.app.selection_remove(context))
             self.assertFalse(self.app.selection_clear(context))
-            self.app.rule_search.set("two")
+            self.set_rule_query("two")
             return True
         self.messages.askyesno.side_effect = changed_prompt
         with patch.object(self.session.draft, "remove_rules", side_effect=AssertionError("stale remove")):
@@ -691,7 +818,7 @@ class NativeConfigGuiTests(unittest.TestCase):
         self.app.geometry("880x660")
         entry = self.app.rule_search_entry
         self.app.change_rule_order("Nome Z–A")
-        self.app.rule_search.set(" Existing query ")
+        self.set_rule_query(" Existing query ")
         self.assertEqual(entry.master.grid_info()["row"], 3)
         self.assertEqual(entry.master.grid_info()["column"], 0)
         self.assertIs(self.button(self.app, "Limpar").master, entry.master)
@@ -728,7 +855,7 @@ class NativeConfigGuiTests(unittest.TestCase):
         state = self.session.dirty, draft.can_undo, draft.can_redo
         generation = self.app.review_generation
         self.app.change_rule_order("Nome Z–A")
-        self.app.rule_search.set("a.exe")
+        self.set_rule_query("a.exe")
         self.assertEqual(self.native_rule_indices("block_exes"), [1, 2])
         with patch.object(self.app, "render_rules", wraps=self.app.render_rules) as render, \
                 patch.object(Path, "read_bytes", side_effect=AssertionError("IO")), \
@@ -740,7 +867,7 @@ class NativeConfigGuiTests(unittest.TestCase):
             render.reset_mock()
             self.button(self.app, "Limpar").invoke()
             render.assert_not_called()
-            self.app.rule_search.set("missing")
+            self.set_rule_query("missing")
             render.reset_mock()
             self.button(self.app, "Limpar").invoke()
             render.assert_called_once_with()
@@ -761,7 +888,7 @@ class NativeConfigGuiTests(unittest.TestCase):
     def test_rule_search_keyboard_native_modal_picker_and_captured_callbacks_after_teardown(self):
         focus, clear = self.app.focus_rule_search, self.app.clear_rule_search
         button_command = self.button(self.app, "Limpar").cget("command")
-        self.app.rule_search.set("keep")
+        self.set_rule_query("keep")
         config = self.session.draft.config
         self.app.edit_window()
         self.app.modal.withdraw()
@@ -807,7 +934,7 @@ class NativeConfigGuiTests(unittest.TestCase):
         self.assertEqual(self.native_rule_indices("block_exes"), [1, 2, 3, 0])
         self.app.change_rule_order("Nome Z–A")
         self.assertEqual(self.native_rule_indices("block_exes"), [0, 3, 1, 2])
-        self.app.rule_search.set(" A.EXE ")
+        self.set_rule_query(" A.EXE ")
         self.assertEqual(self.native_rule_indices("block_exes"), [1, 2])
         row = self.app.review_rows[("block_exes", 2)]
         self.button(row, "Editar").invoke()
@@ -818,7 +945,7 @@ class NativeConfigGuiTests(unittest.TestCase):
         self.entries()[0].insert(0, "changed.exe")
         self.button(self.app.modal, "Aplicar alteração").invoke()
         self.assertEqual(self.session.draft.config.block_exes, ("z.exe", "a.exe", "changed.exe", "b.exe"))
-        self.app.rule_search.set("")
+        self.set_rule_query("")
         self.messages.askyesno.return_value = True
         self.button(self.app.review_rows[("block_exes", 3)], "Remover").invoke()
         self.assertEqual(self.session.draft.config.block_exes, ("z.exe", "a.exe", "changed.exe"))
@@ -847,7 +974,7 @@ class NativeConfigGuiTests(unittest.TestCase):
         self.assertEqual(self.native_rule_indices("block_cmdline"), [2, 3, 1, 0])
         self.app.change_rule_order("Nome Z–A")
         self.assertEqual(self.native_rule_indices("block_cmdline"), [0, 1, 2, 3])
-        self.app.rule_search.set("z")
+        self.set_rule_query("z")
         self.assertEqual(self.native_rule_indices("block_cmdline"), [0, 1])
         self.assertIs(self.session.draft, draft)
         self.assertIs(self.session.snapshot, snapshot)
@@ -873,7 +1000,7 @@ class NativeConfigGuiTests(unittest.TestCase):
         self.app.change_rule_order("Nome A–Z")
         self.assertIsNone(self.app.highlighted_row)
         self.assertNotIn(timer, self.app.tk.splitlist(self.app.tk.call("after", "info")))
-        self.app.rule_search.set("a-00")
+        self.set_rule_query("a-00")
         self.assertTrue(self.app.navigate_review_choice(token))
         self.assertEqual(self.app.rule_search.get(), "")
         self.assertEqual(self.app.rule_order.get(), "Nome A–Z")
@@ -914,7 +1041,7 @@ class NativeConfigGuiTests(unittest.TestCase):
         for field in ("windows", "block_exes", "block_folders", "safelist_exes", "block_cmdline"):
             with self.subTest(field=field):
                 if field != "windows":
-                    self.app.rule_search.set("no results")
+                    self.set_rule_query("no results")
                     with patch.object(self.app, "render_rules", wraps=self.app.render_rules) as rendered:
                         self.assertTrue(self.app.navigate_review(field, 1))
                         rendered.assert_called_once_with(target_index=1)
@@ -1002,10 +1129,10 @@ class NativeConfigGuiTests(unittest.TestCase):
         self.assertTrue(self.app.navigate_review("block_exes", 0))
         row = self.app.highlighted_row
         timer = row.review_scroll_timer
-        self.app.rule_search.set("no results")
+        self.set_rule_query("no results")
         self.assertIsNone(self.app.highlighted_row)
         self.assertNotIn(timer, self.app.tk.splitlist(self.app.tk.call("after", "info")))
-        self.app.rule_search.set("")
+        self.set_rule_query("")
         self.app.navigate_review("block_exes", 0)
         self.app.after(100, self.app.quit)
         self.app.mainloop()
@@ -1435,7 +1562,7 @@ class NativeConfigGuiTests(unittest.TestCase):
         for name in ("first.exe", "target.exe", "last.exe"):
             self.session.draft.add_rule("block_exes", name)
         self.app.render()
-        self.app.rule_search.set("TARGET")
+        self.set_rule_query("TARGET")
         self.app.update_idletasks()
         self.button(self.app.rules_list, "Editar").invoke()
         self.app.modal.withdraw()
@@ -1511,7 +1638,7 @@ class NativeConfigGuiTests(unittest.TestCase):
         self.app.render()
         orphaned_row = Mock()
         self.button(self.app.rules_list, "Editar").after(30, orphaned_row)
-        self.app.rule_search.set("no results")
+        self.set_rule_query("no results")
         self.button(self.app, "Adicionar horário").invoke()
         orphaned_modal = Mock()
         self.app.modal.after(30, orphaned_modal)
