@@ -153,6 +153,13 @@ a conferência final e o replace; não equivale a CAS/lock de escritores externo
 
 ## Validação e limites
 
+Ações individuais e formulários recusam contextos antigos após reconstrução
+da lista ou mudança do rascunho. Remoção revalida antes/depois da confirmação;
+Apply verifica identidade modal/draft e conteúdo tipado antes de ler campos.
+Recarregar não executa durante formulário, seletor ou outra confirmação e
+preserva mudanças de memória feitas durante o prompt. Detalhes em
+[EDITOR_ACTION_CONTEXT_CONTRACT.md](EDITOR_ACTION_CONTEXT_CONTRACT.md).
+
 - `tests/test_config_session.py`: persistência real, rascunho/baseline,
   consulta de agenda salva, dias vazios, conflitos, remoção, falhas e retry.
 - `tests/test_config_gui_main.py`: flag, importações sob demanda, abertura
@@ -160,11 +167,11 @@ a conferência final e o replace; não equivale a CAS/lock de escritores externo
 - `tests/test_config_gui.py`: callbacks de CRUD, validação e correção,
   categorias, salvamento, recarga e saída usando widgets simulados com JSON
   e repositório reais. Não valida renderização ou compatibilidade dos widgets.
-- `tests/test_config_gui_native.py`: trinta e um smoke tests com CustomTkinter real
+- `tests/test_config_gui_native.py`: quarenta e três smoke tests com CustomTkinter real
   quando instalado, com janelas ocultas; não substituem inspeção visual.
 
-Na retomada de 2026-10-12, as dependências foram instaladas no `.venv`/QA 3.12 e os trinta e um
-smoke tests nativos passaram sem erros de callbacks Tk. Controlador simulado,
+As dependências estão instaladas no `.venv`/QA 3.12. Os smoke tests exercitam
+callbacks e teardown de widgets reais. Controlador simulado,
 sem encerramentos reais. A janela de QA abriu com JSON isolado e alvos vazios,
 mas a captura falhou duas vezes por timeout; inspeção visual, DPI e rolagem em
 tamanho mínimo continuam pendentes. Não considerar a fase 5 completa entregue.

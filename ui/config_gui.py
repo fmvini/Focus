@@ -850,18 +850,60 @@ def _build_app(ctk, tk, filedialog, messagebox, session, controller=None, tray=N
             self.modal = None
             dialog.destroy()
 
-        def item_row(self, frame, index, title, detail, edit, remove, duplicate=None, selection=None):
+        def model_is_current(self, draft, config):
+            return session.draft is draft and configs_equal(config, session.draft.config)
+
+        def action_context(self, field, index, *, row=None, config=None):
+            if field not in ("windows", *rule_fields.values()) or type(index) is not int or index < 0:
+                return None
+            config = session.draft.config if config is None else config
+            if index >= len(getattr(config, field)):
+                return None
+            kind = "windows" if field == "windows" else "rules"
+            view = None if kind == "windows" else (self.rule_category.get(), self.rule_search.get(), self.visual_rule_order)
+            return (kind, field, index, self.row_generation[kind], row, session.draft, config, view)
+
+        def action_is_current(self, context, *, during_confirmation=False):
+            if (not self.navigation_available() or (self.confirming_rule_removal and not during_confirmation)
+                    or context is None):
+                return False
+            kind, field, index, generation, row, draft, config, view = context
+            if (generation != self.row_generation[kind] or not self.model_is_current(draft, config)
+                    or type(index) is not int or not 0 <= index < len(getattr(config, field))
+                    or (row is not None and self.review_rows.get((field, index)) is not row)):
+                return False
+            return view is None or view == (self.rule_category.get(), self.rule_search.get(), self.visual_rule_order)
+
+        def form_is_current(self, dialog, draft, config, error):
+            if (self.closing or self.closed or self.picker_active or self.selecting_executables
+                    or self.confirming_rule_removal or self.modal is not dialog):
+                return False
+            if not self.model_is_current(draft, config):
+                error.configure(text="O rascunho mudou. Feche este formulário e reabra o item para editar a versão atual.")
+                return False
+            return True
+
+        def item_row(self, frame, index, title, detail, edit, remove, duplicate=None, selection=None, action=None):
             row = ctk.CTkFrame(frame, fg_color="white", corner_radius=8)
             row.grid(row=index, column=0, sticky="ew", pady=(0, 8))
+            if action is not None:
+                field, original_index, config = action
+                row_action_context = self.action_context(field, original_index, row=row, config=config)
+                row.action_context = row_action_context
+                edit = (lambda i=original_index, ctx=row_action_context: self.edit_window(i, context=ctx)) if field == "windows" else (
+                    lambda i=original_index, f=field, ctx=row_action_context: self.edit_rule(i, f, context=ctx))
+                remove = lambda f=field, i=original_index, ctx=row_action_context: self.remove_item(f, i, context=ctx)
+                if duplicate is not None:
+                    duplicate = lambda i=original_index, ctx=row_action_context: self.duplicate_window(i, context=ctx)
             text_column = 0 if selection is None else 1
             row.grid_columnconfigure(text_column, weight=1)
             wrap = 390 if duplicate is not None else 500 if selection is not None else 540
             if selection is not None:
-                context, original_index = selection
+                selection_context, original_index = selection
                 variable = tk.IntVar(value=0)
                 checkbox = ctk.CTkCheckBox(row, text="", width=24, checkbox_width=20, checkbox_height=20,
-                                         variable=variable, command=lambda: self.selection_toggle(
-                                             context, original_index, row, variable))
+                                         variable=variable, command=lambda ctx=selection_context, i=original_index,
+                                         current_row=row, var=variable: self.selection_toggle(ctx, i, current_row, var))
                 checkbox.grid(row=0, column=0, rowspan=2, padx=(8, 0))
                 self.rule_selection_boxes[original_index] = (row, variable, checkbox)
             ctk.CTkLabel(row, text=title, anchor="w", justify="left", wraplength=wrap,
@@ -880,8 +922,11 @@ def _build_app(ctk, tk, filedialog, messagebox, session, controller=None, tray=N
             return row
 
         def render_windows(self):
+            if self.closing or self.closed:
+                return
             self.clear(self.windows_list)
-            windows = session.draft.config.windows
+            config = session.draft.config
+            windows = config.windows
             if not windows:
                 ctk.CTkLabel(self.windows_list, text="Nenhum horário cadastrado.\nAdicione seu primeiro horário para começar.",
                              text_color=muted).grid(row=0, column=0, pady=45)
@@ -891,18 +936,22 @@ def _build_app(ctk, tk, filedialog, messagebox, session, controller=None, tray=N
                               f"{window.start:%H:%M} → {window.end:%H:%M}", day_text,
                               lambda i=index: self.edit_window(i),
                               lambda i=index: self.remove_item("windows", i),
-                              lambda i=index: self.duplicate_window(i))
+                              lambda i=index: self.duplicate_window(i), action=("windows", index, config))
 
-        def duplicate_window(self, index):
-            if self.closing or self.closed or self.modal is not None:
-                return
+        def duplicate_window(self, index, *, context=None):
+            if not self.navigation_available() or self.confirming_rule_removal or type(index) is not int:
+                return False
+            context = self.action_context("windows", index) if context is None else context
+            if not self.action_is_current(context) or context[1:3] != ("windows", index):
+                return False
             try:
-                session.draft.duplicate_window(index)
+                context[5].duplicate_window(index)
             except ConfigError as exc:
                 self.notify(f"Não foi possível duplicar: {exc}", error=True)
-                return
+                return False
             self.render()
             self.notify("Horário duplicado no rascunho. Clique em Salvar para gravar.")
+            return True
 
         def focus_rule_search(self, event=None):
             if not self.navigation_available():
@@ -1106,7 +1155,8 @@ def _build_app(ctk, tk, filedialog, messagebox, session, controller=None, tray=N
                 self.review_rows[(field, index)] = self.item_row(self.rules_list, visible, title, detail,
                               lambda i=index, f=field: self.edit_rule(i, f),
                               lambda i=index, f=field: self.remove_item(f, i),
-                              selection=(context, index) if context is not None else None)
+                              selection=(context, index) if context is not None else None,
+                              action=(field, index, config))
             if not indices:
                 ctk.CTkLabel(self.rules_list, text="Nenhuma regra corresponde à busca nesta categoria.",
                              text_color=muted).grid(row=0, column=0, pady=45)
@@ -1168,19 +1218,33 @@ def _build_app(ctk, tk, filedialog, messagebox, session, controller=None, tray=N
             self.notify(f"{added} {label} ao rascunho de {category}, por nome em qualquer pasta. "
                         "Clique em Salvar para gravar.")
 
-        def remove_item(self, field, index):
-            if self.closing or self.closed or self.modal is not None:
-                return
-            if not messagebox.askyesno("Remover item", "Remover este item do rascunho?", parent=self):
-                return
-            if self.closing or self.closed:
-                return
-            if field == "windows":
-                session.draft.remove_window(index)
-            else:
-                session.draft.remove_rule(field, index)
-            self.render()
-            self.notify("Item removido do rascunho. Clique em Salvar para gravar.")
+        def remove_item(self, field, index, *, context=None):
+            if not self.navigation_available() or self.confirming_rule_removal or type(index) is not int:
+                return False
+            context = self.action_context(field, index) if context is None else context
+            if not self.action_is_current(context) or context[1:3] != (field, index):
+                return False
+            self.confirming_rule_removal = True
+            try:
+                if not messagebox.askyesno("Remover item", "Remover este item do rascunho?", parent=self):
+                    return False
+                if not self.action_is_current(context, during_confirmation=True):
+                    return False
+                try:
+                    if field == "windows":
+                        context[5].remove_window(index)
+                    else:
+                        context[5].remove_rule(field, index)
+                except ConfigError as exc:
+                    self.notify(f"Não foi possível remover: {exc}. Rascunho preservado.", error=True)
+                    return False
+                self.render()
+                self.notify("Item removido do rascunho. Clique em Salvar para gravar.")
+                return True
+            finally:
+                self.confirming_rule_removal = False
+                if not self.closing and not self.closed:
+                    self.update_rule_selection_controls()
 
         def show_changes(self):
             if self.closing or self.closed or self.modal is not None or self.picker_active or self.selecting_executables:
@@ -1243,12 +1307,19 @@ def _build_app(ctk, tk, filedialog, messagebox, session, controller=None, tray=N
             self.render()
             self.notify("Rascunho atualizado. Clique em Salvar para gravar.")
 
-        def edit_window(self, index=None):
-            if self.closing or self.closed or self.modal is not None:
-                return
+        def edit_window(self, index=None, *, context=None):
+            if not self.navigation_available() or self.confirming_rule_removal:
+                return False
+            if index is not None:
+                context = self.action_context("windows", index) if context is None else context
+                if type(index) is not int or not self.action_is_current(context) or context[1:3] != ("windows", index):
+                    return False
+            draft, config = session.draft, session.draft.config
+            value = None if index is None else config.windows[index]
             dialog, form, error, actions, close = self.new_dialog("Adicionar horário" if index is None else "Editar horário")
+            if not self.form_is_current(dialog, draft, config, error):
+                return False
             dialog.geometry("560x470")
-            value = None if index is None else session.draft.config.windows[index]
             ctk.CTkLabel(form, text="Início (HH:MM)", anchor="w").grid(row=0, column=0, sticky="w")
             start = ctk.CTkEntry(form, placeholder_text="HH:MM")
             start.grid(row=1, column=0, sticky="ew", pady=(0, 8))
@@ -1268,8 +1339,7 @@ def _build_app(ctk, tk, filedialog, messagebox, session, controller=None, tray=N
                                 checkbox_height=18, fg_color=accent).grid(row=0, column=day, padx=(0, 6), pady=8)
 
             def form_is_current():
-                return (not self.closing and not self.closed and not self.picker_active
-                        and not self.selecting_executables and self.modal is dialog)
+                return self.form_is_current(dialog, draft, config, error)
 
             def select_days(chosen):
                 if not form_is_current():
@@ -1293,9 +1363,9 @@ def _build_app(ctk, tk, filedialog, messagebox, session, controller=None, tray=N
                 chosen = [day for day in original_days if day in final_days]
                 chosen.extend(day for day in range(7) if day in final_days and day not in original_days)
                 if index is None:
-                    session.draft.add_window(start.get().strip(), end.get().strip(), chosen)
+                    draft.add_window(start.get().strip(), end.get().strip(), chosen)
                 else:
-                    session.draft.update_window(index, start.get().strip(), end.get().strip(), chosen)
+                    draft.update_window(index, start.get().strip(), end.get().strip(), chosen)
 
             def apply_form():
                 if not form_is_current():
@@ -1306,12 +1376,21 @@ def _build_app(ctk, tk, filedialog, messagebox, session, controller=None, tray=N
                           command=apply_form).pack(side="left")
             dialog.startup_timers.append(dialog.after(150, start.focus_set))
 
-        def edit_rule(self, index=None, field=None):
-            if self.closing or self.closed or self.modal is not None:
-                return
-            field = field or rule_fields[self.rule_category.get()]
+        def edit_rule(self, index=None, field=None, *, context=None):
+            if not self.navigation_available() or self.confirming_rule_removal:
+                return False
+            field = rule_fields[self.rule_category.get()] if field is None else field
+            if field not in rule_fields.values():
+                return False
+            if index is not None:
+                context = self.action_context(field, index) if context is None else context
+                if type(index) is not int or not self.action_is_current(context) or context[1:3] != (field, index):
+                    return False
+            draft, config = session.draft, session.draft.config
+            value = None if index is None else getattr(config, field)[index]
             dialog, form, error, actions, close = self.new_dialog("Adicionar regra" if index is None else "Editar regra")
-            value = None if index is None else getattr(session.draft.config, field)[index]
+            if not self.form_is_current(dialog, draft, config, error):
+                return False
             label = "Pasta absoluta" if field == "block_folders" else "Executável (.exe)"
             ctk.CTkLabel(form, text=label, anchor="w").grid(row=0, column=0, sticky="w")
             name = ctk.CTkEntry(form)
@@ -1327,15 +1406,15 @@ def _build_app(ctk, tk, filedialog, messagebox, session, controller=None, tray=N
                     contains.insert(0, value.contains)
             elif field == "block_folders":
                 def choose_folder():
-                    if self.closing or self.closed or self.modal is not dialog or self.picker_active:
+                    if not self.form_is_current(dialog, draft, config, error):
                         return
                     try:
                         chosen = self.open_picker(filedialog.askdirectory, parent=dialog, title="Selecionar pasta")
                     except tk.TclError as exc:
-                        if not self.closing and not self.closed and self.modal is dialog:
+                        if self.form_is_current(dialog, draft, config, error):
                             error.configure(text=f"Não foi possível abrir o seletor de pasta: {exc}")
                         return
-                    if not chosen or self.closing or self.closed or self.modal is not dialog:
+                    if not chosen or not self.form_is_current(dialog, draft, config, error):
                         return
                     name.delete(0, "end")
                     name.insert(0, str(Path(chosen)))
@@ -1349,12 +1428,17 @@ def _build_app(ctk, tk, filedialog, messagebox, session, controller=None, tray=N
                 if contains is not None:
                     entered = {"executable": entered, "contains": contains.get()}
                 if index is None:
-                    session.draft.add_rule(field, entered)
+                    draft.add_rule(field, entered)
                 else:
-                    session.draft.update_rule(field, index, entered)
+                    draft.update_rule(field, index, entered)
+
+            def apply_form():
+                if not self.form_is_current(dialog, draft, config, error):
+                    return False
+                self.finish_edit(apply, error, close)
 
             ctk.CTkButton(actions, text="Adicionar" if index is None else "Aplicar alteração", fg_color=accent,
-                          command=lambda: self.finish_edit(apply, error, close)).pack(side="left")
+                          command=apply_form).pack(side="left")
             dialog.startup_timers.append(dialog.after(150, name.focus_set))
 
         def import_config(self):
@@ -1425,22 +1509,33 @@ def _build_app(ctk, tk, filedialog, messagebox, session, controller=None, tray=N
             return True
 
         def reload_config(self):
-            if self.closing or self.closed:
-                return
-            if session.dirty and not messagebox.askyesno(
-                "Recarregar configuração", "Descartar as alterações não salvas e o histórico de edição e recarregar o arquivo?", parent=self
-            ):
-                return
-            if self.closing or self.closed:
-                return
+            if not self.navigation_available() or self.confirming_rule_removal:
+                return False
+            draft, config = session.draft, session.draft.config
+            generation = self.review_generation
+            history = draft.can_undo, draft.can_redo
+            self.confirming_rule_removal = True
             try:
-                session.reload()
-            except ConfigError as exc:
-                self.notify(f"Não foi possível recarregar: {exc}. Rascunho preservado.", error=True)
-                return
-            self.render()
-            self.refresh_status(schedule=False)
-            self.notify("Configuração recarregada.")
+                if session.dirty and not messagebox.askyesno(
+                    "Recarregar configuração", "Descartar as alterações não salvas e o histórico de edição e recarregar o arquivo?", parent=self
+                ):
+                    return False
+                if (not self.navigation_available() or not self.model_is_current(draft, config)
+                        or generation != self.review_generation or history != (draft.can_undo, draft.can_redo)):
+                    return False
+                try:
+                    session.reload()
+                except ConfigError as exc:
+                    self.notify(f"Não foi possível recarregar: {exc}. Rascunho preservado.", error=True)
+                    return False
+                self.render()
+                self.refresh_status(schedule=False)
+                self.notify("Configuração recarregada.")
+                return True
+            finally:
+                self.confirming_rule_removal = False
+                if not self.closing and not self.closed:
+                    self.update_rule_selection_controls()
 
         def refresh_status(self, *, schedule=True):
             if self.closing or self.closed:

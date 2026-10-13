@@ -393,6 +393,246 @@ class ConfigGuiFlowTests(unittest.TestCase):
         self.session.reload()
         self.app.render()
 
+    def action_fixture(self):
+        self.bulk_fixture()
+        self.session.draft.add_window("22:00", "02:00", (6, 0))
+        self.app.save_config()
+        self.session.reload()
+        self.app.render()
+
+    def test_editor_action_render_shared_snapshots_and_old_rows_never_operate_again(self):
+        self.action_fixture()
+        draft = self.session.draft
+        getter = type(draft).config.fget
+        calls = []
+        def counted(owner):
+            calls.append(owner)
+            return getter(owner)
+        with patch.object(type(draft), "config", new=property(counted)):
+            self.app.render_windows()
+            self.app.render_rules()
+        self.assertEqual(calls, [draft, draft])
+        rows = [row for (field, _), row in self.app.review_rows.items() if field == "block_exes"]
+        self.assertTrue(all(row.action_context[6] is rows[0].action_context[6] for row in rows))
+        for change in ("render", "import_equal", "reload", "undo_redo_equal", "view_roundtrip", "typed_extra"):
+            with self.subTest(change=change):
+                self.action_fixture()
+                commands = [button(self.app.review_rows[(field, 0)], title).options["command"]
+                            for field, title in (("windows", "Editar"), ("windows", "Remover"),
+                                                 ("windows", "Duplicar"), ("block_exes", "Editar"),
+                                                 ("block_exes", "Remover"))]
+                if change == "render": self.app.render()
+                elif change == "import_equal": self.session.import_config(self.path)
+                elif change == "reload": self.app.reload_config()
+                elif change == "undo_redo_equal":
+                    self.session.draft.add_rule("block_exes", "temporary.exe")
+                    self.app.undo_draft()
+                    self.app.redo_draft()
+                    self.app.undo_draft()
+                elif change == "view_roundtrip":
+                    self.app.render_windows()  # invalidate schedules too, with equal data
+                    self.app.rule_search.set("dup")
+                    self.app.rule_search.set("")
+                else:
+                    config = self.session.draft.config
+                    config.extra["typed"][0] = 1
+                    self.session.draft.replace_config(config)
+                before = self.session.draft.config
+                state = self.session.dirty, self.session.draft.can_undo, self.session.draft.can_redo
+                with patch.object(self.app, "new_dialog", side_effect=AssertionError("stale dialog")), \
+                        patch.object(self.messages, "askyesno", side_effect=AssertionError("stale prompt")):
+                    for command in commands:
+                        self.assertFalse(command())
+                self.assertEqual(self.session.draft.config, before)
+                self.assertEqual((self.session.dirty, self.session.draft.can_undo, self.session.draft.can_redo), state)
+
+    def test_editor_action_remove_postprompt_replacement_view_same_data_and_reentrancy(self):
+        for change in ("identity", "model", "typed", "render_equal", "row", "query", "picker", "closed", "reentrant"):
+            with self.subTest(change=change):
+                self.app.closed = self.app.picker_active = False
+                self.app.rule_search.set("")
+                self.action_fixture()
+                command = button(self.app.review_rows[("block_exes", 0)], "Remover").options["command"]
+                def confirm(*args, **kwargs):
+                    if change == "identity": self.session.import_config(self.path)
+                    elif change == "model": self.session.draft.update_rule("block_exes", 0, "replacement.exe")
+                    elif change == "typed":
+                        config = self.session.draft.config
+                        config.extra["typed"][0] = 1
+                        self.session.draft.replace_config(config)
+                    elif change == "render_equal": self.app.render_rules()
+                    elif change == "row": self.app.review_rows[("block_exes", 0)] = Widget()
+                    elif change == "query": self.app.rule_search.set("z")
+                    elif change == "picker": self.app.picker_active = True
+                    elif change == "closed": self.app.closed = True
+                    else:
+                        self.assertFalse(command())
+                        self.assertFalse(self.app.reload_config())
+                        self.assertFalse(self.app.begin_rule_selection())
+                        self.assertFalse(self.app.edit_window())
+                    return change != "reentrant"
+                self.messages.askyesno.side_effect = confirm
+                with patch.object(self.session.draft, "remove_rule", side_effect=AssertionError("wrong target")):
+                    self.assertFalse(command())
+                self.assertFalse(self.app.confirming_rule_removal)
+                self.app.closed = self.app.picker_active = False
+                self.messages.askyesno.side_effect = None
+        self.action_fixture()
+        config, original = self.session.draft.config, self.path.read_bytes()
+        with patch.object(self.session.draft, "remove_window", side_effect=ConfigError("invalid")):
+            self.assertFalse(button(self.app.review_rows[("windows", 0)], "Remover").invoke())
+        self.assertIn("Rascunho preservado", self.labels(self.app))
+        self.assertEqual(self.session.draft.config, config)
+        self.assertEqual(self.path.read_bytes(), original)
+        self.messages.askyesno.side_effect = RuntimeError("dialog failure")
+        with self.assertRaisesRegex(RuntimeError, "dialog failure"):
+            self.app.remove_item("windows", 0)
+        self.assertFalse(self.app.confirming_rule_removal)
+
+    def test_editor_action_forms_stale_model_or_draft_rejected_before_getters_and_finish(self):
+        for kind in ("window", "rule"):
+            for change in ("identity_equal", "model", "typed_extra"):
+                with self.subTest(kind=kind, change=change):
+                    self.action_fixture()
+                    self.app.edit_window(0) if kind == "window" else self.app.edit_rule(0, "block_exes")
+                    dialog = self.app.modal
+                    command = button(dialog, "Aplicar alteração").options["command"]
+                    entries = self.entries()
+                    if change == "identity_equal": self.session.import_config(self.path)
+                    elif change == "model": self.session.draft.update_rule("block_exes", 0, "new.exe")
+                    else:
+                        config = self.session.draft.config
+                        config.extra["typed"][0] = 1
+                        self.session.draft.replace_config(config)
+                    before, snapshot, original = self.session.draft.config, self.session.snapshot, self.path.read_bytes()
+                    for entry in entries:
+                        entry.get = Mock(side_effect=AssertionError("stale getter"))
+                    with patch.object(self.app, "finish_edit", side_effect=AssertionError("finish")):
+                        self.assertFalse(command())
+                    self.assertIs(self.app.modal, dialog)
+                    self.assertIn("rascunho mudou", self.labels(dialog))
+                    self.assertEqual(self.session.draft.config, before)
+                    self.assertIs(self.session.snapshot, snapshot)
+                    self.assertEqual(self.path.read_bytes(), original)
+                    button(dialog, "Cancelar").invoke()
+
+    def test_editor_action_old_rule_apply_and_dialog_creation_change_never_touch_old_tk(self):
+        self.action_fixture()
+        for kind in ("rule", "window"):
+            self.app.edit_rule() if kind == "rule" else self.app.edit_window()
+            old = self.app.modal
+            apply = button(old, "Adicionar").options["command"]
+            old_entries = self.entries()
+            button(old, "Cancelar").invoke()
+            self.app.edit_rule()
+            replacement = self.app.modal
+            for entry in old_entries:
+                entry.get = Mock(side_effect=AssertionError("destroyed Tk"))
+            with patch.object(self.app, "finish_edit", side_effect=AssertionError("finish")):
+                self.assertFalse(apply())
+            self.assertIs(self.app.modal, replacement)
+            button(replacement, "Cancelar").invoke()
+        create = self.app.new_dialog
+        for kind in ("rule", "window"):
+            def replaced(*args, **kwargs):
+                dialog = create(*args, **kwargs)
+                self.session.import_config(self.path)
+                return dialog
+            with patch.object(self.app, "new_dialog", side_effect=replaced):
+                self.assertFalse(self.app.edit_rule(0, "block_exes") if kind == "rule" else self.app.edit_window(0))
+            self.assertEqual(self.entries(), [])
+            self.assertIn("rascunho mudou", self.labels(self.app.modal))
+            button(self.app.modal, "Cancelar").invoke()
+
+    def test_editor_action_invalid_indices_fields_and_guards_before_dialog_or_prompt(self):
+        self.action_fixture()
+        with patch.object(self.app, "new_dialog", side_effect=AssertionError("dialog")), \
+                patch.object(self.messages, "askyesno", side_effect=AssertionError("prompt")):
+            for index in (True, False, -1, 200, "0", 1.0):
+                self.assertFalse(self.app.edit_window(index))
+                self.assertFalse(self.app.edit_rule(index, "block_exes"))
+                self.assertFalse(self.app.remove_item("windows", index))
+                self.assertFalse(self.app.duplicate_window(index))
+            self.assertFalse(self.app.edit_rule(0, "unknown"))
+            self.assertFalse(self.app.remove_item("unknown", 0))
+            for flag in ("picker_active", "selecting_executables", "closing", "closed", "confirming_rule_removal"):
+                setattr(self.app, flag, True)
+                self.assertFalse(self.app.edit_rule())
+                self.assertFalse(self.app.edit_window())
+                self.assertFalse(self.app.remove_item("windows", 0))
+                self.assertFalse(self.app.duplicate_window(0))
+                setattr(self.app, flag, False)
+
+    def test_editor_action_active_selection_row_edit_cancel_remove_one_undo(self):
+        self.action_fixture()
+        config, snapshot, original = self.session.draft.config, self.session.snapshot, self.path.read_bytes()
+        self.app.begin_rule_selection()
+        self.app.selection_select_all(self.app.rule_selection_context)
+        row = self.app.review_rows[("block_exes", 1)]
+        self.assertEqual(len(row.action_context), 8)
+        self.assertEqual(len(self.app.rule_selection_context), 7)
+        button(row, "Editar").invoke()
+        self.assertEqual(self.entries()[0].get(), "dup.exe")
+        button(self.app.modal, "Cancelar").invoke()
+        self.assertEqual(self.session.draft.config, config)
+        self.assertFalse(self.session.draft.can_undo)
+        self.assertTrue(button(row, "Remover").invoke())
+        self.assertEqual(self.session.draft.config.block_exes, ("z.exe", "hidden.exe", "DUP.exe"))
+        self.assertTrue(self.app.undo_draft())
+        self.assertEqual(self.session.draft.config, config)
+        self.assertFalse(self.session.draft.can_undo)
+        self.assertTrue(self.app.rule_selection_mode)
+        self.assertEqual(self.path.read_bytes(), original)
+        self.assertIs(self.session.snapshot, snapshot)
+
+    def test_editor_action_reload_guards_and_memory_change_preserve_new_draft_without_io(self):
+        self.action_fixture()
+        self.app.edit_rule()
+        with patch.object(self.session, "reload", side_effect=AssertionError("IO")), \
+                patch.object(self.messages, "askyesno", side_effect=AssertionError("prompt")):
+            self.assertFalse(self.app.reload_config())
+        button(self.app.modal, "Cancelar").invoke()
+        for flag in ("picker_active", "selecting_executables", "closing", "closed", "confirming_rule_removal"):
+            setattr(self.app, flag, True)
+            with patch.object(self.session, "reload", side_effect=AssertionError("IO")), \
+                    patch.object(self.messages, "askyesno", side_effect=AssertionError("prompt")):
+                self.assertFalse(self.app.reload_config())
+            setattr(self.app, flag, False)
+        for change in ("identity", "typed", "history_equal", "picker"):
+            self.action_fixture()
+            self.session.draft.add_rule("block_exes", "dirty.exe")
+            self.app.render()
+            snapshot, original = self.session.snapshot, self.path.read_bytes()
+            def confirm(*args, **kwargs):
+                self.assertFalse(self.app.reload_config())
+                if change == "identity": self.session.import_config(self.path)
+                elif change == "typed":
+                    config = self.session.draft.config
+                    config.extra["typed"][0] = 1
+                    self.session.draft.replace_config(config)
+                elif change == "history_equal":
+                    self.session.draft.add_rule("block_exes", "temporary.exe")
+                    self.app.undo_draft()
+                else: self.app.picker_active = True
+                return True
+            self.messages.askyesno.side_effect = confirm
+            with patch.object(self.session, "reload", side_effect=AssertionError("new draft lost")):
+                self.assertFalse(self.app.reload_config())
+            self.assertFalse(self.app.confirming_rule_removal)
+            self.assertIs(self.session.snapshot, snapshot)
+            self.assertEqual(self.path.read_bytes(), original)
+            self.app.picker_active = False
+            self.messages.askyesno.side_effect = None
+        self.action_fixture()
+        self.session.draft.add_rule("block_exes", "dirty.exe")
+        def external(*args, **kwargs):
+            self.path.write_text(json.dumps({"windows": [], "block_exes": ["external.exe"]}), encoding="utf-8")
+            return True
+        self.messages.askyesno.side_effect = external
+        self.assertTrue(self.app.reload_config())
+        self.assertEqual(self.session.draft.config.block_exes, ("external.exe",))
+        self.assertFalse(self.session.dirty)
+
     def test_rule_bulk_selection_view_only_all_visible_indices_all_categories_and_one_undo(self):
         self.bulk_fixture()
         original, snapshot = self.path.read_bytes(), self.session.snapshot
@@ -595,7 +835,7 @@ class ConfigGuiFlowTests(unittest.TestCase):
                     elif mutation == "row": self.app.review_rows[("block_exes", 0)] = Widget()
                     elif mutation == "picker": self.app.picker_active = True
                     elif mutation == "selecting": self.app.selecting_executables = True
-                    elif mutation == "modal": self.app.edit_window()
+                    elif mutation == "modal": self.app.new_dialog("Interrompido")
                     else: setattr(self.app, mutation, True)
                     return True
                 self.messages.askyesno.side_effect = confirm
@@ -1425,7 +1665,9 @@ class ConfigGuiFlowTests(unittest.TestCase):
                 def close_modal(**kwargs):
                     button(dialog, "Cancelar").invoke()
                     if replace:
-                        self.app.edit_rule()
+                        self.assertFalse(self.app.edit_rule())  # picker ativo recusa ação normal
+                        _, form, *_ = self.app.new_dialog("Modal substituto externo")
+                        type(entry)(form).grid(row=0, column=0, sticky="ew")
                     return r"C:\Late"
 
                 self.filedialog.askdirectory.side_effect = close_modal

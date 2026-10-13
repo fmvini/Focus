@@ -216,6 +216,116 @@ class NativeConfigGuiTests(unittest.TestCase):
     def native_rule_indices(self, field):
         return [index for row_field, index in self.app.review_rows if row_field == field]
 
+    def native_action_fixture(self):
+        self.load_native_window_days()
+        self.session.draft.add_rule("block_exes", "same.exe")
+        self.session.draft.add_rule("block_exes", "same.exe")
+        self.app.save_config()
+        self.session.reload()
+        self.app.render()
+
+    def test_editor_action_native_old_apply_and_changed_forms_never_access_destroyed_entries(self):
+        self.native_action_fixture()
+        original, snapshot = self.path.read_bytes(), self.session.snapshot
+        for kind in ("rule", "window"):
+            self.app.edit_rule(0, "block_exes") if kind == "rule" else self.app.edit_window(0)
+            dialog = self.app.modal
+            dialog.withdraw()
+            old_apply = self.button(dialog, "Aplicar alteração").cget("command")
+            self.button(dialog, "Cancelar").invoke()
+            self.app.edit_rule()
+            replacement = self.app.modal
+            replacement.withdraw()
+            self.assertFalse(old_apply())  # real Entry from old form is already destroyed
+            self.assertIs(self.app.modal, replacement)
+            self.button(replacement, "Cancelar").invoke()
+            self.app.edit_rule(0, "block_exes") if kind == "rule" else self.app.edit_window(0)
+            dialog = self.app.modal
+            dialog.withdraw()
+            current_apply = self.button(dialog, "Aplicar alteração").cget("command")
+            changed = self.session.draft.config
+            changed.extra["typed"][0] = 1 if type(changed.extra["typed"][0]) is bool else True
+            self.session.draft.replace_config(changed)
+            before = self.session.draft.config
+            with patch.object(self.app, "finish_edit", side_effect=AssertionError("stale finish")):
+                self.assertFalse(current_apply())
+            text = "\n".join(child.cget("text") for child in self.descendants(dialog)
+                             if isinstance(child, self.ctk.CTkLabel))
+            self.assertIn("rascunho mudou", text)
+            self.assertEqual(self.session.draft.config, before)
+            self.assertIs(self.app.modal, dialog)
+            with patch.object(self.session, "reload", side_effect=AssertionError("IO under form")):
+                self.assertFalse(self.app.reload_config())
+            self.button(dialog, "Cancelar").invoke()
+        self.assertIs(self.session.snapshot, snapshot)
+        self.assertEqual(self.path.read_bytes(), original)
+        self.assertEqual(self.controller.starts, 0)
+        self.assertEqual(self.background_errors, [])
+
+    def test_editor_action_native_row_generations_remove_postprompt_and_closed_callbacks(self):
+        self.native_action_fixture()
+        commands = [self.button(self.app.review_rows[(field, 0)], title).cget("command")
+                    for field, title in (("windows", "Editar"), ("windows", "Remover"),
+                                         ("windows", "Duplicar"), ("block_exes", "Editar"),
+                                         ("block_exes", "Remover"))]
+        self.app.render()  # equal content is still a different row generation
+        with patch.object(self.app, "new_dialog", side_effect=AssertionError("stale dialog")), \
+                patch.object(self.messages, "askyesno", side_effect=AssertionError("stale prompt")):
+            for command in commands:
+                self.assertFalse(command())
+        original = self.path.read_bytes()
+        def changed_prompt(*args, **kwargs):
+            self.assertFalse(self.app.remove_item("windows", 0))
+            self.assertFalse(self.app.reload_config())
+            self.session.draft.update_rule("block_exes", 0, "replacement.exe")
+            return True
+        self.messages.askyesno.side_effect = changed_prompt
+        with patch.object(self.session.draft, "remove_rule", side_effect=AssertionError("wrong target")):
+            self.assertFalse(self.button(self.app.review_rows[("block_exes", 0)], "Remover").invoke())
+        self.assertFalse(self.app.confirming_rule_removal)
+        self.assertEqual(self.session.draft.config.block_exes, ("replacement.exe", "same.exe"))
+        self.assertEqual(self.path.read_bytes(), original)
+        self.app.render()
+        self.messages.askyesno.side_effect = None
+        self.messages.askyesno.return_value = True
+        self.assertTrue(self.button(self.app.review_rows[("block_exes", 1)], "Remover").invoke())
+        self.assertTrue(self.app.undo_draft())
+        self.assertEqual(self.session.draft.config.block_exes, ("replacement.exe", "same.exe"))
+        commands = [self.button(self.app.review_rows[(field, 0)], title).cget("command")
+                    for field, title in (("windows", "Editar"), ("windows", "Remover"),
+                                         ("windows", "Duplicar"), ("block_exes", "Editar"),
+                                         ("block_exes", "Remover"))]
+        self.app.close_editor()
+        for command in commands:
+            self.assertFalse(command())
+        self.assertEqual(self.app.tk.splitlist(self.app.tk.call("after", "info")), ())
+        self.app.tk.call("update")
+        self.assertEqual(self.background_errors, [])
+
+    def test_editor_action_native_active_selection_row_edit_cancel_remove_one_undo(self):
+        self.native_action_fixture()
+        config, snapshot, original = self.session.draft.config, self.session.snapshot, self.path.read_bytes()
+        self.app.begin_rule_selection()
+        self.app.selection_select_all(self.app.rule_selection_context)
+        row = self.app.review_rows[("block_exes", 1)]
+        self.assertEqual(len(row.action_context), 8)
+        self.assertEqual(len(self.app.rule_selection_context), 7)
+        self.button(row, "Editar").invoke()
+        self.app.modal.withdraw()
+        self.assertEqual(self.entries()[0].get(), "same.exe")
+        self.button(self.app.modal, "Cancelar").invoke()
+        self.assertEqual(self.session.draft.config, config)
+        self.messages.askyesno.return_value = True
+        self.assertTrue(self.button(row, "Remover").invoke())
+        self.assertEqual(self.session.draft.config.block_exes, ("same.exe",))
+        self.assertTrue(self.app.undo_draft())
+        self.assertEqual(self.session.draft.config, config)
+        self.assertFalse(self.session.draft.can_undo)
+        self.assertEqual(self.path.read_bytes(), original)
+        self.assertIs(self.session.snapshot, snapshot)
+        self.assertTrue(self.app.rule_selection_mode)
+        self.assertEqual(self.background_errors, [])
+
     def test_rule_bulk_selection_native_compact_mode_offviewport_all_and_close_view_only(self):
         self.app.geometry("880x660")
         self.app.tabs.set("Jogos / Apps")
@@ -949,8 +1059,10 @@ class NativeConfigGuiTests(unittest.TestCase):
 
         def replace_modal(**kwargs):
             self.button(dialog, "Cancelar").invoke()
-            self.app.edit_rule()
-            self.app.modal.withdraw()
+            self.assertFalse(self.app.edit_rule())  # picker ativo recusa ação normal
+            replacement, form, *_ = self.app.new_dialog("Modal substituto externo")
+            replacement.withdraw()
+            self.ctk.CTkEntry(form).grid(row=0, column=0, sticky="ew")
             return r"C:\Late"
 
         self.filedialog.askdirectory.side_effect = replace_modal

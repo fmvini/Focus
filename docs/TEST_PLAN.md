@@ -2,6 +2,14 @@
 
 Fonte: [escopo](Focus%20Blocker_%20escopo%20do%20projeto.md), [requisitos](REQUIREMENTS.md) e [decisões](DECISIONS.md). Fases 1/2: 206 testes OK em Python 3.14.6/psutil 7.2.2 por `.venv/Scripts/python.exe -B -m unittest discover -s tests` (10,542 s). Sintaxe 3.12 dos 18 arquivos Python conferida; runtime 3.12 ainda não executado. Encerramentos reais e fases posteriores continuam pendentes.
 
+## Evidência da integridade das ações individuais — 2026-10-13
+
+- Sete fake/três native novos verificam contextos capturados no render, snapshots compartilhados, identidade/modelo tipado/vista/geração, callbacks antigos após render/import/reload/history, Apply antes de getter Tk e recarga guardada sem IO. Remoção confere contexto antes/depois do prompt; cancelamento/reentrância/erro liberam a flag sem alterar dados. Dois casos verificam Editar/Cancelar e Remover individual com um Undo durante seleção em lote.
+- Fontes finais após correção de closure ACTION/BULK: Frontend dez aprovados nos dois runtimes, 25,351 s/26,713 s; Banco dez, 24,686 s/23,771 s; Backend quatro essenciais, 5,048 s/5,623 s. Revisões finais sem achados. Maestro dez novos, 18,754 s/17,718 s.
+- Primeira suíte completa encontrou dois erros de fixtures legadas que chamavam edit_rule durante picker ativo, agora recusado. Simulações ajustadas para confirmar a recusa e construir modal substituto externo diretamente; dois testes aprovados nos dois runtimes, 2,556 s/2,600 s. Produção não alterada nesse ajuste.
+- Suíte completa final Maestro: **803 descobertos, 802 aprovados e um skip conhecido** symlink/WinError 1314 nos dois runtimes Windows AMD64: Python 3.14.6/225,621 s e Python 3.12.14/262,128 s. Quarenta e três nativeGUI, ícone real e guardas passaram. AST 3.12/UTF-8 nos 73 arquivos, links dos 27 documentos e diff conferidos.
+- Raízes ocultas/controlador-tray fake/fixtures isoladas; não comprovam visual/DPI/foco físico/acessibilidade. Nenhum processo/hosts/configuração do usuário afetado.
+
 ## Evidência da remoção em lote — 2026-10-12
 
 - Quinze novos core testam quatro listas/posições/duplicatas, one-shot/falha tardia/causa/interrupção, tipos/faixa/campo, vazio sem serializer/revalidação preservando redo, atomicidade/uma edição, source/typedextras/pureza/import lazy. Com 35 regressões, 50 aprovados nos dois runtimes, 0,880 s/1,270 s. Quatro integrações com JSON/helper/sessão reais cobrem sort/filter/dup/Save/UndoRedo/conflict/import/reload; 0,217 s/0,197 s.

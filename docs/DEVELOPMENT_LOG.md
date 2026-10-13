@@ -1,3 +1,28 @@
+## 2026-10-13 — Integridade das ações e formulários individuais
+
+### Implementado
+- Contextos de linhas capturados no render recusam Editar/Remover/Duplicar antigos após reconstrução ou troca de draft/modelo/vista. Remover individual revalida antes/depois da confirmação e usa o draft capturado.
+- Ambos formulários guardam identidade modal/draft e snapshot tipado antes de getters/Apply; campos antigos não sobrescrevem modelo novo. Recarregar recusa formulário/seletor/confirmação e preserva mudanças de memória durante o prompt, permitindo alterações somente do arquivo externo.
+
+### Arquivos principais alterados
+- `ui/config_gui.py`, `tests/test_config_gui.py`, `tests/test_config_gui_native.py`.
+- `README.md`, `docs/EDITOR_ACTION_CONTEXT_CONTRACT.md`, `docs/GUI_EDITOR_CONTRACT.md`, `docs/README.md`, `docs/TEST_PLAN.md`, `docs/DEVELOPMENT_LOG.md`.
+
+### Decisões técnicas
+- Snapshot compartilhado por lista, sem cópia por linha; contextos individuais e de lote distintos, argumentos de callbacks capturados na construção. Confirmação individual/lote/recarga compartilha flag com finally contra reentrância.
+- Core/schema/igualdade, dias preservados, histórico e salvamento explícito permanecem existentes. Sem novo timer nem efeitos sobre o motor.
+
+### Estado atual
+- Base `d128a78`. Sete fake/três native novos cobrem callbacks antigos, identidade/modelo tipado/vista/geração, Apply antes de Tk, criação de diálogo alterada, prompt/reentrância/finally, recarga sem IO e CRUD individual no modo de seleção em lote.
+- Frontend dez novos finais aprovados nos dois runtimes, 25,351 s/26,713 s; Banco dez finais, 24,686 s/23,771 s, sem achados; Backend quatro essenciais, 5,048 s/5,623 s, sem achados. Maestro dez novos, 18,754 s/17,718 s. P2 de closure ACTION/BULK introduzido na primeira versão foi corrigido e ganhou duas regressões antes desses resultados.
+- Primeira suíte completa encontrou dois erros de fixtures legadas que tentavam abrir editor durante picker ativo, agora corretamente recusado. Frontend ajustou somente a simulação externa de modal substituto; dois testes passaram nos dois runtimes, 2,556 s/2,600 s, sem alteração de produção.
+- Suíte completa final Maestro: **803 descobertos, 802 aprovados e um skip conhecido** symlink/WinError 1314 nos dois runtimes Windows AMD64: Python 3.14.6/225,621 s e Python 3.12.14/262,128 s. Quarenta e três nativeGUI, ícone real e guardas passaram. AST 3.12/UTF-8 nos 73 arquivos, links dos 27 documentos e diff conferidos.
+- Widgets ocultos/fakes não aceitam visual/DPI/acessibilidade; nenhum efeito em processos/hosts/configuração do usuário. Hipótese de clique físico antes de grab_set não demonstrada.
+
+### Próximos passos
+- Medir custo de renderização e repouso da GUI com listas extensas antes de escolher a próxima otimização; usar raízes ocultas, configuração isolada e motor simulado.
+- Visual/DPI/acessibilidade e perguntas de sites/pausa/avisos pendentes.
+
 ## 2026-10-12 — Remoção de regras selecionadas em lote
 
 ### Implementado
