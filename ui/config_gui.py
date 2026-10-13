@@ -419,6 +419,11 @@ def _build_app(ctk, tk, filedialog, messagebox, session, controller=None, tray=N
         def notify(self, text, *, error=False):
             self.feedback.configure(text=text, text_color="#A33232" if error else muted)
 
+        def configure_if_changed(self, widget, **desired):
+            changes = {key: value for key, value in desired.items() if widget.cget(key) != value}
+            if changes:
+                widget.configure(**changes)
+
         def render(self):
             if self.closing or self.closed:
                 return
@@ -437,8 +442,8 @@ def _build_app(ctk, tk, filedialog, messagebox, session, controller=None, tray=N
 
         def update_history(self):
             enabled = not self.closing and self.modal is None and not self.picker_active and not self.selecting_executables
-            self.undo_button.configure(state="normal" if enabled and session.draft.can_undo else "disabled")
-            self.redo_button.configure(state="normal" if enabled and session.draft.can_redo else "disabled")
+            self.configure_if_changed(self.undo_button, state="normal" if enabled and session.draft.can_undo else "disabled")
+            self.configure_if_changed(self.redo_button, state="normal" if enabled and session.draft.can_redo else "disabled")
 
         def undo_draft(self):
             return self.change_history(redo=False)
@@ -520,9 +525,9 @@ def _build_app(ctk, tk, filedialog, messagebox, session, controller=None, tray=N
 
         def update_review_navigation(self):
             available = self.navigation_available()
-            self.rule_order_picker.configure(state="normal" if available else "disabled")
-            self.review_picker.configure(state="normal" if available and self.review_choices else "disabled")
-            self.review_go.configure(state="normal" if available and self.review_selected is not None else "disabled")
+            self.configure_if_changed(self.rule_order_picker, state="normal" if available else "disabled")
+            self.configure_if_changed(self.review_picker, state="normal" if available and self.review_choices else "disabled")
+            self.configure_if_changed(self.review_go, state="normal" if available and self.review_selected is not None else "disabled")
             self.update_rule_selection_controls()
 
         def choose_review(self, label, generation):
@@ -718,18 +723,18 @@ def _build_app(ctk, tk, filedialog, messagebox, session, controller=None, tray=N
             if not alive:
                 self.stop_requested = False
             view = format_runtime(snapshot)
-            self.runtime_title.configure(text=view.title)
+            self.configure_if_changed(self.runtime_title, text=view.title)
             if view.detail != self.runtime_detail_text:
                 self.runtime_detail.configure(state="normal")
                 self.runtime_detail.delete("1.0", "end")
                 self.runtime_detail.insert("1.0", view.detail)
                 self.runtime_detail.configure(state="disabled")
                 self.runtime_detail_text = view.detail
-            self.start_button.configure(state="normal" if (
+            self.configure_if_changed(self.start_button, state="normal" if (
                 view.start_enabled and not alive and self.modal is None and not self.closing
                 and not session.is_new and not self.picker_active and not self.selecting_executables
             ) else "disabled")
-            self.stop_button.configure(state="normal" if view.stop_enabled and not self.closing else "disabled")
+            self.configure_if_changed(self.stop_button, state="normal" if view.stop_enabled and not self.closing else "disabled")
             self.update_history()
             self.update_review_navigation()
 
@@ -1010,16 +1015,16 @@ def _build_app(ctk, tk, filedialog, messagebox, session, controller=None, tray=N
 
         def update_rule_selection_controls(self):
             available = self.navigation_available() and not self.confirming_rule_removal
-            self.rule_selection_begin.configure(state="normal" if available and not self.rule_selection_mode else "disabled")
+            self.configure_if_changed(self.rule_selection_begin, state="normal" if available and not self.rule_selection_mode else "disabled")
             context = self.rule_selection_context
             if self.rule_selection_count is None or context is None:
                 return
             selected, shown = len(self.rule_selection_indices), len(context[2])
-            self.rule_selection_count.configure(text=f"{selected} selecionadas / {shown} exibidas\nAtualizar a lista limpa a seleção.")
+            self.configure_if_changed(self.rule_selection_count, text=f"{selected} selecionadas / {shown} exibidas\nAtualizar a lista limpa a seleção.")
             current = self.selection_is_current(context)
             for action, control in self.rule_selection_actions.items():
                 enabled = current and (shown > 0 if action == "all" else selected > 0 if action in {"clear", "remove"} else True)
-                control.configure(state="normal" if enabled else "disabled")
+                self.configure_if_changed(control, state="normal" if enabled else "disabled")
             for _, _, checkbox in self.rule_selection_boxes.values():
                 state = "normal" if current else "disabled"
                 if checkbox.cget("state") != state:
@@ -1544,9 +1549,9 @@ def _build_app(ctk, tk, filedialog, messagebox, session, controller=None, tray=N
             if self.closing or self.closed:
                 return
             status = session.agenda_status(datetime.now())
-            self.agenda_label.configure(text=("Agenda ainda não salva" if session.is_new else
+            self.configure_if_changed(self.agenda_label, text=("Agenda ainda não salva" if session.is_new else
                                              "Agenda carregada: dentro da janela" if status.active else "Agenda carregada: fora da janela"))
-            self.next_label.configure(text=("Salvar cria o arquivo; Iniciar continua exigindo confirmação." if session.is_new else
+            self.configure_if_changed(self.next_label, text=("Salvar cria o arquivo; Iniciar continua exigindo confirmação." if session.is_new else
                 "Próximo início: " + (status.next_start.strftime("%d/%m/%Y às %H:%M") if status.next_start else "nenhum horário ativo")))
             if session.is_new:
                 ending = "Nenhuma janela salva em andamento."
@@ -1556,8 +1561,8 @@ def _build_app(ctk, tk, filedialog, messagebox, session, controller=None, tray=N
                 ending = "Agenda carregada: cobertura semanal contínua, sem fim previsto."
             else:
                 ending = "Fim da janela carregada: " + status.current_end.strftime("%d/%m/%Y às %H:%M")
-            self.end_label.configure(text=ending)
-            self.agenda_hint.configure(text=("Prévia do rascunho abaixo; motor parado até salvar e confirmar Iniciar." if session.is_new else
+            self.configure_if_changed(self.end_label, text=ending)
+            self.configure_if_changed(self.agenda_hint, text=("Prévia do rascunho abaixo; motor parado até salvar e confirmar Iniciar." if session.is_new else
                                               "Consulta da agenda carregada; o estado do motor aparece acima."))
             self.update_runtime()
             if schedule and self.status_timer is None:

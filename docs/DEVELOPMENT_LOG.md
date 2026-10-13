@@ -1,3 +1,27 @@
+## 2026-10-13 — Custo da interface e polling
+
+### Implementado
+- Medição isolada na base `7d3ad6d`: snapshot/helper sub-ms, construção/render de 1000 regras 30,538 s/35,648 s, RSS idle 195,31 MiB. Idle 0/100/1000 aproximadamente 7,49%/8,11%/7,50% de um núcleo. Dados e limites em `docs/GUI_PERFORMANCE.md`.
+- Implementada atualização condicional dos setters de texto/estado no polling. Instrumentação fake inicial confirmou 13 configure por poll igual; regressões finais verificam zero configure após sincronização, preservando avaliações e mudanças reais.
+
+### Arquivos principais alterados
+- `ui/config_gui.py`, `tests/test_config_gui.py`, `tests/test_config_gui_native.py`.
+- `docs/GUI_PERFORMANCE.md`, `docs/GUI_IDLE_UPDATES_CONTRACT.md`, `docs/GUI_EDITOR_CONTRACT.md`, `docs/README.md`, `docs/TEST_PLAN.md`, `docs/DEVELOPMENT_LOG.md`.
+
+### Decisões técnicas
+- Comparar cget público e configurar somente deltas, sem cache de modelo, nova cadência ou skip de avaliações. Preservar transições/guardas/saída e seleção de todos os resultados do filtro.
+- Não escolher paginação/limites nem reescrever renderização nesta unidade. Custo de listas extensas exige evolução separada.
+
+### Estado atual
+- Benchmark terminou, fixtures removidas e base limpa antes desta unidade. Um processo por cenário, raízes ocultas/motor fake, sem efeitos em processos/hosts do usuário. Não prova RNF01, visual/DPI ou comportamento de seleção ativa.
+- Fonte GUI congelada: Frontend 133 GUI/mainfake e dois novos native aprovados nos dois runtimes, 11,943 s/11,870 s, zero skips. Três fake/dois native novos testam polling estável e transições reais, incluindo toolbar ativa, agenda/mailbox/controller avaliados e closing com worker vivo.
+- Backend/Banco revisão estática sem achados. Backend confirmou AST idêntica ao HEAD após normalizar novos setters e remover helper; somente deltas de text/state mudaram.
+- Medição posterior exclusiva 0/100 com mesmo protocolo: CPU idle 0,937%/0,312% de um núcleo contra 7,49%/8,11% antes, RSS 62,71/75,09 MiB próximo do anterior. Uma amostra/quantização, sem garantia estatística/RNF01; não repetido 1000. Processos e fixtures encerrados.
+- Suíte completa final Maestro: **808 descobertos, 807 aprovados e um skip conhecido** symlink/WinError 1314 nos dois runtimes Windows AMD64: Python 3.14.6/199,132 s e Python 3.12.14/229,239 s. Quarenta e cinco nativeGUI, ícone real e guardas passaram. AST 3.12/UTF-8 nos 73 arquivos, links e diff conferidos.
+
+### Próximos passos
+- Avaliar renderização progressiva em próxima unidade; respostas de sites/pausa/avisos e visual/DPI permanecem pendentes.
+
 ## 2026-10-13 — Integridade das ações e formulários individuais
 
 ### Implementado

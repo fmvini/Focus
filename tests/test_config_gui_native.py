@@ -15,6 +15,7 @@ from uuid import uuid4
 
 from core.config import load_config
 from core.config_session import ConfigSession
+from core.process_controller import RuntimeSnapshot
 from ui.config_gui import _build_app
 from tests.test_config_gui import FakeController, FakeTray
 from ui.tray_commands import TrayMailbox
@@ -104,6 +105,102 @@ class NativeConfigGuiTests(unittest.TestCase):
 
     def entries(self):
         return [child for child in self.descendants(self.app.modal) if isinstance(child, self.ctk.CTkEntry)]
+
+    def watch_idle_configures(self):
+        widgets = [self.app, *self.descendants(self.app)]
+        for widget in widgets:
+            widget.configure = Mock(wraps=widget.configure)
+        return widgets
+
+    def assert_idle_polls(self, widgets):
+        for widget in widgets:
+            widget.configure.reset_mock()
+        for _ in range(3):
+            self.app.refresh_status(schedule=False)
+        for widget in widgets:
+            widget.configure.assert_not_called()
+
+    def test_idle_updates_native_stable_idle_active_toolbar_and_picker_state_changes(self):
+        self.app.refresh_status(schedule=False)
+        for name in ("one.exe", "two.exe"):
+            self.session.draft.add_rule("block_exes", name)
+        self.app.render()
+        self.app.begin_rule_selection()
+        original, snapshot, config = self.path.read_bytes(), self.session.snapshot, self.session.draft.config
+        generation, context = self.app.rule_selection_generation, self.app.rule_selection_context
+        widgets = self.watch_idle_configures()
+        self.assert_idle_polls(widgets)
+        self.app.selection_select_all(context)
+        self.assertIn("2 selecionadas / 2 exibidas", self.app.rule_selection_count.cget("text"))
+        self.assertEqual(self.app.rule_selection_actions["remove"].cget("state"), "normal")
+        self.assert_idle_polls(widgets)
+        self.app.picker_active = True
+        self.app.refresh_status(schedule=False)
+        self.assertEqual(self.app.rule_order_picker.cget("state"), "disabled")
+        self.assertTrue(all(control.cget("state") == "disabled" for control in self.app.rule_selection_actions.values()))
+        self.assert_idle_polls(widgets)
+        self.app.picker_active = False
+        self.app.refresh_status(schedule=False)
+        self.assertEqual(self.app.rule_order_picker.cget("state"), "normal")
+        self.assertEqual(self.app.rule_selection_actions["remove"].cget("state"), "normal")
+        self.app.selection_clear(context)
+        self.assertIn("0 selecionadas / 2 exibidas", self.app.rule_selection_count.cget("text"))
+        self.assertEqual(self.app.rule_selection_actions["remove"].cget("state"), "disabled")
+        self.assert_idle_polls(widgets)
+        self.assertIs(self.app.rule_selection_context, context)
+        self.assertEqual(self.app.rule_selection_generation, generation)
+        self.assertEqual(self.app.rule_selection_indices, set())
+        self.assertEqual(self.session.draft.config, config)
+        self.assertIs(self.session.snapshot, snapshot)
+        self.assertEqual(self.path.read_bytes(), original)
+        self.assertEqual(self.controller.starts, 0)
+        self.assertEqual(self.background_errors, [])
+
+    def test_idle_updates_native_runtime_error_modal_and_alive_closing_keep_transitions(self):
+        self.session.draft.add_rule("block_exes", "game.exe")
+        self.app.render()
+        original = self.path.read_bytes()
+        self.app.edit_rule()
+        self.app.modal.withdraw()
+        self.assertEqual(self.app.undo_button.cget("state"), "disabled")
+        widgets = self.watch_idle_configures()
+        self.assert_idle_polls(widgets)
+        self.button(self.app.modal, "Cancelar").invoke()
+        self.assertEqual(self.app.undo_button.cget("state"), "normal")
+        for state, alive, title, start, stop in (
+            ("running", True, "Motor em execução", "disabled", "normal"),
+            ("stopping", True, "Motor parando", "disabled", "disabled"),
+            ("error", False, "Motor com erro", "normal", "disabled"),
+        ):
+            self.controller.value = RuntimeSnapshot(state=state, error="falha" if state == "error" else None)
+            self.controller.alive = alive
+            self.app.refresh_status(schedule=False)
+            self.assertEqual(self.app.runtime_title.cget("text"), title)
+            self.assertEqual(self.app.start_button.cget("state"), start)
+            self.assertEqual(self.app.stop_button.cget("state"), stop)
+            self.assert_idle_polls(widgets)
+        self.controller.value, self.controller.alive = RuntimeSnapshot(state="running"), True
+        self.app.close_editor()
+        self.assertTrue(self.app.closing)
+        self.assertFalse(self.app.closed)
+        self.assertEqual(self.app.runtime_title.cget("text"), "Motor parando")
+        self.assertEqual(self.app.start_button.cget("state"), "disabled")
+        self.assertEqual(self.app.stop_button.cget("state"), "disabled")
+        for widget in widgets:
+            widget.configure.reset_mock()
+        for _ in range(3):
+            self.app.update_runtime()
+        for widget in widgets:
+            widget.configure.assert_not_called()
+        self.controller.finish()
+        self.app.poll_close()
+        self.assertTrue(self.app.closed)
+        with patch.object(self.app.agenda_label, "cget", side_effect=AssertionError("Tk after close")):
+            self.app.refresh_status()
+        self.assertEqual(self.path.read_bytes(), original)
+        self.assertEqual(self.app.tk.splitlist(self.app.tk.call("after", "info")), ())
+        self.app.tk.call("update")
+        self.assertEqual(self.background_errors, [])
 
     def native_day_variables(self):
         return [widget.cget("variable") for widget in self.descendants(self.app.modal)

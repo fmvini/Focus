@@ -160,6 +160,11 @@ Recarregar não executa durante formulário, seletor ou outra confirmação e
 preserva mudanças de memória feitas durante o prompt. Detalhes em
 [EDITOR_ACTION_CONTEXT_CONTRACT.md](EDITOR_ACTION_CONTEXT_CONTRACT.md).
 
+Medições de construção/reconstrução/repouso, com fixtures isoladas e limites
+de interpretação, ficam em [GUI_PERFORMANCE.md](GUI_PERFORMANCE.md). A
+atualização condicional de texto/estado no polling tem contrato próprio em
+[GUI_IDLE_UPDATES_CONTRACT.md](GUI_IDLE_UPDATES_CONTRACT.md).
+
 - `tests/test_config_session.py`: persistência real, rascunho/baseline,
   consulta de agenda salva, dias vazios, conflitos, remoção, falhas e retry.
 - `tests/test_config_gui_main.py`: flag, importações sob demanda, abertura
@@ -167,7 +172,7 @@ preserva mudanças de memória feitas durante o prompt. Detalhes em
 - `tests/test_config_gui.py`: callbacks de CRUD, validação e correção,
   categorias, salvamento, recarga e saída usando widgets simulados com JSON
   e repositório reais. Não valida renderização ou compatibilidade dos widgets.
-- `tests/test_config_gui_native.py`: quarenta e três smoke tests com CustomTkinter real
+- `tests/test_config_gui_native.py`: quarenta e cinco smoke tests com CustomTkinter real
   quando instalado, com janelas ocultas; não substituem inspeção visual.
 
 As dependências estão instaladas no `.venv`/QA 3.12. Os smoke tests exercitam

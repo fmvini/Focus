@@ -2,6 +2,13 @@
 
 Fonte: [escopo](Focus%20Blocker_%20escopo%20do%20projeto.md), [requisitos](REQUIREMENTS.md) e [decisões](DECISIONS.md). Fases 1/2: 206 testes OK em Python 3.14.6/psutil 7.2.2 por `.venv/Scripts/python.exe -B -m unittest discover -s tests` (10,542 s). Sintaxe 3.12 dos 18 arquivos Python conferida; runtime 3.12 ainda não executado. Encerramentos reais e fases posteriores continuam pendentes.
 
+## Evidência da atualização condicional de widgets — 2026-10-13
+
+- Três fake/dois native novos cobrem três polls estáveis sem configure em todos os widgets após sync, agenda/runtime/mailbox avaliados três vezes, mudanças reais de texto/estado, histórico/revisão/modal/picker/selecting/confirming, runtime/error/aliveclosing e toolbar de seleção ativa. Preservam identidade/modelo/history/baseline/bytes/geração/seleção/timer; CTk real verifica cget/teardown sem bgerrors.
+- Frontend final: 133 GUI/mainfake e somente dois novos native aprovados nos dois runtimes, Python 3.14.6/11,943 s e Python 3.12.14/11,870 s, zero skips. Backend/Banco estáticos sem achados; Backend normalizou setters novos/removendo helper e confirmou restante AST idêntico ao HEAD anterior.
+- Medição comparativa com fontes congeladas concluída, sem suites concorrentes: idle 0/100 de 7,49%/8,11% para 0,937%/0,312% de um núcleo; RSS próximo. Uma amostra/quantização, sem garantia estatística/RNF01; 1000 não repetido. Metodologia/dados/limites em [GUI_PERFORMANCE.md](GUI_PERFORMANCE.md).
+- Suíte completa final Maestro: **808 descobertos, 807 aprovados e um skip conhecido** symlink/WinError 1314 nos dois runtimes Windows AMD64: Python 3.14.6/199,132 s e Python 3.12.14/229,239 s. Quarenta e cinco nativeGUI, ícone real e guardas passaram. AST 3.12/UTF-8 nos 73 arquivos, links e diff conferidos.
+
 ## Evidência da integridade das ações individuais — 2026-10-13
 
 - Sete fake/três native novos verificam contextos capturados no render, snapshots compartilhados, identidade/modelo tipado/vista/geração, callbacks antigos após render/import/reload/history, Apply antes de getter Tk e recarga guardada sem IO. Remoção confere contexto antes/depois do prompt; cancelamento/reentrância/erro liberam a flag sem alterar dados. Dois casos verificam Editar/Cancelar e Remover individual com um Undo durante seleção em lote.
