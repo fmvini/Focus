@@ -48,6 +48,8 @@ class Widget:
         self.value = ""
         self.callbacks = {}
         self.timers = {}
+        self.grid_options = {}
+        self.grid_visible = False
         if parent is not None:
             parent.children.append(self)
 
@@ -58,10 +60,12 @@ class Widget:
         return self.options.get(name, "normal" if name == "state" else None)
 
     def grid(self, **options):
-        pass
+        self.grid_options.update(options)
+        self.grid_visible = True
 
     pack = grid
-    grid_remove = lambda *args, **kwargs: None
+    def grid_remove(self):
+        self.grid_visible = False
     grid_columnconfigure = lambda *args, **kwargs: None
     grid_rowconfigure = lambda *args, **kwargs: None
     def title(self, value):
@@ -228,6 +232,252 @@ class ConfigGuiFlowTests(unittest.TestCase):
         return [widget for widget in descendants(self.app.modal)
                 if widget.__class__.__name__ == "CTkEntry"]
 
+    def pagination_fixture(self, count=60, *, duplicates=False):
+        values = [f"game-{index:03}.exe" for index in range(count)]
+        if duplicates:
+            values[31] = values[56] = values[2]
+        self.path.write_text(json.dumps({
+            "windows": [], "block_exes": values,
+            "safelist_exes": ["keep.exe"], "typed": [True, 1, 1.0, "ação"],
+        }), encoding="utf-8")
+        self.session.reload()
+        self.app.render()
+
+    def test_rule_pagination_bounds_materializes_only_page_and_keeps_model_history(self):
+        for count in (0, 25, 26, 50, 51, 1000):
+            with self.subTest(count=count):
+                self.pagination_fixture(count)
+                self.session.draft.add_rule("safelist_exes", "redo.exe")
+                self.session.draft.undo()
+                self.app.render()
+                draft, snapshot, config = self.session.draft, self.session.snapshot, self.session.draft.config
+                original = self.path.read_bytes()
+                context = self.app.rule_view_context
+                self.assertEqual(self.displayed_rule_indices("block_exes"), list(range(min(count, 25))))
+                self.assertEqual(self.app.rule_page_result.total, count)
+                self.assertEqual(self.app.rule_pager.grid_visible, count > 25)
+                self.assertEqual(self.app.rule_page_previous.cget("state"), "disabled")
+                with patch.object(Path, "read_bytes", side_effect=AssertionError("page IO")), \
+                        patch.object(draft, "_accept", side_effect=AssertionError("page edit")), \
+                        patch.object(self.app, "render_rules", side_effect=AssertionError("logical reset")):
+                    for page in range(1, (count + 24) // 25):
+                        self.assertTrue(self.app.change_rule_page(page))
+                        self.assertEqual(self.displayed_rule_indices("block_exes"),
+                                         list(range(page * 25, min(count, (page + 1) * 25))))
+                        self.assertIs(self.app.rule_view_context, context)
+                    self.assertFalse(self.app.change_rule_page(self.app.rule_page_result.page_count))
+                    self.assertFalse(self.app.change_rule_page(True))
+                    self.assertEqual(self.app.rule_page_next.cget("state"), "disabled")
+                self.assertIs(self.session.draft, draft)
+                self.assertIs(self.session.snapshot, snapshot)
+                self.assertEqual(draft.config, config)
+                self.assertFalse(self.session.dirty)
+                self.assertFalse(draft.can_undo)
+                self.assertTrue(draft.can_redo)
+                self.assertEqual(self.path.read_bytes(), original)
+        self.assertEqual((self.controller.starts, self.controller.stops), (0, 0))
+
+    def test_rule_pagination_crosspage_selection_old_rows_pager_and_atomic_remove(self):
+        self.pagination_fixture(duplicates=True)
+        config, snapshot, original = self.session.draft.config, self.session.snapshot, self.path.read_bytes()
+        self.app.begin_rule_selection()
+        context = self.app.rule_selection_context
+        old_row, old_var, old_box = self.app.rule_selection_boxes[2]
+        callbacks = [old_box.options["command"], button(old_row, "Editar").options["command"],
+                     button(old_row, "Remover").options["command"], self.app.rule_page_next.options["command"]]
+        for page, index in ((0, 2), (1, 31), (2, 56)):
+            if page:
+                self.assertTrue(self.app.change_rule_page(page))
+            _, variable, checkbox = self.app.rule_selection_boxes[index]
+            variable.set(1)
+            self.assertTrue(checkbox.invoke())
+            self.assertIs(self.app.rule_selection_context, context)
+        self.assertEqual(self.app.rule_selection_indices, {2, 31, 56})
+        self.assertTrue(self.app.change_rule_page(0))
+        self.assertEqual(self.app.rule_selection_boxes[2][1].get(), 1)
+        with patch.object(old_var, "get", side_effect=AssertionError("destroyed variable")):
+            for callback in callbacks:
+                self.assertFalse(callback())
+        self.messages.askyesno.assert_not_called()
+        self.assertIn("3 selecionadas / 60 resultados", self.app.rule_selection_count.cget("text"))
+        with patch.object(self.session.draft, "remove_rules", wraps=self.session.draft.remove_rules) as remove:
+            self.assertTrue(self.app.selection_remove(context))
+            remove.assert_called_once_with("block_exes", (2, 31, 56))
+        self.assertEqual(self.session.draft.config.block_exes,
+                         tuple(value for index, value in enumerate(config.block_exes) if index not in (2, 31, 56)))
+        self.assertIs(self.session.snapshot, snapshot)
+        self.assertEqual(self.path.read_bytes(), original)
+        self.assertTrue(self.app.undo_draft())
+        self.assertEqual(self.session.draft.config, config)
+        self.assertFalse(self.session.draft.can_undo)
+        self.assertTrue(self.app.redo_draft())
+        self.app.save_config()
+        self.assertEqual(load_config(self.path), self.session.draft.config)
+        self.assertFalse(self.session.dirty)
+
+    def test_rule_pagination_all_full_filtered_categories_and_logical_reset(self):
+        self.pagination_fixture(51)
+        config = self.session.draft.config
+        # Populate the other categories once, keeping separate hidden rules.
+        data = json.loads(self.path.read_text(encoding="utf-8"))
+        data.update(block_folders=[f"C:\\Games\\game-{i:03}" for i in range(51)] + ["C:\\Other"],
+                    safelist_exes=[f"game-{i:03}.exe" for i in range(51)] + ["keep.exe"],
+                    block_cmdline=[{"executable": "javaw.exe", "contains": f"game-{i:03}"} for i in range(51)]
+                                  + [{"executable": "other.exe", "contains": "hidden"}])
+        self.path.write_text(json.dumps(data), encoding="utf-8")
+        self.session.reload()
+        self.app.render()
+        config, snapshot, original = self.session.draft.config, self.session.snapshot, self.path.read_bytes()
+        for category, field in (("Executáveis", "block_exes"), ("Pastas", "block_folders"),
+                                ("Proteção adicional", "safelist_exes"), ("Linha de comando", "block_cmdline")):
+            with self.subTest(field=field):
+                self.app.rule_category.set(category)
+                self.app.rule_search.set("game-")
+                if not self.app.rule_selection_mode:
+                    self.app.begin_rule_selection()
+                context = self.app.rule_selection_context
+                self.assertEqual(len(self.app.rule_selection_boxes), 25)
+                self.assertTrue(self.app.selection_select_all(context))
+                self.assertEqual(self.app.rule_selection_indices, set(range(51)))
+                self.assertTrue(self.app.change_rule_page(2))
+                self.assertEqual(set(self.app.rule_selection_boxes), {50})
+                self.assertEqual(self.app.rule_selection_boxes[50][1].get(), 1)
+                self.assertTrue(self.app.selection_remove(context))
+                self.assertEqual(getattr(self.session.draft.config, field), getattr(config, field)[51:])
+                self.assertTrue(self.app.undo_draft())
+                self.assertEqual(self.session.draft.config, config)
+                self.assertFalse(self.session.draft.can_undo)
+                self.assertTrue(self.session.draft.can_redo)
+                self.assertEqual(self.path.read_bytes(), original)
+                self.assertIs(self.session.snapshot, snapshot)
+        for change in (lambda: self.app.rule_search.set("game-0"),
+                       lambda: self.app.change_rule_order("Nome Z–A"),
+                       lambda: (self.app.rule_category.set("Executáveis"), self.app.render_rules()),
+                       lambda: self.app.render(), lambda: self.app.redo_draft(), lambda: self.app.undo_draft()):
+            self.app.selection_select_all(self.app.rule_selection_context)
+            old = self.app.rule_selection_context
+            self.app.change_rule_page(1)
+            change()
+            self.assertIsNot(self.app.rule_selection_context, old)
+            self.assertEqual(self.app.rule_selection_indices, set())
+            self.assertEqual(self.app.rule_page_result.page, 0)
+            self.assertFalse(self.app.selection_select_all(old))
+
+    def test_rule_pagination_prompt_projection_guards_and_closed_callbacks_before_tk(self):
+        self.pagination_fixture()
+        self.app.begin_rule_selection()
+        context = self.app.rule_selection_context
+        self.app.selection_select_all(context)
+        config, original = self.session.draft.config, self.path.read_bytes()
+
+        def cancel_prompt(*args, **kwargs):
+            self.assertFalse(self.app.change_rule_page(1))
+            self.assertFalse(self.app.selection_remove(context))
+            self.assertFalse(self.app.navigate_review("block_exes", 31))
+            self.assertEqual(self.app.rule_page_next.cget("state"), "disabled")
+            return False
+
+        self.messages.askyesno.side_effect = cancel_prompt
+        self.assertFalse(self.app.selection_remove(context))
+        self.assertEqual(self.app.rule_selection_indices, set(range(60)))
+        self.assertEqual(self.app.rule_page_next.cget("state"), "normal")
+
+        def replace_projection(*args, **kwargs):
+            self.app.render_rule_projection(1)  # External reentrant UI refresh invalidates epoch.
+            return True
+
+        self.messages.askyesno.side_effect = replace_projection
+        with patch.object(self.session.draft, "remove_rules", side_effect=AssertionError("stale prompt edit")):
+            self.assertFalse(self.app.selection_remove(context))
+        self.assertFalse(self.app.confirming_rule_removal)
+        self.assertEqual(self.session.draft.config, config)
+        self.assertEqual(self.path.read_bytes(), original)
+        row, variable, checkbox = self.app.rule_selection_boxes[31]
+        commands = [checkbox.options["command"], self.app.rule_page_previous.options["command"],
+                    button(row, "Editar").options["command"], button(row, "Remover").options["command"]]
+        for flag in ("picker_active", "selecting_executables", "closing", "closed"):
+            setattr(self.app, flag, True)
+            with patch.object(variable, "get", side_effect=AssertionError("guard before Tk")), \
+                    patch.object(self.app.rule_category, "get", side_effect=AssertionError("guard before Tk")):
+                for command in commands:
+                    self.assertFalse(command())
+            setattr(self.app, flag, False)
+        self.app.edit_rule()
+        for command in commands:
+            self.assertFalse(command())
+        button(self.app.modal, "Cancelar").invoke()
+
+    def test_rule_pagination_review_sorted_original_target_one_projection_selection_and_scroll(self):
+        self.pagination_fixture()
+        self.app.change_rule_order("Nome Z–A")
+        self.app.begin_rule_selection()
+        context, config = self.app.rule_selection_context, self.session.draft.config
+        self.app.selection_select_all(context)
+        original, generation = self.path.read_bytes(), self.app.rule_selection_generation
+        # Original 2 is at sorted offset57, page2, not 2//25.
+        with patch.object(self.app, "render_rule_projection", wraps=self.app.render_rule_projection) as projected:
+            self.assertTrue(self.app.navigate_review("block_exes", 2))
+            projected.assert_called_once_with(2)
+        row = self.app.highlighted_row
+        timer, callback = row.review_scroll_timer, row.timers[row.review_scroll_timer]
+        self.assertEqual(self.app.rule_page_result.page, 2)
+        self.assertIs(self.app.rule_selection_context, context)
+        self.assertEqual(self.app.rule_selection_generation, generation)
+        self.assertEqual(self.app.rule_selection_indices, set(range(60)))
+        self.assertTrue(self.app.change_rule_page(0))
+        self.assertNotIn(timer, row.timers)
+        with patch.object(row, "winfo_y", create=True, side_effect=AssertionError("old scroll Tk")):
+            callback()
+        self.app.rule_search.set("game-059")
+        with patch.object(self.app, "render_rule_projection", wraps=self.app.render_rule_projection) as projected:
+            self.assertTrue(self.app.navigate_review("block_exes", 2))
+            projected.assert_called_once_with(2)
+        self.assertEqual(self.app.rule_search.get(), "")
+        self.assertEqual(self.app.rule_selection_indices, set())
+        self.assertEqual(self.app.visual_rule_order, "name_desc")
+        self.assertEqual(self.session.draft.config, config)
+        self.assertEqual(self.path.read_bytes(), original)
+        self.assertFalse(self.session.dirty)
+        self.assertFalse(self.session.draft.can_undo)
+        self.assertEqual((self.controller.starts, self.controller.stops), (0, 0))
+
+    def test_rule_pagination_review_included_filter_preserves_owner_selection_and_redo(self):
+        self.pagination_fixture()
+        self.session.draft.add_rule("safelist_exes", "redo.exe")
+        self.session.draft.undo()
+        self.app.render()
+        self.app.rule_search.set("game-")
+        self.app.change_rule_order("Nome Z–A")
+        self.app.begin_rule_selection()
+        context, generation = self.app.rule_selection_context, self.app.rule_selection_generation
+        self.app.selection_select_all(context)
+        draft, snapshot, config = self.session.draft, self.session.snapshot, self.session.draft.config
+        original = self.path.read_bytes()
+        with patch.object(self.app, "render_rules", side_effect=AssertionError("unneeded logical reset")), \
+                patch.object(self.app, "render_rule_projection", wraps=self.app.render_rule_projection) as projected, \
+                patch.object(Path, "read_bytes", side_effect=AssertionError("navigation IO")), \
+                patch.object(draft, "_accept", side_effect=AssertionError("navigation edit")):
+            self.assertTrue(self.app.navigate_review("block_exes", 2))
+            projected.assert_called_once_with(2)
+        self.assertEqual(self.app.rule_search.get(), "game-")
+        self.assertEqual(self.app.visual_rule_order, "name_desc")
+        self.assertEqual(self.app.rule_page_result.total, 60)
+        self.assertEqual(self.app.rule_page_result.page, 2)
+        self.assertIs(self.app.rule_view_context, context)
+        self.assertIs(self.app.rule_selection_context, context)
+        self.assertEqual(self.app.rule_selection_generation, generation)
+        self.assertEqual(self.app.rule_selection_indices, set(range(60)))
+        self.assertTrue(all(variable.get() for _, variable, _ in self.app.rule_selection_boxes.values()))
+        self.assertIs(self.app.highlighted_row, self.app.review_rows[("block_exes", 2)])
+        self.assertIs(self.session.draft, draft)
+        self.assertIs(self.session.snapshot, snapshot)
+        self.assertEqual(draft.config, config)
+        self.assertFalse(self.session.dirty)
+        self.assertFalse(draft.can_undo)
+        self.assertTrue(draft.can_redo)
+        self.assertEqual(self.path.read_bytes(), original)
+        self.assertEqual((self.controller.starts, self.controller.stops), (0, 0))
+
     def watch_idle_configures(self):
         widgets = [self.app, *descendants(self.app)]
         for widget in widgets:
@@ -358,12 +608,14 @@ class ConfigGuiFlowTests(unittest.TestCase):
         self.app.rule_selection_actions["remove"].configure.assert_called_once_with(state="normal")
         self.app.rule_selection_actions["all"].configure.assert_not_called()
         self.app.rule_selection_actions["close"].configure.assert_not_called()
-        self.assertIn("4 selecionadas / 4 exibidas", self.app.rule_selection_count.cget("text"))
+        self.assertIn("4 selecionadas / 4 resultados", self.app.rule_selection_count.cget("text"))
+        self.assertIn("Todas as páginas. Busca/ordem/categoria limpam seleção.",
+                      self.app.rule_selection_count.cget("text"))
         self.assert_idle_polls(widgets)
         self.app.selection_clear(context)
         self.app.rule_selection_actions["clear"].configure.assert_called_once_with(state="disabled")
         self.app.rule_selection_actions["remove"].configure.assert_called_once_with(state="disabled")
-        self.assertIn("0 selecionadas / 4 exibidas", self.app.rule_selection_count.cget("text"))
+        self.assertIn("0 selecionadas / 4 resultados", self.app.rule_selection_count.cget("text"))
         self.assert_idle_polls(widgets)
         for flag in ("picker_active", "confirming_rule_removal"):
             setattr(self.app, flag, True)
@@ -810,7 +1062,7 @@ class ConfigGuiFlowTests(unittest.TestCase):
                     self.assertEqual(self.session.draft.config, config)
                     self.assertFalse(self.session.dirty)
                     self.assertFalse(self.session.draft.can_undo)
-                    self.assertIn("2 selecionadas / 2 exibidas", self.app.rule_selection_count.options["text"])
+                    self.assertIn("2 selecionadas / 2 resultados", self.app.rule_selection_count.options["text"])
                 with patch.object(self.session.draft, "remove_rules", wraps=self.session.draft.remove_rules) as remove:
                     self.assertTrue(button(self.app, "Remover selecionadas").invoke())
                     remove.assert_called_once_with(field, (1, 3))
@@ -894,7 +1146,7 @@ class ConfigGuiFlowTests(unittest.TestCase):
         self.app.begin_rule_selection()
         self.assertEqual(self.app.rule_selection_actions["all"].options["state"], "disabled")
         self.assertEqual(self.app.rule_selection_actions["remove"].options["state"], "disabled")
-        self.assertIn("0 selecionadas / 0 exibidas", self.app.rule_selection_count.options["text"])
+        self.assertIn("0 selecionadas / 0 resultados", self.app.rule_selection_count.options["text"])
 
     def test_rule_bulk_selection_every_render_resets_and_all_old_commands_are_stale(self):
         self.bulk_fixture()
@@ -1355,7 +1607,7 @@ class ConfigGuiFlowTests(unittest.TestCase):
         self.app.rule_search.set("last")
         with patch.object(self.app, "render_rules", wraps=self.app.render_rules) as rendered:
             self.assertTrue(self.app.navigate_review("block_exes", 2))
-            rendered.assert_called_once_with()
+            rendered.assert_called_once_with(target_index=2)
         row = self.app.review_rows[("block_exes", 2)]
         button(row, "Editar").invoke()
         self.assertEqual(self.entries()[0].get(), "TARGET.EXE")
@@ -1363,9 +1615,9 @@ class ConfigGuiFlowTests(unittest.TestCase):
         button(self.app.modal, "Aplicar alteração").invoke()
         self.assertIsNone(self.app.highlighted_row)
         self.assertEqual(self.session.draft.config.block_exes, ("first.exe", "target.exe", "changed.exe", "last.exe"))
-        with patch.object(self.app, "render_rules", wraps=self.app.render_rules) as rendered:
+        with patch.object(self.app, "render_rule_projection", wraps=self.app.render_rule_projection) as rendered:
             self.assertTrue(self.app.navigate_review("block_exes", 2))
-            rendered.assert_called_once_with()
+            rendered.assert_called_once_with(0)
         button(self.app.highlighted_row, "Remover").invoke()
         self.assertEqual(self.session.draft.config.block_exes, ("first.exe", "target.exe", "last.exe"))
         self.assertIsNone(self.app.highlighted_row)

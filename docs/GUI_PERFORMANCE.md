@@ -48,7 +48,37 @@ do anterior. Render de 100 regras continua aproximadamente 3,15 s; a alteração
 não resolve o custo da materialização de listas extensas. Não extrapolar o
 resultado posterior para 1000 regras, seleção ativa, motor real ou RNF01.
 
-## Interpretação e limites
+## Após paginação visual — 2026-10-13
+
+Uma execução final do cenário 1000, fonte RULE_PAGINATION congelada sobre
+`795c794`, mesmo ambiente/dataset/configuração/880×660/seleção desligada.
+SHA256 de `ui/config_gui.py`:
+`1BAB4F60A1689F6D9403134FDB8B2BDB32FE1C78B89F5EA50681FE3FD252827F`.
+
+| Medida | Antes, 1000 regras | Após paginação, 1000 regras |
+| --- | ---: | ---: |
+| Construção s | 30,538 | 2,089431 |
+| Render s | 35,648 (`app.render`) | 1,049138 (`app.render_rules`) |
+| RSS idle MiB | 195,31 | 66,773438 |
+| CPU idle de um núcleo | 7,50% | 0,311850% |
+
+**Desvio explícito:** o script anterior renderizava toda a app
+(`app.render` + updates); o atual usou `app.render_rules` + os mesmos updates,
+por instrução inicial incorreta do Maestro. A correção chegou após o processo
+terminar; não houve repetição. Os tempos de render não são comparação estrita.
+Construção e demais condições mantiveram o protocolo anterior. Uma amostra
+não é garantia estatística nem aceite RNF01/visual/DPI.
+
+Snapshot 0,282300 ms/helper 0,272600 ms; CPU build/render 1,890625/0,953125 s.
+RSS após build 66,222656 MiB, pico lifetime 66,777344 MiB. Idle wall 5,010428 s,
+CPU 0,015625 s (quantização relevante). Nenhum timeout/erro/stderr.
+
+Invariantes conferidos: FULLindices/modelo **1000**, página 0 de **40**, somente
+**25** rows materializadas (índices 0–24), modelo tipado/bytes intactos, dirty
+false, controller/tray starts zero e bgerrors vazios. Processo/launcher
+encerrados e fixture UUID removida. Não medir seleção ativa ou motor real.
+
+## Interpretação consolidada e limites
 
 - Nesta amostra, snapshot/helper são sub-ms; criação/reconstrução dos widgets
   domina o custo de listas extensas. Com 1000 regras, o custo é relevante para
@@ -62,12 +92,14 @@ resultado posterior para 1000 regras, seleção ativa, motor real ou RNF01.
   comparações. Sem medição de pintura, foco físico, DPI ou acessibilidade.
 - Instrumentação fake independente confirmou inicialmente 39 `configure` em
   três polls sem mudança (13/poll). A atualização condicional elimina setters
-  repetidos de texto/estado; não resolve a materialização de listas extensas.
+  repetidos de texto/estado. Essa alteração sozinha não reduz a quantidade de
+  widgets; a paginação posterior limita a projeção a 25 linhas.
 
 ## Continuidade
 
-Medição posterior 0/100 concluída com o mesmo protocolo. Para listas extensas,
-uma próxima unidade deve
-avaliar renderização progressiva cancelável preservando todos os resultados
-da seleção, índices originais, contextos obsoletos recusados e navegação pela
-revisão. Nenhuma política de paginação/limite foi implementada nesta medição.
+Atualização condicional e paginação visual de 25 limitam trabalho repetido e
+quantidade de widgets, preservando o universo completo. A implementação/QA
+da paginação tem [contrato próprio](RULE_PAGINATION_CONTRACT.md). Modelos e
+snapshots continuam proporcionais à quantidade de dados; páginas não limitam
+configuração nem garantem latência/RSS. Aceite visual/DPI e RNF01 do app real
+continuam pendentes.

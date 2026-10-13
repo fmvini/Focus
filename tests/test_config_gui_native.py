@@ -106,6 +106,141 @@ class NativeConfigGuiTests(unittest.TestCase):
     def entries(self):
         return [child for child in self.descendants(self.app.modal) if isinstance(child, self.ctk.CTkEntry)]
 
+    def native_pagination_fixture(self, *, duplicates=False):
+        values = [f"game-{index:03}.exe" for index in range(60)]
+        if duplicates:
+            values[31] = values[56] = values[2]
+        self.path.write_text(json.dumps({"windows": [],
+            "block_exes": values,
+            "typed": [True, 1, 1.0, "ação"]}), encoding="utf-8")
+        self.session.reload()
+        self.app.render()
+        self.app.geometry("880x660")
+        self.app.tabs.set("Jogos / Apps")
+
+    def test_rule_pagination_native_layout_crosspage_old_callbacks_and_one_undo(self):
+        self.native_pagination_fixture(duplicates=True)
+        draft, snapshot, config = self.session.draft, self.session.snapshot, self.session.draft.config
+        original = self.path.read_bytes()
+        self.assertEqual(len(self.native_rule_indices("block_exes")), 25)
+        self.assertEqual(self.app.rules_list._parent_frame.grid_info()["row"], 4)
+        self.assertEqual(self.app.rule_pager.grid_info()["row"], 5)
+        self.assertEqual(self.app.rule_page_previous.cget("state"), "disabled")
+        self.app.begin_rule_selection()
+        self.assertEqual(self.app.rules_list._parent_frame.grid_info()["row"], 5)
+        self.assertEqual(self.app.rule_pager.grid_info()["row"], 6)
+        self.assertEqual(self.app.rule_area.grid_rowconfigure(5)["weight"], 1)
+        context, generation = self.app.rule_selection_context, self.app.rule_selection_generation
+        old_row, old_var, old_box = self.app.rule_selection_boxes[2]
+        old_commands = [old_box.cget("command"), self.button(old_row, "Editar").cget("command"),
+                        self.button(old_row, "Remover").cget("command"), self.app.rule_page_next.cget("command")]
+        for page, index in ((0, 2), (1, 31), (2, 56)):
+            if page:
+                self.assertTrue(self.app.change_rule_page(page))
+            self.app.rule_selection_boxes[index][2].toggle()
+            self.assertIs(self.app.rule_selection_context, context)
+            self.assertEqual(self.app.rule_selection_generation, generation)
+        self.assertEqual(self.app.rule_selection_indices, {2, 31, 56})
+        self.assertEqual(len(self.app.rule_selection_boxes), 10)
+        self.assertIn("Página 3 de 3 · itens 51–60 de 60", self.app.rule_page_label.cget("text"))
+        self.assertTrue(self.app.change_rule_page(0))
+        self.assertEqual(self.app.rule_selection_boxes[2][1].get(), 1)
+        with patch.object(old_var, "get", side_effect=AssertionError("old native Tk")):
+            for command in old_commands:
+                self.assertFalse(command())
+        self.messages.askyesno.assert_not_called()
+        self.messages.askyesno.return_value = True
+        with patch.object(draft, "remove_rules", wraps=draft.remove_rules) as remove:
+            self.assertTrue(self.app.selection_remove(context))
+            remove.assert_called_once_with("block_exes", (2, 31, 56))
+        self.assertIs(self.session.snapshot, snapshot)
+        self.assertEqual(self.path.read_bytes(), original)
+        self.assertTrue(self.app.undo_draft())
+        self.assertEqual(draft.config, config)
+        self.assertFalse(draft.can_undo)
+        self.assertTrue(draft.can_redo)
+        self.app.rule_search.set("missing")
+        self.assertFalse(self.app.rule_pager.grid_info())
+        self.assertEqual(self.app.rule_page_result.total, 0)
+        self.app.update()
+        self.assertEqual(self.background_errors, [])
+        self.assertEqual((self.controller.starts, self.controller.stops), (0, 0))
+
+    def test_rule_pagination_native_review_sorted_target_preserves_selection_and_owned_scroll(self):
+        self.native_pagination_fixture()
+        self.app.change_rule_order("Nome Z–A")
+        self.app.begin_rule_selection()
+        context, config, original = self.app.rule_selection_context, self.session.draft.config, self.path.read_bytes()
+        self.app.selection_select_all(context)
+        with patch.object(self.app, "render_rule_projection", wraps=self.app.render_rule_projection) as projected:
+            self.assertTrue(self.app.navigate_review("block_exes", 2))
+            projected.assert_called_once_with(2)
+        self.assertEqual(self.app.rule_page_result.page, 2)
+        self.assertIs(self.app.rule_selection_context, context)
+        self.assertEqual(self.app.rule_selection_indices, set(range(60)))
+        self.assertTrue(all(var.get() == 1 for _, var, _ in self.app.rule_selection_boxes.values()))
+        row, timer = self.app.highlighted_row, self.app.highlighted_row.review_scroll_timer
+        self.assertTrue(self.app.change_rule_page(0))
+        self.assertNotIn(timer, self.app.tk.splitlist(self.app.tk.call("after", "info")))
+        self.assertIsNone(self.app.highlighted_row)
+        self.app.rule_search.set("game-059")
+        with patch.object(self.app, "render_rule_projection", wraps=self.app.render_rule_projection) as projected:
+            self.assertTrue(self.app.navigate_review("block_exes", 2))
+            projected.assert_called_once_with(2)
+        self.assertEqual(self.app.rule_selection_indices, set())
+        self.assertEqual(self.app.rule_search.get(), "")
+        self.assertEqual(self.app.visual_rule_order, "name_desc")
+        row = self.app.highlighted_row
+        self.assertIs(row, self.app.review_rows[("block_exes", 2)])
+        self.assertEqual(row.cget("border_width"), 2)
+        self.app.after(100, self.app.quit)
+        self.app.mainloop()
+        self.assertIsNone(row.review_scroll_timer)
+        self.assertEqual(self.session.draft.config, config)
+        self.assertFalse(self.session.dirty)
+        self.assertFalse(self.session.draft.can_undo)
+        self.assertEqual(self.path.read_bytes(), original)
+        self.assertEqual(self.background_errors, [])
+
+    def test_rule_pagination_native_review_included_filter_keeps_selection_owner_and_redo(self):
+        self.native_pagination_fixture()
+        self.session.draft.add_rule("safelist_exes", "redo.exe")
+        self.session.draft.undo()
+        self.app.render()
+        self.app.rule_search.set("game-")
+        self.app.change_rule_order("Nome Z–A")
+        self.app.begin_rule_selection()
+        context, generation = self.app.rule_selection_context, self.app.rule_selection_generation
+        self.app.selection_select_all(context)
+        draft, snapshot, config = self.session.draft, self.session.snapshot, self.session.draft.config
+        original = self.path.read_bytes()
+        with patch.object(self.app, "render_rules", side_effect=AssertionError("unneeded logical reset")), \
+                patch.object(self.app, "render_rule_projection", wraps=self.app.render_rule_projection) as projected, \
+                patch.object(Path, "read_bytes", side_effect=AssertionError("navigation IO")):
+            self.assertTrue(self.app.navigate_review("block_exes", 2))
+            projected.assert_called_once_with(2)
+        self.assertEqual(self.app.rule_search.get(), "game-")
+        self.assertEqual(self.app.visual_rule_order, "name_desc")
+        self.assertEqual(self.app.rule_page_result.page, 2)
+        self.assertIs(self.app.rule_selection_context, context)
+        self.assertIs(self.app.rule_view_context, context)
+        self.assertEqual(self.app.rule_selection_generation, generation)
+        self.assertEqual(self.app.rule_selection_indices, set(range(60)))
+        self.assertEqual(len(self.app.rule_selection_boxes), 10)
+        self.assertTrue(all(variable.get() for _, variable, _ in self.app.rule_selection_boxes.values()))
+        self.assertIs(self.app.highlighted_row, self.app.review_rows[("block_exes", 2)])
+        self.app.after(100, self.app.quit)
+        self.app.mainloop()
+        self.assertIs(self.session.draft, draft)
+        self.assertIs(self.session.snapshot, snapshot)
+        self.assertEqual(draft.config, config)
+        self.assertFalse(self.session.dirty)
+        self.assertFalse(draft.can_undo)
+        self.assertTrue(draft.can_redo)
+        self.assertEqual(self.path.read_bytes(), original)
+        self.assertEqual((self.controller.starts, self.controller.stops), (0, 0))
+        self.assertEqual(self.background_errors, [])
+
     def watch_idle_configures(self):
         widgets = [self.app, *self.descendants(self.app)]
         for widget in widgets:
@@ -131,7 +266,7 @@ class NativeConfigGuiTests(unittest.TestCase):
         widgets = self.watch_idle_configures()
         self.assert_idle_polls(widgets)
         self.app.selection_select_all(context)
-        self.assertIn("2 selecionadas / 2 exibidas", self.app.rule_selection_count.cget("text"))
+        self.assertIn("2 selecionadas / 2 resultados", self.app.rule_selection_count.cget("text"))
         self.assertEqual(self.app.rule_selection_actions["remove"].cget("state"), "normal")
         self.assert_idle_polls(widgets)
         self.app.picker_active = True
@@ -144,7 +279,7 @@ class NativeConfigGuiTests(unittest.TestCase):
         self.assertEqual(self.app.rule_order_picker.cget("state"), "normal")
         self.assertEqual(self.app.rule_selection_actions["remove"].cget("state"), "normal")
         self.app.selection_clear(context)
-        self.assertIn("0 selecionadas / 2 exibidas", self.app.rule_selection_count.cget("text"))
+        self.assertIn("0 selecionadas / 2 resultados", self.app.rule_selection_count.cget("text"))
         self.assertEqual(self.app.rule_selection_actions["remove"].cget("state"), "disabled")
         self.assert_idle_polls(widgets)
         self.assertIs(self.app.rule_selection_context, context)
@@ -445,7 +580,7 @@ class NativeConfigGuiTests(unittest.TestCase):
         self.assertEqual(self.app.rule_selection_bar.grid_info()["row"], 4)
         self.assertEqual(self.app.rule_area.grid_rowconfigure(5)["weight"], 1)
         self.assertEqual(self.app.rule_order_picker.master.grid_info()["row"], 3)
-        self.assertEqual(len(self.app.rule_selection_boxes), 30)
+        self.assertEqual(len(self.app.rule_selection_boxes), 25)
         self.assertEqual(self.app.rule_selection_context[2], tuple(reversed(range(30))))
         with patch.object(self.app, "render_rules", side_effect=AssertionError("selection render")), \
                 patch.object(Path, "read_bytes", side_effect=AssertionError("IO")), \
@@ -453,11 +588,16 @@ class NativeConfigGuiTests(unittest.TestCase):
                 patch.object(self.controller, "stop", side_effect=AssertionError("motor")):
             self.button(self.app, "Selecionar exibidas").invoke()
             self.assertEqual(self.app.rule_selection_indices, set(range(30)))
-            self.assertIn("30 selecionadas / 30 exibidas", self.app.rule_selection_count.cget("text"))
+            self.assertIn("30 selecionadas / 30 resultados", self.app.rule_selection_count.cget("text"))
             self.assertNotIn(30, self.app.rule_selection_indices)
+            self.assertTrue(self.app.change_rule_page(1))
+            self.assertEqual(set(self.app.rule_selection_boxes), set(range(5)))
+            self.assertTrue(all(var.get() for _, var, _ in self.app.rule_selection_boxes.values()))
             self.button(self.app, "Limpar seleção").invoke()
+            self.app.rule_selection_boxes[0][2].toggle()
+            self.assertTrue(self.app.change_rule_page(0))
             self.app.rule_selection_boxes[29][2].toggle()
-            self.assertEqual(self.app.rule_selection_indices, {29})
+            self.assertEqual(self.app.rule_selection_indices, {0, 29})
         self.button(self.app, "Fechar seleção").invoke()
         self.assertEqual(self.app.rules_list._parent_frame.grid_info()["row"], 4)
         self.assertEqual(self.app.rule_area.grid_rowconfigure(4)["weight"], 1)
@@ -777,7 +917,7 @@ class NativeConfigGuiTests(unittest.TestCase):
                     self.app.rule_search.set("no results")
                     with patch.object(self.app, "render_rules", wraps=self.app.render_rules) as rendered:
                         self.assertTrue(self.app.navigate_review(field, 1))
-                        rendered.assert_called_once_with()
+                        rendered.assert_called_once_with(target_index=1)
                 else:
                     self.assertTrue(self.app.navigate_review(field, 1))
                 row = self.app.review_rows[(field, 1)]

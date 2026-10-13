@@ -65,6 +65,8 @@ Em **Jogos / Apps → Ordem visual**, escolha Cadastro, Nome A–Z ou Nome Z–A
 
 **Selecionar regras** abre o modo de remoção em lote. Marque linhas ou use **Selecionar exibidas** para selecionar todos os resultados da categoria/filtro atual, inclusive os que exigem rolagem. **Remover selecionadas** pede confirmação e atualiza somente o rascunho, como uma única edição de **Desfazer**; clique em **Salvar** para gravar. **Limpar seleção** e **Fechar seleção** preservam os dados. Atualizar a lista, mudar busca, ordem ou categoria limpa a seleção. Ver [contrato de remoção em lote](docs/RULE_BULK_REMOVE_CONTRACT.md).
 
+Listas extensas usam páginas de 25 regras. **Anterior/Próxima** mudam apenas a página e mantêm as regras selecionadas; **Selecionar exibidas** abrange todos os resultados do filtro, incluindo outras páginas. O contador informa esse total. Busca, ordem, categoria ou mudança da configuração reiniciam a seleção. **Ir para item** revela a página do índice original indicado pela revisão; um filtro que já inclui o alvo é preservado. Ver [contrato da paginação](docs/RULE_PAGINATION_CONTRACT.md).
+
 **Desfazer** e **Refazer** restauram até 50 edições do rascunho nesta sessão, incluindo horários, regras, sugestões e seleção de arquivos. Os atalhos são **Ctrl+Z/Ctrl+Y** fora de formulários/campos de texto. **Salvar** mantém o histórico; **Importar** ou **Recarregar** bem-sucedidos o reiniciam. A versão restaurada só é gravada quando você salvar; o histórico não é persistido ao fechar.
 
 Alterações em campos extras preservam a distinção entre valores JSON como `true`, `1` e `1.0` e contam como edição pendente. Seletores de arquivos/pastas mantêm a janela acessível; enviar à bandeja exige concluir a seleção e clicar novamente.

@@ -40,6 +40,11 @@ horários/regras, histórico, baseline ou estado do motor.
   rolagem manual. Revalidar esse adaptador ao atualizar a dependência.
 - Busca não vazia usa seu trace para reconstruir a lista; busca já vazia
   renderiza diretamente. A navegação não constrói a mesma lista duas vezes.
+- Regras paginadas são localizadas pela posição do índice original no universo
+  completo ordenado. Revelar página antes do destaque/scroll, sem buscar pelo
+  texto de duplicatas. Mesma vista muda somente projeção e preserva seleção;
+  limpar filtro ou mudar contexto reconstrói logicamente. Detalhes no
+  [contrato da paginação](RULE_PAGINATION_CONTRACT.md).
 
 ## Propriedade e validação
 

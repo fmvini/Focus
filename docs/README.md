@@ -37,6 +37,7 @@ Status: fases 1/2, editor CLI, painel/configuração gráfica, controle explíci
 | [EDITOR_ACTION_CONTEXT_CONTRACT.md](EDITOR_ACTION_CONTEXT_CONTRACT.md) | Guardas de contexto para ações individuais, formulários e recarga |
 | [GUI_IDLE_UPDATES_CONTRACT.md](GUI_IDLE_UPDATES_CONTRACT.md) | Atualização condicional de texto/estado sem mudar o polling |
 | [GUI_PERFORMANCE.md](GUI_PERFORMANCE.md) | Medição isolada de construção, renderização e repouso da GUI |
+| [RULE_PAGINATION_CONTRACT.md](RULE_PAGINATION_CONTRACT.md) | Universo de regras completo, projeção paginada e seleção entre páginas |
 | [PROCESS_GUI_CONTRACT.md](PROCESS_GUI_CONTRACT.md) | Motor gráfico: início/parada, worker, snapshots, recarga e saída ordenada |
 | [TRAY_CONTRACT.md](TRAY_CONTRACT.md) | Bandeja explícita, fila de comandos Tk e uma GUI por configuração/sessão |
 | [INITIAL_SETUP_CONTRACT.md](INITIAL_SETUP_CONTRACT.md) | Primeira configuração gráfica, sugestões opt-in e criação exclusiva ao Salvar |

@@ -27,12 +27,16 @@ posições originais das quatro listas de processos, nunca horários.
 - Modo explícito **Selecionar regras**, inicialmente desligado. Fora do modo,
   preservar lista/busca/ordem/footer atuais. Ativo mostra checkbox compacta em
   cada regra e barra de contador/ações; não altera dados ao entrar ou fechar.
-- Contador N selecionadas / M exibidas. **Selecionar exibidas** abrange todos
-  os resultados da categoria/filtro atual, inclusive fora do viewport. Nunca
+- Contador N selecionadas / M resultados. **Selecionar exibidas** abrange todos
+  os resultados da categoria/filtro atual, inclusive fora do viewport e de
+  outras páginas. Nunca
   outras categorias ou linhas ocultas pelo filtro. **Limpar seleção** e
   **Fechar seleção** descartam somente estado visual.
-- Categoria, consulta, ordem, qualquer rerender ou mudança de modelo limpa
-  seleção e incrementa geração. Informar essa política brevemente na barra.
+- Categoria, consulta, ordem, reconstrução lógica ou mudança de modelo limpa
+  seleção e incrementa geração. Trocar somente a página visual preserva a
+  seleção de índices do universo completo e invalida bindings das rows antigas,
+  conforme [RULE_PAGINATION_CONTRACT.md](RULE_PAGINATION_CONTRACT.md).
+  Informar essa política brevemente na barra.
   Checkbox/contador não reconstrói a lista. Zero selecionadas desabilita
   remoção; zero exibidas desabilita seleção em lote.
 - Polling de estado não deve reconfigurar checkboxes quando o estado permanece

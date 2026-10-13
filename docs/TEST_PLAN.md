@@ -2,6 +2,14 @@
 
 Fonte: [escopo](Focus%20Blocker_%20escopo%20do%20projeto.md), [requisitos](REQUIREMENTS.md) e [decisões](DECISIONS.md). Fases 1/2: 206 testes OK em Python 3.14.6/psutil 7.2.2 por `.venv/Scripts/python.exe -B -m unittest discover -s tests` (10,542 s). Sintaxe 3.12 dos 18 arquivos Python conferida; runtime 3.12 ainda não executado. Encerramentos reais e fases posteriores continuam pendentes.
 
+## Evidência da paginação visual — 2026-10-13
+
+- Helper frozen: 14 novos/14 view existentes aprovados nos dois runtimes, 0,439 s/0,889 s. Limites 0/25/26/50/51/1000, offsets/clamp/lookup/duplicatas/reconstrução/tipos/frozen/source/pureza/lazy.
+- Banco quatro integrações com JSON/sessão/helpers reais aprovadas nos dois runtimes, 0,954 s/0,843 s. Seleção de índices entre páginas e AllFULL não fica limitada ao slice visual, uma edição Undo/Redo, ordem/tipos/extras/baseline/bytes/Save/conflito/importreload preservados.
+- GUI final: seis fake/três native novos verificam universo completo/projeção25, seleção crosspage e remoção offpage/AllFULL, índices originais/duplicatas, epochs e callbacks antigos, prompt/reentrância, revisão distante e filtro incluinte preservado, layout/ownedscroll/bgerrors. Quick9 nos dois runtimes 19,722 s/20,621 s; compatibilidade140 15,851 s/15,826 s. Após ajuste somente de hint, um fake final nos dois runtimes 0,032 s. Backend/Banco revisão estática final sem achados pendentes.
+- Suíte completa final Maestro: **835 descobertos, 834 aprovados e um skip conhecido** symlink/WinError 1314 nos dois runtimes Windows AMD64: Python 3.14.6/265,365 s e Python 3.12.14/285,585 s. Quarenta e oito nativeGUI, ícone real e guardas passaram. AST 3.12/UTF-8 nos 76 arquivos, links e diff conferidos.
+- Medição única 1000, sem QA concorrente: modelo/universo1000, 40 páginas/25 widgets, bytes/dirty/controlador preservados; construção2,089 s e RSS idle66,773 MiB. Render usou render_rules, baseline render completo: não comparar estritamente esses tempos. Protocolo/limites em [GUI_PERFORMANCE.md](GUI_PERFORMANCE.md), comportamento em [RULE_PAGINATION_CONTRACT.md](RULE_PAGINATION_CONTRACT.md). HiddenRoot/amostra única não constituem aceite visual/DPI ou RNF01.
+
 ## Evidência da atualização condicional de widgets — 2026-10-13
 
 - Três fake/dois native novos cobrem três polls estáveis sem configure em todos os widgets após sync, agenda/runtime/mailbox avaliados três vezes, mudanças reais de texto/estado, histórico/revisão/modal/picker/selecting/confirming, runtime/error/aliveclosing e toolbar de seleção ativa. Preservam identidade/modelo/history/baseline/bytes/geração/seleção/timer; CTk real verifica cget/teardown sem bgerrors.

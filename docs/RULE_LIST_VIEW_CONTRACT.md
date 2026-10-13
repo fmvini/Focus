@@ -37,6 +37,11 @@ cadastro, JSON, histórico, baseline, matching do motor e índices originais.
 - Controle compacto deve preservar área da lista em 880×660. Widgets ocultos
   validam estado/teardown, não inspeção visual/DPI.
 
+O helper sempre retorna o universo completo. A projeção GUI em páginas de 25
+é definida em [RULE_PAGINATION_CONTRACT.md](RULE_PAGINATION_CONTRACT.md), sem
+truncar resultados nem converter índices. Navegação da revisão revela a página
+correspondente ao índice original; seleção em lote continua abrangendo todas.
+
 Backend: helper/testes. Frontend: GUI/testes fake+nativos. Banco: integração
 com sessão/JSON em arquivo de testes exclusivo, sem GUI durante edição.
 Maestro: revisão, documentação, suíte e commit funcional conjunto. Testes

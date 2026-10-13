@@ -1,3 +1,29 @@
+## 2026-10-13 — Paginação visual de regras
+
+### Implementado
+- Páginas visuais de 25 regras com Anterior/Próxima e indicador de faixa/total, ocultas quando desnecessárias. Universo completo preservado e seleção mantida entre páginas; filtro/ordem/categoria/modelo/refresh lógico reiniciam seleção.
+- Remoção offpage/AllFULL e navegação da revisão pelo índice original, com lookup antes de uma projeção. Filtro incluinte preserva consulta/seleção; excluinte é limpo. Row/pager/checkbox usam época de projeção e owner/modelo para recusar callbacks antigos, sem novo timer.
+
+### Arquivos principais alterados
+- `ui/rule_pagination.py`, `tests/test_rule_pagination.py`, `tests/test_rule_pagination_integration.py`, `ui/config_gui.py`, `tests/test_config_gui.py`, `tests/test_config_gui_native.py`.
+- `README.md`, `docs/RULE_PAGINATION_CONTRACT.md`, `docs/RULE_BULK_REMOVE_CONTRACT.md`, `docs/RULE_LIST_VIEW_CONTRACT.md`, `docs/REVIEW_NAVIGATION_CONTRACT.md`, `docs/GUI_EDITOR_CONTRACT.md`, `docs/README.md`, `docs/GUI_PERFORMANCE.md`, `docs/TEST_PLAN.md`, `docs/DEVELOPMENT_LOG.md`.
+
+### Decisões técnicas
+- Paginação limita widgets, enquanto render progressivo sozinho manteria RSS final de todas as rows. Não alterar core/JSON/motor nem limitar quantidade de regras.
+- Separar universo lógico completo da projeção paginada e seus bindings. Páginas preservam seleção; filtro/ordem/categoria/modelo/reconstrução lógica limpam. Remoção offpage usa índices originais/guardas tipadas, uma edição e Save explícito.
+
+### Estado atual
+- Base `795c794`, suíte anterior 808/807 aprovados/um skip nos dois runtimes. Medição anterior 1000 regras mostrou build/render 30,538 s/35,648 s e RSS idle 195,31 MiB.
+- Helper Backend congelado: 14 novos e 14 regressões de view aprovados nos dois runtimes, 0,439 s/0,889 s. API página/lookup conforme contrato, somente stdlib, valida universo completo e preserva índices/ordem/duplicatas; revisão Maestro sem achado funcional no fluxo do app.
+- Banco congelou quatro integrações e aprovou nos dois runtimes, 0,954 s/0,843 s: sort/duplicatas nas fronteiras, seleção crosspage/AllFULL, oneUndo/Save/conflict/importreload e views sem IO/history/bytes/tipos alterados.
+- Frontend final seis fake/três native novos: quick9 nos dois runtimes 19,722 s/20,621 s e compatibilidade140 15,851 s/15,826 s. Após ajuste somente do hint, um fake final nos dois runtimes 0,032 s. Root full usa fonte pós-string; runs anteriores não atribuir à alteração posterior. Backend/Banco revisões finais estáticas sem achados após corrigir navegação que limpava filtro incluinte.
+- Medição final1000: build 2,089 s, RSS idle 66,773 MiB, universo/model1000, páginas40, rows25, bytes intactos/dirtyfalse/controllerszero/bgerrorsvazio. Uma amostra, sem garantia/RNF01/visual. Render atual1,049 s usa render_rules, baseline35,648 s usava render completo; desvio declarado, sem comparação estrita. Detalhes em `docs/GUI_PERFORMANCE.md`.
+- Suíte completa final Maestro: **835 descobertos, 834 aprovados e um skip conhecido** symlink/WinError 1314 em ambos runtimes Windows AMD64: Python 3.14.6/265,365 s e Python 3.12.14/285,585 s. Quarenta e oito nativeGUI, ícone real e guardas passaram. AST 3.12/UTF-8 nos 76 arquivos, links e diff conferidos.
+
+### Próximos passos
+- Continuar a partir da projeção de 25 linhas e universo completo: avaliar custo de busca por digitação antes de escolher debounce ou outra otimização, preservando invalidação imediata de callbacks/seleção.
+- Visual/DPI, definição do ensaio RNF01 e respostas de sites/pausa/avisos permanecem pendentes; não implementar comportamentos dependentes dessas respostas.
+
 ## 2026-10-13 — Custo da interface e polling
 
 ### Implementado
