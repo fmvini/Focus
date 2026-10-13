@@ -103,3 +103,9 @@ da paginação tem [contrato próprio](RULE_PAGINATION_CONTRACT.md). Modelos e
 snapshots continuam proporcionais à quantidade de dados; páginas não limitam
 configuração nem garantem latência/RSS. Aceite visual/DPI e RNF01 do app real
 continuam pendentes.
+
+Próxima medição exploratória deve seguir [PERFORMANCE_PROTOCOL.md](PERFORMANCE_PROTOCOL.md),
+registrando fontes/dados brutos e desvios. Matriz, cargas, durações e método de
+aceite continuam propostas de D18; não houve benchmark novo nesta preparação.
+Q-PERF-01/02 em [USER_ANSWERS.md](USER_ANSWERS.md) tratam ambiente/repouso e
+significado dos limites para aceite final, sem impedir investigação exploratória.

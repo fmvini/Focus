@@ -1,3 +1,30 @@
+## 2026-10-13 — Roteiros de aceite visual e desempenho
+
+### Implementado
+- Roteiro visual com 13 casos, oito ambientes reais/simulados e receitas de fixtures isoladas: primeiro uso ausente, listas vazias/25/26/60 e integridade de 1000 regras com duplicatas, Unicode, extras tipados, dias `(6,0)` e horário desativado.
+- Proposta de protocolo de CPU/RAM, perímetro de processos, cargas/estados, endpoints de timing, repetições, dados brutos e teardown. Q-PERF-01/02 acrescentadas ao canal do usuário para detalhar D18/RNF01, sem preencher respostas ou alterar requisitos.
+- Tentativa real de inspeção da primeira configuração registrada separadamente; documentação de retomada e referências atualizadas.
+
+### Arquivos principais alterados
+- `docs/GUI_ACCEPTANCE.md`, `docs/GUI_ACCEPTANCE_RESULTS.md`, `docs/PERFORMANCE_PROTOCOL.md`.
+- `docs/USER_ANSWERS.md`, `docs/DECISIONS.md`, `docs/README.md`, `docs/TEST_PLAN.md`, `docs/GUI_EDITOR_CONTRACT.md`, `docs/GUI_PERFORMANCE.md`, `docs/DELIVERY_PLAN.md`, `docs/DEVELOPMENT_LOG.md`.
+
+### Decisões técnicas
+- Escala Windows real e fatores de simulação CTk ficam separados; matriz não ganha aceite por teste oculto, receita validada ou captura indisponível. Oráculos da cópia ativa e dados de memória não observáveis têm limites explícitos.
+- CPU por processador lógico/total, bytes/MB/MiB, working set/commit privado e pico lifetime/amostrado não são intercambiáveis. D18 define aceite final; medições exploratórias dentro do desenvolvimento autorizado podem continuar antes de fechar D18.
+- Fixtures verificam contenção/links/junctions, nome UUID e criação exclusiva antes de escrever. Fonte Python é ASCII com escapes Unicode para evitar perda de acentos no pipe legado.
+
+### Estado atual
+- Base `79607c9`; nenhuma produção, dependência ou teste versionado alterado. Última suíte funcional permanece 842 descobertos/841 aprovados/um skip conhecido nos dois runtimes; não foi repetida para esta unidade documental.
+- Receita final de cinco JSONs exercitada por extração da fonte em Python 3.14.6 e 3.12.14: parser, hashes, tipos, Unicode/espaços, duplicatas/dias e destino novo ausente passaram. Nome inválido, reutilização e destino fora de QA recusados sem sobrescrita. Pipe PowerShell integral e abertura/simulação de GUI do roteiro não executados; fixtures/logs locais ignorados em `.qa/`.
+- Probe abriu janela real de primeiro uso 880×660, arquivo ausente e controlador sem bloqueador. Duas capturas falharam por timeout; UIA retornou principalmente painéis/imagens, sem confirmar foco da busca. Clique não dispunha de geometria; encerramento normal não demonstrado. Cleanup externo restrito aos dois PIDs do probe, destino permaneceu ausente; nenhuma captura salva, benchmark, Save ou motor real iniciado.
+- Backend/Banco revisões finais somente leitura sem achados pendentes; Frontend apontou persistência do filtro em V06, corrigida com limpeza explícita antes das quatro categorias. Revisões documentais não executaram GUI/receita/benchmark. Casos visuais, leitor de tela e RNF01 continuam sem aceite.
+
+### Próximos passos
+- Implementar coletor exploratório conforme `docs/PERFORMANCE_PROTOCOL.md`: validar contadores/endpoints e manifesto bruto com processo identificado por PID/create_time; começar com motor parado e fixtures sintéticas, um cenário por vez, sem afirmar RNF01 aceito.
+- Retomar `docs/GUI_ACCEPTANCE.md` com observação direta ou captura funcional. Registrar escala real, executar casos por ambiente e conferir foco/teclado/leitor separadamente; manter falhas de ferramenta distintas de defeitos demonstrados do produto.
+- Consolidar Q-PERF-01/02 para aceite final. Sites, pausa e avisos continuam dependendo das respostas existentes em `docs/USER_ANSWERS.md`.
+
 ## 2026-10-13 — Busca com reconstrução diferida
 
 ### Implementado

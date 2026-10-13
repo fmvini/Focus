@@ -158,3 +158,47 @@ o horário já terminou? O canal seria a notificação do Windows nos dois casos
 somente quando a agenda exigir bloqueio, sem depender de jogo aberto.
 
 **Resposta do usuário:**
+
+
+## Perguntas para o aceite de desempenho — D18 / RNF01
+
+O [protocolo proposto](PERFORMANCE_PROTOCOL.md) distingue medições
+exploratórias de aceite do produto. Estas respostas definem o aceite final;
+não impedem investigar o custo do app durante o desenvolvimento.
+
+### Q-PERF-01 — Ambiente e estado de repouso
+
+**Status:** aguardando resposta.
+
+Em quais máquinas e versões Windows o limite de CPU/RAM deve ser validado?
+Para "repouso", deseja exigir os limites com a janela aberta, com o app na
+bandeja, ou em ambos? O motor deve estar parado ou executando normalmente
+fora de uma janela de bloqueio? Qual quantidade de regras deve ser a carga
+de referência? É possível responder descrevendo seu uso esperado.
+
+**Sugestão da equipe:** registrar janela aberta e bandeja em séries separadas,
+primeiro com motor parado e depois com motor real fora da janela; usar cargas
+de 0/100/1000 regras para exploração. Hardware, carga e estados do aceite
+continuam a definir; essas séries não aprovam RNF01 por si mesmas.
+
+**Resposta do usuário:**
+
+
+### Q-PERF-02 — Significado dos limites
+
+**Status:** aguardando resposta.
+
+O limite de CPU <1% deve usar a capacidade total da máquina, como a exibição
+geral do Gerenciador de Tarefas, ou um processador lógico como 100%? Para
+RAM <80 MB, podemos usar 80.000.000 bytes de working set (memória física
+residente do processo), registrando também a memória privada comprometida?
+O limite deve valer para a média do período de repouso ou para toda amostra
+válida? A memória residente pode incluir páginas compartilhadas; ela não
+equivale automaticamente a todas as colunas de memória do Windows.
+
+**Sugestão da equipe:** publicar ambos os percentuais de CPU e os contadores
+de RAM em bytes/MB/MiB, além de média e máximo. Escolher contador, perímetro
+de processos e estatística antes do aceite, sem mudar a interpretação depois
+de ver o resultado. Essas escolhas não são aprovadas por campo vazio.
+
+**Resposta do usuário:**

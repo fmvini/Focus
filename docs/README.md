@@ -37,6 +37,9 @@ Status: fases 1/2, editor CLI, painel/configuração gráfica, controle explíci
 | [EDITOR_ACTION_CONTEXT_CONTRACT.md](EDITOR_ACTION_CONTEXT_CONTRACT.md) | Guardas de contexto para ações individuais, formulários e recarga |
 | [GUI_IDLE_UPDATES_CONTRACT.md](GUI_IDLE_UPDATES_CONTRACT.md) | Atualização condicional de texto/estado sem mudar o polling |
 | [GUI_PERFORMANCE.md](GUI_PERFORMANCE.md) | Medição isolada de construção, renderização e repouso da GUI |
+| [GUI_ACCEPTANCE.md](GUI_ACCEPTANCE.md) | Roteiro reproduzível de aceite visual/DPI, teclado e acessibilidade com fixtures isoladas |
+| [GUI_ACCEPTANCE_RESULTS.md](GUI_ACCEPTANCE_RESULTS.md) | Tentativa real de observação da GUI e limitações de captura/acessibilidade |
+| [PERFORMANCE_PROTOCOL.md](PERFORMANCE_PROTOCOL.md) | Proposta de medição de CPU/RAM, cargas, estados, tempos e dados brutos para D18/RNF01 |
 | [RULE_PAGINATION_CONTRACT.md](RULE_PAGINATION_CONTRACT.md) | Universo de regras completo, projeção paginada e seleção entre páginas |
 | [RULE_SEARCH_DEBOUNCE_CONTRACT.md](RULE_SEARCH_DEBOUNCE_CONTRACT.md) | Busca com invalidação imediata e reconstrução após intervalo de digitação |
 | [PROCESS_GUI_CONTRACT.md](PROCESS_GUI_CONTRACT.md) | Motor gráfico: início/parada, worker, snapshots, recarga e saída ordenada |

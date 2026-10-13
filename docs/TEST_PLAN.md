@@ -2,6 +2,14 @@
 
 Fonte: [escopo](Focus%20Blocker_%20escopo%20do%20projeto.md), [requisitos](REQUIREMENTS.md) e [decisões](DECISIONS.md). Fases 1/2: 206 testes OK em Python 3.14.6/psutil 7.2.2 por `.venv/Scripts/python.exe -B -m unittest discover -s tests` (10,542 s). Sintaxe 3.12 dos 18 arquivos Python conferida; runtime 3.12 ainda não executado. Encerramentos reais e fases posteriores continuam pendentes.
 
+## Preparação de aceite visual e desempenho — 2026-10-13
+
+- [GUI_ACCEPTANCE.md](GUI_ACCEPTANCE.md) define 13 casos, critérios de cortes/foco/contraste/alcance, oito ambientes reais/simulados e fixtures ausente/vazio/25/26/60/1000. Matriz visual ainda sem aprovação; simulação CTk não equivale a escala Windows.
+- Receita de cinco JSONs validada em Python 3.14.6 e 3.12.14, sem abrir GUI: parser/manifesto SHA256, Unicode/espaços/tipos, duplicatas, dias `(6,0)` e destino ausente preservados. Nome inválido, reutilização e destino fora de QA recusados sem escrita/sobrescrita. Execução integral do pipe PowerShell não ensaiada; fonte extraída da receita executada em cada runtime.
+- [GUI_ACCEPTANCE_RESULTS.md](GUI_ACCEPTANCE_RESULTS.md) registra uma janela real de primeiro uso com controlador sem bloqueador, 880×660 e arquivo ausente. Duas capturas falharam por timeout; UIA retornou principalmente painéis/imagens, sem confirmar foco útil. Clique sem geometria e tentativa de fechamento não completaram o fluxo; cleanup externo somente dos processos do probe, sem prova de teardown normal. Nenhum caso visual/DPI foi aprovado.
+- [PERFORMANCE_PROTOCOL.md](PERFORMANCE_PROTOCOL.md) mantém cargas/estados/repetições como proposta, diferencia denominadores CPU e contadores RAM, endpoints de build/render/query e dados brutos. Coletor ainda não implementado; nenhum benchmark novo ou aceite RNF01. Q-PERF-01/02 em USER_ANSWERS detalham D18 para aceite final.
+- Produção/testes existentes não alterados nesta unidade; não se repetiu a suíte completa. Última evidência funcional permanece 842 testes/841 aprovados/um skip nos dois runtimes sobre `79607c9`.
+
 ## Evidência da busca com reconstrução diferida — 2026-10-13
 
 Contrato em [RULE_SEARCH_DEBOUNCE_CONTRACT.md](RULE_SEARCH_DEBOUNCE_CONTRACT.md).

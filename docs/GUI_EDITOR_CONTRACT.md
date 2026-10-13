@@ -195,3 +195,9 @@ callbacks e teardown de widgets reais. Controlador simulado,
 sem encerramentos reais. A janela de QA abriu com JSON isolado e alvos vazios,
 mas a captura falhou duas vezes por timeout; inspeção visual, DPI e rolagem em
 tamanho mínimo continuam pendentes. Não considerar a fase 5 completa entregue.
+
+O roteiro reproduzível atual está em [GUI_ACCEPTANCE.md](GUI_ACCEPTANCE.md),
+com registros reais separados em [GUI_ACCEPTANCE_RESULTS.md](GUI_ACCEPTANCE_RESULTS.md).
+A tentativa sobre `79607c9` abriu primeiro uso em 880×660, mas não obteve
+captura nem confirmou foco dos controles pela UIA; não aprova visual/DPI
+ou acessibilidade. Preparação das fixtures validada não equivale ao aceite.
