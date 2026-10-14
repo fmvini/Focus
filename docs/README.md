@@ -46,6 +46,7 @@ Status: fases 1/2, editor CLI, painel/configuração gráfica, controle explíci
 | [PERFORMANCE_GEOMETRY_RESULTS.md](PERFORMANCE_GEOMETRY_RESULTS.md) | Timings v2 no mainloop, geometria confirmada e repetições exploratórias de CPU |
 | [PERFORMANCE_QUERY_CONTRACT.md](PERFORMANCE_QUERY_CONTRACT.md) | Busca programática com debounce real, eventos/revisões e reset antes do idle |
 | [PERFORMANCE_QUERY_RESULTS.md](PERFORMANCE_QUERY_RESULTS.md) | Ensaios de busca single/burst/spaced nos dois runtimes, latências e limites |
+| [PERFORMANCE_IDLE_DIAGNOSTIC.md](PERFORMANCE_IDLE_DIAGNOSTIC.md) | Controles sem busca, recortes warmup/idle e perfil separado da thread Tk |
 | [RULE_PAGINATION_CONTRACT.md](RULE_PAGINATION_CONTRACT.md) | Universo de regras completo, projeção paginada e seleção entre páginas |
 | [RULE_SEARCH_DEBOUNCE_CONTRACT.md](RULE_SEARCH_DEBOUNCE_CONTRACT.md) | Busca com invalidação imediata e reconstrução após intervalo de digitação |
 | [PROCESS_GUI_CONTRACT.md](PROCESS_GUI_CONTRACT.md) | Motor gráfico: início/parada, worker, snapshots, recarga e saída ordenada |

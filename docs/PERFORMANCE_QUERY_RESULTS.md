@@ -137,3 +137,7 @@ idle pós-reset com fonte/carga/estado equivalentes, medir série temporal e
 overhead antes de alterar polling/produção. Repetições/durações/cargas e D18
 continuam propostas; aceite final requer respostas Q-PERF e artefato distribuído.
 Aceite visual continua em [registro próprio](GUI_ACCEPTANCE_RESULTS.md).
+
+Continuação: [controles e diagnóstico](PERFORMANCE_IDLE_DIAGNOSTIC.md)
+registram CPU alto também sem query no idle curto e contrastes com warmup30 s.
+Não alteram esta série histórica nem atribuem o custo exclusivamente à busca.

@@ -122,3 +122,8 @@ A [medição de busca](PERFORMANCE_QUERY_RESULTS.md) separa setter/debounce/rend
 after_idle e reset vazio real antes do idle. Usa R_N1000, programaticamente,
 sem representar teclado físico ou pintura. Custo por chamada e CPU idle
 observados exigem diagnóstico separado antes de alterar produção ou polling.
+
+Os [controles de idle](PERFORMANCE_IDLE_DIAGNOSTIC.md) observaram CPU alto
+também sem query no período curto; warmup30/idle15 reduziu os valores, com
+picos posteriores. Perfil separado localiza CPU na thread Tk em um ensaio,
+sem atribuir função nativa ou aceitar RNF01. Polling/produção permanecem iguais.

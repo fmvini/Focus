@@ -2,6 +2,23 @@
 
 Fonte: [escopo](Focus%20Blocker_%20escopo%20do%20projeto.md), [requisitos](REQUIREMENTS.md) e [decisões](DECISIONS.md). Fases 1/2: 206 testes OK em Python 3.14.6/psutil 7.2.2 por `.venv/Scripts/python.exe -B -m unittest discover -s tests` (10,542 s). Sintaxe 3.12 dos 18 arquivos Python conferida; runtime 3.12 ainda não executado. Encerramentos reais e fases posteriores continuam pendentes.
 
+## Controles e diagnóstico de idle — 2026-10-14
+
+- Fonte `8bdff2c`/produção/dependências intactas; não houve alteração funcional
+  ou teste novo nesta unidade documental. Última suíte113/113 aprovada nos
+  dois runtimes; não repetida apenas por executar experimentos.
+- Seis controles G-P1000 sem profiler: quatro none/single com warmup30/idle15
+  e dois none com1/3, sampler0,25. Todos válidos, hashes/invariantes/teardown/
+  saída do PID confirmados. CPU curto semquery52–58%; longo0,106–4,428%, sem
+  direção consistente none/single; raw ready→idle mostra início alto e picos.
+- Três perfis cProfile separados, Python3.14, receita QA local/AST3.12:
+  dois short1/3 (primeiro antes contador thread) e um long30/10. Complete/report
+  ok, dados/lifecycle preservados; sem sampler/supervisor externo ou prova
+  equivalente da saída de filho. Falhas da receita somente revistas, não ensaiadas.
+- [Diagnóstico](PERFORMANCE_IDLE_DIAGNOSTIC.md) distingue CPU thread, tempos
+  wall e mainloop C preaberto, overhead e ausência de atribuição nativa.
+  Nenhuma otimização, traceETW/WPR, aceite estatístico/RNF01/visual ou nova captura.
+
 ## Busca programática e reset real — 2026-10-14
 
 - [Contrato](PERFORMANCE_QUERY_CONTRACT.md) e [resultados](PERFORMANCE_QUERY_RESULTS.md).

@@ -1,3 +1,30 @@
+## 2026-10-14 — Controles de CPU e diagnóstico do idle
+
+### Implementado
+- Seis controles G-P1000 na fonte8bdff2c: pares none/single-reset nos dois runtimes com warmup30/idle15 e dois nonecurtos1/3, sampler0,25. Dados brutos, recortes desde ready e três bins de idle retidos/recalculados.
+- Três perfis experimentais cProfile por instância Worker, separados dos controles sem profiler. Receita QA local retém validade/parcial/erros/brackets e CPU da thread Tk nas duas execuções finais; fonte/scripts/artefatos permanecem ignorados, sem modificar a ferramenta distribuída ou produção.
+
+### Arquivos principais alterados
+- `docs/PERFORMANCE_IDLE_DIAGNOSTIC.md`, `docs/GUI_PERFORMANCE.md`, `docs/PERFORMANCE_QUERY_RESULTS.md`.
+- `docs/TEST_PLAN.md`, `docs/README.md`, `docs/DEVELOPMENT_LOG.md`.
+
+### Decisões técnicas
+- Curto semquery também apresenta CPU alto; não atribuir exclusivamente ao debounce/reset. Duração/cobertura/ordem/overhead distintos permanecem separados. Recortes de5 s excluem fronteiras e não somam o delta completo; ready precede publicação, sem virar marker exato de warmup.
+- Perfil cProfile mede tempos próprios/cumulativos wall e não CPU; mainloop C já aberto não é atribuído nessa janela. CPU thread é contador separado. Não subtrair wall de CPU ou afirmar Tcl/Windows como causa. Nenhum trace global ETW/WPR iniciado apesar da ferramenta disponível.
+
+### Estado atual
+- Produto/dependências/tools/testes intactos. Últimos113 testes aprovados nos dois runtimes não repetidos por mudança somente documental. Controles: oito artefatos/run, fonte/hash fixture/invariantes/zero starts/timers/teardown/PID ausente positivos, geometrias confirmadas. Todas as fontes dos manifestos coincidem com entrega8bdff2c.
+- Longos CPU lógico0,105578–4,427762%; none3.14=2,006393% versus single0,214764%, none3.12=0,105578% versus single4,427762%, sem tendência causal/estatística. Dois nonecurtos57,721129%/52,429549%. Raw ready→idle: primeiros5 s52–59%, próximos5 s13–16%, depois recortes baixos e picos posteriores;30 s não são garantia universal de quiescência.
+- Profile curto final: CPU thread1,656250 s/span3,000184 s,5722calls/soma própria wall0,026606 s, poll12/DPI30/appearance99/textbox45, sem render/mainloop registrado. Longo: CPU thread0,687500 s/span10,003915 s,18356calls/wall0,096497 s. Overhead e trabalho não atribuído impedem conclusão de função/causa.
+- Profiles: reportok/errors[]/closed/trayfalse/timers preservados/exit0, sem supervisor externo e sem prova equivalente de saída de filho. Experimento original sem contador thread separado dos dois finais de mesma receita SHA7B80D6AF…15D9ADF. Falhas da receita somente leitura/AST, não exercitadas; não é CLI público. Frontend revisou limites/short estaticamente; execução somente Maestro.
+- Nenhuma captura nova, aceite visual, D18/RNF01 ou alteração de respostas de negócio.
+- Banco recalculou seis controles/36 bins/três profiles sem divergência. P3 documental corrigido: complete da receita não exige stats; para atribuição exigir registros/tempos disponíveis. Três observados têm stats. Fonte histórica não alterada. Maestro conferiu AST3.12/UTF-8 dos89 Python, UTF-8 dos40 docs e202 links locais, diff/status sem código de produção/tools/testes.
+
+### Próximos passos
+- Definir amostragem externa restrita do worker/TID nativo Tk, com identidade PID/create_time/TID/thread_birth e CPU bruta/cobertura/erros. API Windows deve consultar/fechar handles, sem suspender thread ou alterar prioridades; guardas/testdoubles antes de native.
+- Desenhar atribuição por stacks nativas/estados com perímetro e overhead definidos, se necessária; não coletar processos alheios ou inferir CPU de estados wait. Manter observações sem causa até evidência adequada.
+- Depois da atribuição, avaliar otimização demonstrada de render/invalidação em unidade com contrato/regressões; manter200/250 ms e oráculos de histórico/tipos/IO. Aceite visual continua aguardando observação funcional.
+
 ## 2026-10-14 — Medição da busca pelo debounce original
 
 ### Implementado
