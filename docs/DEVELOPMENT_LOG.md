@@ -1,3 +1,35 @@
+## 2026-10-13 — Coletor exploratório de desempenho da GUI
+
+### Implementado
+- CLI de QA com supervisor externo, worker lazy e perfis H-F/G-P/T-P sobre fixtures sintéticas 0/100/1000. CPU/RAM brutos, cobertura efetiva idle, manifesto de fontes/ambiente, timings separados, invariantes e teardown registrados em runs UUID exclusivos dentro de `.qa`.
+- Retenção estruturada de falhas na preparação/coleta/metadados e interrupções; publicação completa sem overwrite, guardas de contenção e identidade PID/create_time. Supervisor confirma saída do alvo separadamente do launcher e cleanup limita-se aos processos dedicados comprovados.
+- Onze ensaios exploratórios e nova tentativa de inspeção visual documentados por estágio de fonte, sem aceitar RNF01/DPI ou mudar produção/dependências.
+
+### Arquivos principais alterados
+- `tools/__init__.py`, `tools/measure_gui.py`, `tools/perf_metrics.py`, `tools/perf_artifacts.py`, `tools/perf_gui_worker.py`.
+- `tests/test_measure_gui.py`, `tests/test_perf_metrics.py`, `tests/test_perf_artifacts.py`, `tests/test_perf_gui_worker.py`.
+- `docs/PERFORMANCE_COLLECTOR_CONTRACT.md`, `docs/PERFORMANCE_COLLECTOR.md`, `docs/PERFORMANCE_COLLECTOR_RESULTS.md`, `docs/PERFORMANCE_PROTOCOL.md`.
+- `docs/GUI_ACCEPTANCE_RESULTS.md`, `docs/GUI_PERFORMANCE.md`, `docs/TEST_PLAN.md`, `docs/README.md`, `docs/DELIVERY_PLAN.md`, `docs/DEVELOPMENT_LOG.md`.
+
+### Decisões técnicas
+- Métricas externas incluem apenas o worker identificado; CPU lógico/total e working set/commit/picos/conversões permanecem distintos. Perfis reais exigem bandeja pronta, sem fallback fake, e controlador parado com gate de start.
+- Atomicidade/exclusividade de artefatos e publicação de erros preservam raw; não se promete retenção se o próprio disco/publicador falhar. Seção final curta ignora SIGINT e restaura handler: sinal nessa seção é descartado, não adiado nem marcado interrupted. Interrupção capturada em fases interrompíveis resulta em CLI130; proteção de sinal é do CLI na thread principal.
+- Timings conservam geometria real observada: fronteiras síncronas 200×200 apesar de dimensões solicitadas, perfis reais prontos 880×660. Não alegar render estabilizado ou comparação estrita. Zero CPU amostrado pode refletir quantização.
+
+### Estado atual
+- Base `6aa53c6`; fontes de produção/GUI e dependências intactas. Fonte final do coletor: **65 testes/65 aprovados/zero skips** em Python 3.14.6/2,336 s e 3.12.14/2,215 s pelo Maestro. Doubles cobrem métricas, artefatos, worker, supervisor, falhas de preparação/metadata/stat, Ctrl+C/retention, ownership e saída/timers. Suíte completa do produto não repetida; última permanece 842/841/um skip nos dois runtimes.
+- Backend/Banco revisões finais somente leitura sem achados P2/P3 pendentes; Frontend alinhou nome UUID ao writer e validou 11 testes fake. Execuções integradas/native/ensaios atribuídas ao Maestro, não às revisões estáticas.
+- Maestro conferiu sintaxe AST 3.12/UTF-8 dos 85 arquivos Python, UTF-8 dos 36 documentos e 173 links locais; hashes dos três manifestos finais coincidem com as fontes entregues. Diff/produção/dependências conferidos sem alteração funcional do app.
+- Banco conferiu independentemente valores finais a partir do raw e estágios de fonte; tabelas/log/plano concordam. Referência documental da afinidade corrigida para summary.identity, sem mudança de código ou nova execução.
+- Três runs na fonte final: G-P100 com warmup30/idle10 nos dois runtimes e T-P100 com 0,5/3 em 3.12. Todos válidos, bytes/fonte/invariantes preservados, closed/tray/timers corretos e ausência do PID comprovada. CPU G-P observado 3,194383% lógico em 3.14 e 0,319457% em 3.12; RSS máximo 60,289/60,465 MiB. Variação e amostra única exigem investigação, não conclusão de causa/aceite. Oito runs anteriores separados em RESULTS, com hashes reais por manifesto.
+- Retry visual isolado abriu 880×660, mas ambas capturas falharam por timeout. Prazo de QA chamou close_editor com descarte automático, processo encerrou normalmente/destino ausente e modelo/baseline intactos. Não prova interação física, leitor de tela ou qualquer caso visual. Artefatos ignorados conservados; resíduos das primeiras fixtures fake com WinError5 não removidos nem tiveram ACL alterada.
+- D18/Q-PERF-01/02 e respostas de sites/pausa/avisos permanecem vazias; nenhum RNF aceito.
+
+### Próximos passos
+- Estabilizar e conferir geometria no mainloop antes de medir render comparável; investigar CPU G-P por série temporal/repetições com warmup registrado, sem alterar polling a partir de uma amostra.
+- Estender coletor para latência de busca, cargas/estados adicionais e sessão longa; fechar D18 antes do aceite no artefato distribuído. Usar guia/RESULTS para reproduzir e preservar raw.
+- Retomar `GUI_ACCEPTANCE.md` em sessão com captura ou observação direta funcional, registrar escala Windows e executar teclado/leitor/retorno da bandeja separadamente. Não preencher matriz com diagnostics do probe.
+
 ## 2026-10-13 — Roteiros de aceite visual e desempenho
 
 ### Implementado

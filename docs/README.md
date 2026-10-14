@@ -40,6 +40,9 @@ Status: fases 1/2, editor CLI, painel/configuração gráfica, controle explíci
 | [GUI_ACCEPTANCE.md](GUI_ACCEPTANCE.md) | Roteiro reproduzível de aceite visual/DPI, teclado e acessibilidade com fixtures isoladas |
 | [GUI_ACCEPTANCE_RESULTS.md](GUI_ACCEPTANCE_RESULTS.md) | Tentativa real de observação da GUI e limitações de captura/acessibilidade |
 | [PERFORMANCE_PROTOCOL.md](PERFORMANCE_PROTOCOL.md) | Proposta de medição de CPU/RAM, cargas, estados, tempos e dados brutos para D18/RNF01 |
+| [PERFORMANCE_COLLECTOR_CONTRACT.md](PERFORMANCE_COLLECTOR_CONTRACT.md) | Contrato do supervisor, worker e artefatos exclusivos de QA |
+| [PERFORMANCE_COLLECTOR.md](PERFORMANCE_COLLECTOR.md) | CLI do coletor exploratório, perfis e interpretação das evidências |
+| [PERFORMANCE_COLLECTOR_RESULTS.md](PERFORMANCE_COLLECTOR_RESULTS.md) | Ensaios reais, cobertura CPU/RAM, teardown e limites observados |
 | [RULE_PAGINATION_CONTRACT.md](RULE_PAGINATION_CONTRACT.md) | Universo de regras completo, projeção paginada e seleção entre páginas |
 | [RULE_SEARCH_DEBOUNCE_CONTRACT.md](RULE_SEARCH_DEBOUNCE_CONTRACT.md) | Busca com invalidação imediata e reconstrução após intervalo de digitação |
 | [PROCESS_GUI_CONTRACT.md](PROCESS_GUI_CONTRACT.md) | Motor gráfico: início/parada, worker, snapshots, recarga e saída ordenada |

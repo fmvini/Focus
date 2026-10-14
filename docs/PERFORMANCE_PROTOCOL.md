@@ -3,10 +3,13 @@
 Data: 2026-10-13. Base de referência: `79607c9`.
 
 **Status: proposta técnica, sem aprovação D18. Nenhum RNF está aceito por
-este documento. Nenhum benchmark ou suíte nativa foi executado nesta unidade.**
+este documento.** A preparação documental original não executou benchmark ou
+suíte nativa; execuções posteriores do coletor estão registradas separadamente.
 Todas as matrizes, cargas, durações, quantidades de repetições e escolhas de
 instrumentação abaixo são propostas para revisão; não são critérios de aceite
-aprovados. O protocolo ainda não possui coletor implementado ou validado.
+aprovados. Um subconjunto agora tem [coletor implementado](PERFORMANCE_COLLECTOR.md),
+testes e [ensaios exploratórios](PERFORMANCE_COLLECTOR_RESULTS.md). Esta proposta
+completa, incluindo sessões longas e artefato distribuído, não foi executada.
 Ensaios exploratórios dentro do desenvolvimento autorizado devem identificar
 suas condições e limites; não exigem fechar D18 para produzir uma medição,
 mas não podem declarar RNF01 aceito antes dessa definição.
@@ -294,8 +297,9 @@ Conferir saída do launcher/app/filhos próprios, threads encerradas, ausência 
 bgerrors/timers owned e remoção apenas das fixtures verificadas. Conservar
 evidências brutas; nunca encerrar PIDs ou excluir caminhos de terceiros.
 
-Próximo passo: implementar e validar um coletor exploratório em unidade própria,
-com os contadores/endpoints e limites registrados. Para aceite final, consolidar
+Próximo passo: estender o coletor exploratório com geometria estabilizada,
+repetições/estados e latência de busca, mantendo contadores/endpoints e limites
+registrados. Para aceite final, consolidar
 D18 com o usuário (hardware, matriz, repouso/carga, CPU, memória/perímetro,
 estatística e artefato) pelo canal [USER_ANSWERS.md](USER_ANSWERS.md).
 Resultados futuros devem relatar

@@ -42,6 +42,26 @@ PIDs de Python confirmados; não foram encerrados aplicativos do usuário.
 Não houve Save, seleção de sugestões, Apply, remoção de regras, início de
 motor, envio à bandeja, captura salva ou benchmark nesta tentativa.
 
+## Nova tentativa — sessão isolada com prazo de encerramento
+
+O Maestro repetiu a abertura com Python 3.14.6 e destino novo ausente em
+`.qa/acceptance-retry-5504ed76167d4b3ba6e335d69d3a06ca/config.json`.
+Janela inicial 880×660, mesmo scaling Tk e controlador sem worker. Uma nova
+sessão Sky encontrou a janela; captura inicial falhou com
+`FrameArrived timed out: timed out waiting on channel`. Depois de atualizar
+a seleção/ativar a janela, a única repetição falhou com
+`window capture timed out: timed out waiting on channel`. Nenhuma imagem
+foi obtida, entrada adicional enviada ou caso visual aprovado.
+
+O probe tinha prazo de 90 s e chamou o lifecycle normal `close_editor`, com
+resposta automática de descarte injetada apenas nesse callback de QA. Não
+foi uma interação física com confirmação/Fechar e não aprova V13. O processo
+terminou normalmente: closed=true, tray_alive=false, errors=[]. `end.json`
+registrou destino ainda ausente, bytes/modelo/baseline preservados,
+dirty=true esperado, Undo/Redo=false, zero starts, um stop e bgerrors=[].
+Esta repetição não precisou de cleanup externo. Diagnóstico de teardown do
+probe não substitui teclado, retorno da bandeja ou observação do roteiro.
+
 ## Estado e retomada
 
 V01 teve somente abertura/diagnóstico parcial. V02–V13 não foram concluídos;

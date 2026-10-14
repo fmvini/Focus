@@ -104,8 +104,12 @@ snapshots continuam proporcionais à quantidade de dados; páginas não limitam
 configuração nem garantem latência/RSS. Aceite visual/DPI e RNF01 do app real
 continuam pendentes.
 
-Próxima medição exploratória deve seguir [PERFORMANCE_PROTOCOL.md](PERFORMANCE_PROTOCOL.md),
+O [coletor exploratório](PERFORMANCE_COLLECTOR.md) foi implementado e seus
+[resultados](PERFORMANCE_COLLECTOR_RESULTS.md) preservam raw, cobertura CPU,
+invariantes e saída do PID. Geometria síncrona e warmup variaram; não comparar
+estritamente seus timings com os históricos acima. Próxima medição deve seguir
+[PERFORMANCE_PROTOCOL.md](PERFORMANCE_PROTOCOL.md),
 registrando fontes/dados brutos e desvios. Matriz, cargas, durações e método de
-aceite continuam propostas de D18; não houve benchmark novo nesta preparação.
+aceite continuam propostas de D18; ensaios curtos não executam a matriz completa.
 Q-PERF-01/02 em [USER_ANSWERS.md](USER_ANSWERS.md) tratam ambiente/repouso e
 significado dos limites para aceite final, sem impedir investigação exploratória.
