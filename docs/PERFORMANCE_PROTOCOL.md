@@ -305,8 +305,10 @@ Conferir saída do launcher/app/filhos próprios, threads encerradas, ausência 
 bgerrors/timers owned e remoção apenas das fixtures verificadas. Conservar
 evidências brutas; nunca encerrar PIDs ou excluir caminhos de terceiros.
 
-Próximo passo: estender a exploração v2 de geometria confirmada com diagnóstico
-da CPU variável, repetições/estados adicionais e latência de busca, mantendo
+Busca programática exploratória segue [contrato](PERFORMANCE_QUERY_CONTRACT.md)
+e [resultados](PERFORMANCE_QUERY_RESULTS.md), sem fechar D18.
+Próximo passo: estender a exploração com diagnóstico
+da CPU variável e repetições/estados adicionais, mantendo
 contadores/endpoints e limites
 registrados. Para aceite final, consolidar
 D18 com o usuário (hardware, matriz, repouso/carga, CPU, memória/perímetro,

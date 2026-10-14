@@ -1,3 +1,35 @@
+## 2026-10-14 — Medição da busca pelo debounce original
+
+### Implementado
+- Query G-P single/burst/spaced e reset vazio real antes de ready/warmup/idle; hooks reversíveis por instância, eventos em memória ligados a seq/revision/ticket/handle e observação after_idle. Helper puro valida oráculos/cronologia e calcula endpoints distintos sem clock/IO/GUI.
+- Supervisor exige ready modo/schema inteiro1 e eventos/checks completos, recalcula resumos e recusa reset anterior ou revisão não crescente. P2 de continuidade após erro Tk/instrumentação e prova declarativa insuficiente corrigidos antes da fonte final.
+- Doze ensaios sequenciais preservados: seis finais, seis anteriores ao endurecimento do supervisor. Nova tentativa visual isolada com duas capturas timeout e fechamento normal por prazo, sem aceite visual.
+
+### Arquivos principais alterados
+- `tools/perf_query.py`, `tools/perf_query_probe.py`, `tools/perf_gui_worker.py`, `tools/measure_gui.py`.
+- `tests/test_perf_query.py`, `tests/test_perf_query_probe.py`, `tests/test_measure_gui.py`.
+- `docs/PERFORMANCE_QUERY_CONTRACT.md`, `docs/PERFORMANCE_QUERY_RESULTS.md`, `docs/PERFORMANCE_COLLECTOR.md`, `docs/PERFORMANCE_COLLECTOR_CONTRACT.md`, `docs/PERFORMANCE_PROTOCOL.md`.
+- `docs/GUI_ACCEPTANCE_RESULTS.md`, `docs/GUI_PERFORMANCE.md`, `docs/TEST_PLAN.md`, `docs/README.md`, `docs/DELIVERY_PLAN.md`, `docs/DEVELOPMENT_LOG.md`.
+
+### Decisões técnicas
+- Query schema1 é distinto de timings de preparação2. Capturar somente after200 dentro de StringVar.set; ticket original não é ticket após render. Callback aceito delega uma vez; cancelado/obsoleto/consumido/fechado recusa antes de Tk. A StringVar mantém trace original; nenhuma alteração de produção/200 ms ou flush/update/sleep.
+- Setter inclui trace síncrono; chamada de render exclui instrumentação, after_idle inclui espera/getters sem provar pintura. Auditar hashes/modelo/history e publicar fora dos intervalos; restaurar hooks antes de ready e em falha/fechamento. Prazo cooperativo não preempta render; supervisor conserva guarda externa.
+- R_N1000 contém somente strings. qa-00 resulta FULL100/índices0..99/4 páginas/25 rows; reset FULL1000/40 páginas. Não atribuir extras/Unicode, teclado físico, DPI ou RNF a essa carga.
+
+### Estado atual
+- Base `9596d71`; produção `79607c9` e dependências intactas. Maestro: **113/113 testes aprovados/zero skips** em Python3.14.6/3,778 s e3.12.14/3,943 s:28 worker/20 métricas/19 artefatos/19 supervisor/20 query puros/7 probe e integração, sem GUI importada/executada pelos doubles. Suíte completa de produto não repetida; última842/841/um skip nos dois runtimes.
+- Backend congelou helper/testes após20 puros nos dois runtimes; Frontend/Banco revisaram hooks/schema/invariantes finais estaticamente, Backend reconferiu supervisor P2/P3 corrigidos. Nenhuma execução native/suíte atribuída às revisões.
+- Maestro conferiu os oito artefatos de cada um dos12runs, eventos/resumos/oráculos/hash bytes/fontes/ready anterior ao idle e teardown. Seis finais coincidem com todas as fontes atuais; seis anteriores diferem somente no supervisor, explicitamente separados em RESULTS. Todos exit0/errors[]/closed/trayfalse/timers[]/QA callbacks0/PID medido ausente/zero starts; dados/baseline/history preservados.
+- Banco recalculou independentemente os24 resumos por aritmética dos eventos e CPU/RSS do raw, sem helper/GUI/scripts Root; tabelas e fontes concordam a seis casas. Maestro: AST3.12/UTF-8 de89 arquivos Python, UTF-8 de39 docs e197 links locais OK; diff de produto/dependências/USER_ANSWERS vazio.
+- Fonte final: worker58E0339F…AF09606, probeF00371F6…AAE031, helperC67AFAD2…B8F032 e supervisorAE0C91C5…34924A; hashes completos em RESULTS/manifestos. Query/reset G-P1000 com warmup1/idle3/interval0,25 nos dois runtimes; latência última escrita→observação0,820–1,237 s, chamada de render0,558–0,703 s. Burst observou1 render, spaced5, com intervalos efetivos distintos dos pedidos e observações antigas suplantadas sem ganho de conclusão.
+- CPU idle posterior ao reset45,86–54,33% de um lógico na série final, cobertura≈2,76 s e RSS60,35–62,72 MiB. Amostras curtas/ambiente não controlado não demonstram causa, estabilidade, melhoria ou RNF01. Diagnóstico de atividade pós-reset continua necessário.
+- Retry visual14/10: janela retornada, duas capturas timeout após recuperação; start diagnosticou200×200, sem confirmação posterior. Fixture QA preservada e close_editor por prazo120 s encerrou sem cleanup externo. Nenhuma imagem/foco/teclado/leitor/DPI/caso visual aprovado. D18/Q-PERF/sites/pausa/avisos sem respostas novas.
+
+### Próximos passos
+- Diagnosticar separadamente custo do setter/invalidação, render e CPU idle pós-reset com fonte/carga/estado equivalentes; medir série temporal/overhead antes de alterar polling ou CTk. Começar pelo código dos callbacks/perfis e definir instrumentação reversível fora do ensaio padrão.
+- Ampliar warmup/idle/repetições e cargas depois do diagnóstico, preservando raw/endpoints/fontes e separando teclado físico/pintura de alteração programática. D18/Q-PERF precisa fechar método/hardware/perímetro/estatística/artefato antes do aceite final.
+- Retomar GUI_ACCEPTANCE somente com observação funcional; registrar escala Windows e executar foco/rolagem/teclado/leitor/retorno da bandeja. Não repetir capturas indefinidamente nem aceitar a matriz por geometria ou diagnósticos internos.
+
 ## 2026-10-13 — Geometria confirmada e timings v2 do coletor
 
 ### Implementado

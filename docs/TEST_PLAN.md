@@ -2,6 +2,28 @@
 
 Fonte: [escopo](Focus%20Blocker_%20escopo%20do%20projeto.md), [requisitos](REQUIREMENTS.md) e [decisões](DECISIONS.md). Fases 1/2: 206 testes OK em Python 3.14.6/psutil 7.2.2 por `.venv/Scripts/python.exe -B -m unittest discover -s tests` (10,542 s). Sintaxe 3.12 dos 18 arquivos Python conferida; runtime 3.12 ainda não executado. Encerramentos reais e fases posteriores continuam pendentes.
 
+## Busca programática e reset real — 2026-10-14
+
+- [Contrato](PERFORMANCE_QUERY_CONTRACT.md) e [resultados](PERFORMANCE_QUERY_RESULTS.md).
+  Query G-P single/burst/spaced, eventos vinculados à revisão/ticket original,
+  observação after_idle e reset vazio pelo debounce original antes de ready/idle.
+- Maestro: **113 testes aprovados/zero skips** em Python3.14.6/3,778 s e
+  3.12.14/3,943 s: 28 worker/20 métricas/19 artefatos/19 supervisor/20 query
+  puros/7 probe e integração. Nenhuma GUI importada/executada pelos doubles.
+  Regressões: cancel/stale/consumed, ambiguidade/restauro, swallowed Tk error,
+  prazo após instrumentação, ready modo/schema e prova completa/recalculada.
+- Doze runs G-P1000 sequenciais, seis na fonte final e seis anteriores à
+  correção do supervisor. Worker/probe/helper iguais; anteriores diferem somente
+  no supervisor. Todos query/reset/invariantes/hashes/teardown/PID ausente OK.
+  Warmup1/idle3/interval0,25; últimas latências0,82–1,24 s e CPU idle45,86–54,33%
+  lógico na série final. Não demonstram causa, estado estabilizado ou RNF01.
+- Frontend/Banco/Backend revisaram fontes finais somente por leitura; suites
+  e native atribuídos ao Maestro. Produção/dependências intactas; suíte completa
+  do produto não repetida (última842/841/um skip em ambos runtimes).
+- Nova sessão visual isolada: duas capturas timeout e encerramento normal
+  por prazo; diagnóstico start200×200. Sem imagem, interação física ou aceite
+  visual/DPI. Registro em [GUI_ACCEPTANCE_RESULTS.md](GUI_ACCEPTANCE_RESULTS.md).
+
 ## Geometria e timings v2 do coletor — 2026-10-13
 
 - Worker mede renders em callbacks distintos do mainloop; gate de duas

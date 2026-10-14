@@ -15,8 +15,9 @@ fluxo real de bandeja, motor parado). Nenhum início de bloqueador, leitura de
 processos do usuário, hosts, configuração APPDATA ou efeitos em alvos.
 
 Warmup/idle/intervalo configuráveis e registrados. Defaults exploratórios
-curtos, sem representar a matriz/repetições propostas para aceite. Não inclui
-query, seleção ativa, motor real, distribuição, longa duração ou aceite visual.
+curtos, sem representar a matriz/repetições propostas para aceite. Query G-P
+foi acrescentada sobre `9596d71` pelo [contrato próprio](PERFORMANCE_QUERY_CONTRACT.md).
+Não inclui seleção ativa, motor real, distribuição, longa duração ou aceite visual.
 Construção/render completo/render de regras têm endpoints separados;
 `update_idletasks` é somente layout, sem prova de pixels apresentados.
 

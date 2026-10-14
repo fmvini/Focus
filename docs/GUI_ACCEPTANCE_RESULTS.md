@@ -62,6 +62,29 @@ dirty=true esperado, Undo/Redo=false, zero starts, um stop e bgerrors=[].
 Esta repetição não precisou de cleanup externo. Diagnóstico de teardown do
 probe não substitui teclado, retorno da bandeja ou observação do roteiro.
 
+## Repetição em 2026-10-14 — fixture de regras
+
+Depois dos ensaios de query, sessão separada com Python 3.14.6, controlador
+simulado parado e fixture `.qa/acceptance-retry-c7e8be6dae6447689d4c600071a067b8/config.json`.
+Executáveis60 com duplicatas, janela noturna days6/0, agenda disabled e extras
+tipados/Unicode; não é a execução completa dos casos V01–V13 ou da receita.
+Guardas da raiz/candidato precederam mkdir. Janela `Focus QA — Regras` foi
+retornada por Sky. Capture inicial e única repetição após renovar seleção/ativar
+falharam com `window capture timed out: timed out waiting on channel`.
+Nenhuma imagem, digitação, clique, Save ou retorno da bandeja foi observado.
+
+O diagnóstico de start, agendado em600 ms, registrou cliente200×200 apesar do
+pedido880×660; não há confirmação posterior de geometria neste probe visual.
+Tk scaling1,3348876577408433 não infere escala Windows. Não reutilizar a
+geometria confirmada dos benchmarks como evidência desta sessão.
+
+Prazo120 s chamou close_editor pelo lifecycle, sem cleanup externo, exit0,
+closed=true/trayfalse/errors[]. Start/end confirmam bytes/modelo/baseline
+preservados, dirty=false/UndoRedo=false, starts0/stop1/bgerrors[]. SHA256
+`450f6d626156c856ca7a6ac0e2eeb16beb1535e940d33c6f1797a19cf493b5f4` nos dois.
+Esses diagnósticos não aprovam V13, foco, cortes, contraste, leitor ou DPI.
+Matriz visual continua sem aceite; artefatos ignorados preservados.
+
 ## Estado e retomada
 
 V01 teve somente abertura/diagnóstico parcial. V02–V13 não foram concluídos;

@@ -88,6 +88,14 @@ class SupervisorTests(unittest.TestCase):
         self.identity = {"pid": 401, "create_time": 123.5}
         if self.ready_mode != "missing":
             ready = {"ok": True, "profile": self.options.profile, "rules": self.options.rules, **self.identity}
+            if self.options.query != "none":
+                ready.update(query_mode=self.options.query, query_schema_version=1)
+                if self.ready_mode == "missing_query":
+                    del ready["query_mode"]
+                elif self.ready_mode == "wrong_query":
+                    ready["query_mode"] = "single"
+                elif self.ready_mode == "bool_query_schema":
+                    ready["query_schema_version"] = True
             if self.ready_mode == "invalid":
                 ready["pid"] = True
             self.artifacts.write_json(self.run_dir / "ready.json", ready)
@@ -95,6 +103,37 @@ class SupervisorTests(unittest.TestCase):
                   "idle_begin_ns": 0, "idle_end_ns": 1_000_000_000,
                   "closed": True, "tray_alive": False, "after_info": [], "errors": [],
                   "invariants": {"checks": {"zero_starts": True, "bytes": True}}}
+        if self.options.query != "none":
+            from tests.test_perf_query import events
+            from tools.perf_query import summarize_query
+            packets = []
+            for mode in (self.options.query, "reset"):
+                writes, renders = events(mode, self.options.rules)
+                if mode == "reset":
+                    for record in writes + renders:
+                        for key, value in record.items():
+                            if key.endswith("_ns") and value is not None:
+                                record[key] += 10_000_000_000
+                        record["revision"] += 100
+                packets.append(dict(query_schema_version=1, mode=mode, status="complete",
+                                    writes=writes, renders=renders,
+                                    summary=summarize_query(writes, renders, mode, self.options.rules),
+                                    data_checks={key: True for key in ("bytes", "draft", "baseline", "model",
+                                                "baseline_model", "history_empty", "clean", "zero_starts")}))
+            report["query"] = {"query_schema_version": 1, "mode": self.options.query, "complete": True,
+                               "packets": packets, "partial": None}
+            if self.report_mode == "bad_query":
+                report["query"]["packets"][-1]["summary"]["ok"] = False
+            elif self.report_mode == "missing_query_events":
+                del packets[0]["writes"]
+            elif self.report_mode == "query_summary_only":
+                packets[0]["summary"] = {"ok": True}
+            elif self.report_mode == "query_checks_only_bytes":
+                packets[0]["data_checks"] = {"bytes": True}
+            elif self.report_mode == "query_summary_tampered":
+                packets[0]["summary"]["last_write_to_observation_ns"] += 1
+            elif self.report_mode == "query_float_schema":
+                packets[0]["query_schema_version"] = 1.0
         if self.report_mode == "failed":
             report.update(ok=False, errors=["NIM_ADD"])
         elif self.report_mode == "wrong_identity":
@@ -295,6 +334,42 @@ class SupervisorTests(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     validate(options)
         self.assertEqual(list(self.root.iterdir()), [])
+
+    def test_query_relay_and_failed_reset_invalidate_supervisor(self):
+        self.options.profile, self.options.query = "G-P", "burst"
+        result = collect(self.options, self.deps)
+        self.assertTrue(result["ok"], result)
+        self.assertEqual(self.command[-2:], ["--query", "burst"])
+        self.report_mode = "bad_query"
+        result = collect(self.options, self.deps)
+        self.assertFalse(result["ok"])
+        self.assertTrue(any("consulta/reset" in error for error in result["errors"]))
+
+    def test_query_profile_rejection_before_run_registration(self):
+        self.options.query = "single"
+        with self.assertRaisesRegex(ValueError, "G-P"):
+            collect(self.options, self.deps)
+        self.assertEqual(list(self.root.iterdir()), [])
+
+    def test_query_ready_requires_mode_and_integer_schema_before_sampling(self):
+        self.options.profile, self.options.query = "G-P", "burst"
+        for mode in ("missing_query", "wrong_query", "bool_query_schema"):
+            with self.subTest(mode=mode):
+                self.ready_mode = mode
+                result = collect(self.options, self.deps)
+                self.assertFalse(result["ok"])
+                self.assertEqual(result["samples_count"], 0)
+                self.assertTrue(any("modo/schema" in error for error in result["errors"]))
+
+    def test_query_report_needs_events_full_checks_and_recomputed_summary(self):
+        self.options.profile, self.options.query = "G-P", "burst"
+        for mode in ("missing_query_events", "query_summary_only", "query_checks_only_bytes",
+                     "query_summary_tampered", "query_float_schema"):
+            with self.subTest(mode=mode):
+                self.report_mode = mode
+                result = collect(self.options, self.deps)
+                self.assertFalse(result["ok"])
+                self.assertTrue(any("consulta/reset" in error for error in result["errors"]))
 
     def test_ownership_uses_fresh_identity_and_optional_metadata_can_be_denied(self):
         class Denied(Exception):

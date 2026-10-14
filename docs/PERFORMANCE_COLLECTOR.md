@@ -110,8 +110,31 @@ conseguir medidas: renders ocultos ficam não confirmados/não comparáveis.
 Build também é não comparável a render estabilizado. Comparabilidade local
 das fronteiras confirmadas exige versões/endpoints/estado e dimensões cliente
 equivalentes no outro run, sem juntar build, render completo ou regras.
-Query/latência de debounce, longa duração, motor real, fake running, outras
+Query programática está implementada conforme
+[contrato de busca](PERFORMANCE_QUERY_CONTRACT.md). Longa duração, motor real, fake running, outras
 cargas/estados e executável distribuído ficam para extensões próprias.
+
+## Medir busca
+
+```powershell
+.\.venv\Scripts\python.exe -B -m tools.measure_gui --rules 1000 --profile G-P --query burst --warmup 1 --idle 3 --interval 0.25
+```
+
+`--query none` é o default sem hooks. `single` escreve `qa-00`; `burst` e
+`spaced` escrevem `q`, `qa`, `qa-`, `qa-0`, `qa-00` com gaps solicitados de
+50/500 ms após o retorno de cada setter. Somente G-P aceita query. Intervalos
+reais e renders são registrados, sem assumir um render por sequência/escrita.
+Query e reset vazio pelo debounce original terminam antes de ready/warmup/idle.
+Prazo cooperativo: 30 s por sequência, 10 s por observação após render;
+startup-timeout externo continua limitando toda preparação.
+
+`report.json.query` conserva dois pacotes query/reset, eventos em memória,
+resumos puros e verificações de dados. `query_schema_version=1` é independente
+dos timings de preparação v2. Latência última escrita→after_idle inclui setter,
+debounce, render e espera/instrumentação; não subtrair 200 ms nem chamar esse
+endpoint de pintura ou teclado físico. Os [resultados](PERFORMANCE_QUERY_RESULTS.md)
+mantêm reset/CPU idle separados. Hooks são restaurados antes do ready e também
+nas falhas; IO/hash/auditorias/publicação ficam fora dos intervalos de query.
 
 Esta implementação conserva um subconjunto do protocolo. DPI/monitor/plano
 de energia/job/quota não são inferidos a partir da geometria ou plataforma;

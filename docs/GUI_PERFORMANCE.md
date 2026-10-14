@@ -117,3 +117,8 @@ registrando fontes/dados brutos e desvios. Matriz, cargas, durações e método 
 aceite continuam propostas de D18; ensaios curtos não executam a matriz completa.
 Q-PERF-01/02 em [USER_ANSWERS.md](USER_ANSWERS.md) tratam ambiente/repouso e
 significado dos limites para aceite final, sem impedir investigação exploratória.
+
+A [medição de busca](PERFORMANCE_QUERY_RESULTS.md) separa setter/debounce/render/
+after_idle e reset vazio real antes do idle. Usa R_N1000, programaticamente,
+sem representar teclado físico ou pintura. Custo por chamada e CPU idle
+observados exigem diagnóstico separado antes de alterar produção ou polling.

@@ -35,12 +35,15 @@ class Options:
     profile: str
     warmup: float = 2.0
     idle: float = 5.0
+    query: str = "none"
 
     def validate(self):
         if type(self.rules) is not int or self.rules not in (0, 100, 1000):
             raise ValueError("rules must be 0, 100 or 1000")
         if self.profile not in ("H-F", "G-P", "T-P"):
             raise ValueError("invalid profile")
+        if self.query not in ("none", "single", "burst", "spaced") or (self.query != "none" and self.profile != "G-P"):
+            raise ValueError("query sequences require G-P and a valid query mode")
         for name, minimum in (("warmup", 0), ("idle", 0)):
             value = getattr(self, name)
             if (isinstance(value, bool) or not isinstance(value, (int, float))
@@ -180,6 +183,9 @@ class Worker:
         self.owned_callbacks = {}
         self.pending_timing = None
         self.render_anchor = None
+        self.query_probe = None
+        self.query_packets = []
+        self.query_finished = False
         self.geometry_gate = dict(status="not_started", reason=None, observations=[],
                                   poll_ms=50, timeout_ns=10_000_000_000)
 
@@ -198,6 +204,8 @@ class Worker:
         if self.idle_begin_ns is not None and self.idle_end_ns is None:
             self.idle_end_ns = self.clock()
         self.errors.append(f"{type(exc).__name__}: {exc}")
+        if self.query_probe is not None:
+            self.query_probe.close()
         self.invalidate_pending(str(exc))
         if self.app is not None and not self.app.closed and not self.app.closing:
             try:
@@ -305,6 +313,8 @@ class Worker:
         original_close = self.app.close_editor
 
         def close():
+            if self.query_probe is not None:
+                self.query_probe.close()
             self.invalidate_pending("window closing before measurement completed")
             self.transition("closing")
             original_close()
@@ -586,6 +596,9 @@ class Worker:
 
     def profile_ready(self):
         self.require_clean()
+        if self.options.query != "none" and not self.query_finished:
+            self.begin_query_sequence(self.options.query)
+            return
         state = self.observe()
         if not all(self.state_checks(state).values()):
             raise RuntimeError("invalid ready invariants")
@@ -595,10 +608,55 @@ class Worker:
         self.publish("ready.json", dict(ok=True, profile=self.options.profile,
                      rules=self.options.rules, **self.identity, timings=self.timings,
                      timing_schema_version=2, geometry_gate=self.geometry_gate,
+                     query_schema_version=1, query_mode=self.options.query,
                      geometry=self.geometry, ready_ns=self.clock()))
         self.ready = True
         self.transition("warmup")
         self.schedule(self.begin_idle, delay=math.ceil(self.options.warmup * 1000))
+
+    def query_geometry_check(self):
+        geometry = self.geometry_data("880x660")
+        self.check_profile_geometry(geometry)
+        return geometry
+
+    def verify_query_data(self):
+        state = self.observe()  # Outside every measured sequence/reset interval.
+        checks = dict(bytes=state["fixture_sha256"] == self.initial_hash,
+                      draft=self.session.draft is self.draft,
+                      baseline=self.session.snapshot is self.baseline,
+                      model=self.deps.equal(self.config, self.session.draft.config),
+                      baseline_model=self.deps.equal(self.config, self.session.snapshot.config),
+                      history_empty=not tuple(self.session.draft._undo) and not tuple(self.session.draft._redo),
+                      clean=not any(state[key] for key in ("dirty", "is_new", "can_undo", "can_redo")),
+                      zero_starts=self.controller.starts == 0 and not self.controller.is_alive())
+        if not all(checks.values()):
+            raise RuntimeError("query data invariants failed")
+        return checks
+
+    def begin_query_sequence(self, mode):
+        from tools.perf_query_probe import QueryProbe
+        self.transition("query_" + mode)
+        self.verify_query_data()
+        self.query_geometry_check()
+        self.query_probe = QueryProbe(self.app, mode, self.options.rules, clock=self.clock,
+                                     schedule=self.schedule, geometry_check=self.query_geometry_check,
+                                     done=self.query_sequence_done)
+        self.query_probe.start()
+
+    def query_sequence_done(self, probe):
+        from tools.perf_query import summarize_query
+        packet = probe.packet()
+        self.transition("query_audit")
+        packet["summary"] = summarize_query(packet["writes"], packet["renders"], probe.mode, self.options.rules)
+        self.query_packets.append(packet)
+        if packet["summary"].get("ok") is not True:
+            raise RuntimeError("query event summary is invalid")
+        packet["data_checks"] = self.verify_query_data()
+        if probe.mode != "reset":
+            self.begin_query_sequence("reset")
+        else:
+            self.query_finished = True
+            self.profile_ready()
 
     def await_tray(self):
         if self.app.closed or self.app.closing:
@@ -647,6 +705,8 @@ class Worker:
         except Exception as exc:
             self.fail(exc)
         finally:
+            if self.query_probe is not None:
+                self.query_probe.close()
             self.cancel_owned()
             # Only outside mainloop may tray.wait block. Normal closure polls.
             for component in (self.controller, self.tray, self.mailbox):
@@ -707,6 +767,8 @@ class Worker:
         checks["geometry_gate"] = self.geometry_gate["status"] == (
             "not_required" if self.options.profile == "H-F" else "confirmed")
         checks["qa_callbacks_cancelled"] = not self.owned_callbacks
+        if self.options.query != "none":
+            checks["query_complete_and_reset"] = self.query_finished
         if not all(checks.values()) and not self.errors:
             self.errors.append("invariants failed: " + ", ".join(k for k, v in checks.items() if not v))
         if self.errors:
@@ -719,6 +781,10 @@ class Worker:
                       timings=self.timings, geometry=self.geometry, versions=getattr(self, "versions", {}),
                       timing_schema_version=2, geometry_gate=self.geometry_gate,
                       qa_callbacks_pending=len(self.owned_callbacks),
+                      query=dict(query_schema_version=1, mode=self.options.query, complete=self.query_finished,
+                                 packets=self.query_packets,
+                                 partial=(self.query_probe.packet() if self.query_probe is not None
+                                          and not self.query_probe.finished else None)),
                       invariants=dict(before=self.before, after=self.after, checks=checks),
                       errors=self.errors, closed=closed, tray_alive=tray_alive, after_info=after_info,
                       exploratory=True, acceptance=False)
@@ -729,7 +795,7 @@ class Worker:
 def run_worker(options, dependencies=None, *, workspace=None, clock=perf_counter_ns):
     options.validate()
     root = validate_run_dir(options.run_dir, workspace or Path(__file__).resolve().parents[1])
-    options = Options(root, options.rules, options.profile, options.warmup, options.idle)
+    options = Options(root, options.rules, options.profile, options.warmup, options.idle, options.query)
     deps = _native_dependencies() if dependencies is None else dependencies
     return Worker(options, deps, clock).execute()
 
@@ -741,6 +807,7 @@ def main(argv=None):
     parser.add_argument("--profile", required=True, choices=("H-F", "G-P", "T-P"))
     parser.add_argument("--warmup", type=float, default=2.0)
     parser.add_argument("--idle", type=float, default=5.0)
+    parser.add_argument("--query", choices=("none", "single", "burst", "spaced"), default="none")
     args = parser.parse_args(argv)
     try:
         report = run_worker(Options(**vars(args)))

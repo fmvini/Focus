@@ -31,6 +31,7 @@ def parser():
     result = argparse.ArgumentParser(description=__doc__)
     result.add_argument("--rules", type=int, choices=(0, 100, 1000), default=100)
     result.add_argument("--profile", choices=("H-F", "G-P", "T-P"), default="H-F")
+    result.add_argument("--query", choices=("none", "single", "burst", "spaced"), default="none")
     result.add_argument("--warmup", type=finite_number, default=2.0)
     result.add_argument("--idle", type=finite_number, default=10.0)
     result.add_argument("--interval", type=finite_number, default=1.0)
@@ -46,6 +47,8 @@ def validate(options):
         raise ValueError("carga deve ser 0, 100 ou 1000 regras")
     if options.profile not in ("H-F", "G-P", "T-P"):
         raise ValueError("perfil desconhecido")
+    if options.query not in ("none", "single", "burst", "spaced") or (options.query != "none" and options.profile != "G-P"):
+        raise ValueError("consulta medida exige perfil G-P e modo válido")
     for name in ("warmup", "idle", "interval", "startup_timeout", "finish_timeout"):
         value = getattr(options, name)
         if isinstance(value, bool) or not isinstance(value, (float, int)) or not math.isfinite(value):
@@ -88,6 +91,36 @@ def metadata():
         "ram_available_bytes": psutil.virtual_memory().available,
         "desktop_dpi_power_job_limits": "não medidos; informar contexto na análise",
     }
+
+
+def query_report_valid(query, mode, rules):
+    """Recompute event evidence outside the worker's measured intervals."""
+    from tools.perf_query import summarize_query
+    required_checks = {"bytes", "draft", "baseline", "model", "baseline_model",
+                       "history_empty", "clean", "zero_starts"}
+    if (not isinstance(query, dict) or query.get("mode") != mode
+            or type(query.get("query_schema_version")) is not int
+            or query["query_schema_version"] != 1 or query.get("complete") is not True
+            or query.get("partial") is not None):
+        return False
+    packets = query.get("packets")
+    if not isinstance(packets, list) or len(packets) != 2:
+        return False
+    for packet, expected_mode in zip(packets, (mode, "reset")):
+        if (not isinstance(packet, dict) or packet.get("mode") != expected_mode
+                or type(packet.get("query_schema_version")) is not int
+                or packet["query_schema_version"] != 1 or packet.get("status") != "complete"
+                or type(packet.get("writes")) is not list or type(packet.get("renders")) is not list
+                or not isinstance(packet.get("summary"), dict)
+                or not isinstance(packet.get("data_checks"), dict)
+                or not required_checks.issubset(packet["data_checks"])
+                or any(value is not True for value in packet["data_checks"].values())):
+            return False
+        summary = summarize_query(packet["writes"], packet["renders"], expected_mode, rules)
+        if summary["ok"] is not True or packet["summary"] != summary:
+            return False
+    return (packets[1]["writes"][0]["begin_ns"] > packets[0]["summary"]["final_observation_ns"]
+            and packets[1]["summary"]["final_revision"] > packets[0]["summary"]["final_revision"])
 
 
 def verify_owned(launcher, ready):
@@ -248,17 +281,18 @@ def collect(options, deps=None):
         return preparation_failure(artifacts, run_dir, options, error)
     command = [str(runtime), "-B", "-m", "tools.perf_gui_worker", "--run-dir", str(run_dir),
                "--rules", str(options.rules), "--profile", options.profile,
-               "--warmup", str(options.warmup), "--idle", str(options.idle)]
+               "--warmup", str(options.warmup), "--idle", str(options.idle), "--query", options.query]
     manifest = {
         "protocol_version": 1, "run_id": run_dir.name, "kind": "exploratory_subset",
         "rnf_accepted": False, "started_utc": datetime.now(timezone.utc).isoformat(),
         "environment": environment, "worker_command": command, "workspace": str(WORKSPACE),
         "profile": options.profile, "rules": options.rules,
+        "query": options.query,
         "requested": {name: getattr(options, name) for name in
                       ("warmup", "idle", "interval", "startup_timeout", "finish_timeout")},
         "config_sha256": before_hash, "config_bytes": config_bytes,
         "measurement": "external PID/create_time; collector excluded; CPU covered idle span",
-        "query_long_sessions_distributed_visual": "não implementados nesta versão",
+        "long_sessions_distributed_visual": "não implementados nesta versão",
     }
     try:
         artifacts.write_json(run_dir / "manifest.json", manifest)
@@ -298,6 +332,10 @@ def collect(options, deps=None):
                 or ready["create_time"] <= 0 or ready.get("rules") != options.rules):
             raise ValueError("ready.json inválido ou perfil não ficou pronto")
         identity = deps.verify_owned(launcher, ready)
+        if options.query != "none" and (ready.get("query_mode") != options.query
+                or type(ready.get("query_schema_version")) is not int
+                or ready["query_schema_version"] != 1):
+            raise ValueError("ready.json não comprova modo/schema da consulta")
         sampler = deps.sampler_factory(ready["pid"], ready["create_time"])
         finish_deadline = deps.clock_ns() + int((options.warmup + options.idle + options.finish_timeout) * 1e9)
         while launcher.poll() is None:
@@ -313,6 +351,9 @@ def collect(options, deps=None):
             raise ValueError("report.json deve ser objeto")
         if report.get("profile") != options.profile:
             errors.append("perfil do report não corresponde ao run")
+        if options.query != "none":
+            if not query_report_valid(report.get("query"), options.query, options.rules):
+                errors.append("consulta/reset não comprovados pelo report")
         if report.get("pid") != ready["pid"] or report.get("create_time") != ready["create_time"]:
             errors.append("identidade do report não corresponde ao worker")
         checks = report.get("invariants", {}).get("checks", {})
