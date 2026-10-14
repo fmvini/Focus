@@ -80,16 +80,36 @@ Memória conserva bytes, MB e MiB; working set atual e pico amostrado não são
 pico lifetime ou commit privado. Instrumentação/modelos de QA fazem parte do
 PID medido e podem afetar seu RSS. Nenhuma coleta de USS ou subtração de overhead.
 
-Build usa o tamanho inicial do app (1000×740); renders completo/de regras são
-medidos depois de ajustar 880×660. Início, retorno, layout e instrumentação
-ficam separados. `update_idletasks` não prova pintura/compositor. Comparações
-precisam repetir os mesmos endpoints e condições, sem juntar build com render.
-Dimensões acima são **solicitadas**, não garantia da geometria efetiva na
-fronteira síncrona. Nos primeiros runs, os timings reportaram 200×200 antes
-de consumir eventos do mainloop; G-P/T-P prontos reportaram 880×660. H-F
-permaneceu com geometria reportada 200×200. Esses desvios impedem atribuir seus
-tempos a renderização estabilizada em 880×660 ou comparar raízes ocultas com
-janela visível como se fossem a mesma condição.
+Build conserva o endpoint síncrono de startup, tamanho inicial solicitado
+1000×740 e dimensão realmente observada. Continua sem prova de mapeamento,
+layout estabilizado ou pintura. A [primeira implementação](PERFORMANCE_COLLECTOR_RESULTS.md)
+reportou 200×200 nos renders pré-mainloop: esses dados históricos permanecem
+válidos como endpoints observados e não ganham comparabilidade retroativa.
+
+Na semântica v2, renders completo/de regras ocorrem em callbacks distintos do
+mainloop. G-P/T-P aguardam duas observações consecutivas, separadas por 50 ms,
+de janela normal/mapeada, getter lógico CTk 880×660 e cliente bruto positivo
+estável. Prazo cooperativo de 10 s; timeout ou mudança nas fronteiras invalida
+o run, sem iniciar idle. Dimensão CTk é lógica; cliente Tk bruto é registrado
+separadamente, sem exigir 880×660 físicos ou inferir DPI.
+`timing_schema_version=2` em ready/report versiona esses endpoints;
+`protocol_version=1` do manifesto e `method=mapped_stable_v1` são rótulos
+distintos e não indicam a semântica antiga de layout por update_idletasks.
+
+Renders v2 não chamam `update()`/`update_idletasks`. `duration_ns` mede apenas
+a chamada; observação de layout por `after_idle` tem espera de event loop em
+`layout_wait_ns`. `layout_duration_ns=None` nesses renders evita tratar a
+espera como CPU ou trabalho exclusivo de layout. Watchdog owned limita
+starvation da continuação; o timeout externo do supervisor protege a execução
+se a thread Tk bloquear. Getters/agendamento/instrumentação ficam explícitos
+fora da chamada. Nenhum endpoint comprova pixels apresentados pelo compositor.
+
+T-P mede renders na preparação visível e depois oculta pelo fluxo real para
+idle; esses timings não são custo de render oculto. H-F nunca é mapeado para
+conseguir medidas: renders ocultos ficam não confirmados/não comparáveis.
+Build também é não comparável a render estabilizado. Comparabilidade local
+das fronteiras confirmadas exige versões/endpoints/estado e dimensões cliente
+equivalentes no outro run, sem juntar build, render completo ou regras.
 Query/latência de debounce, longa duração, motor real, fake running, outras
 cargas/estados e executável distribuído ficam para extensões próprias.
 

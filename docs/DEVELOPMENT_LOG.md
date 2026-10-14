@@ -1,3 +1,34 @@
+## 2026-10-13 — Geometria confirmada e timings v2 do coletor
+
+### Implementado
+- Renders completo/de regras em callbacks distintos do mainloop, com gate de geometria lógica CTk880×660 e cliente bruto positivo/estável em duas observações separadas por 50 ms. Geometria/estado revalidados antes, retorno, after_idle, entre renders e perfil/idle; build conserva startup e H-F permanece oculto/não comparável.
+- Schema 2 separa chamada de render, espera do event loop/observação e instrumentação; layout_duration_ns=None nos renders. Deadline de retorno+10 s, watchdog usando margem restante positiva, callbacks owned/token/fase/handle consumido e preservação de timings parciais. Falha de cancelamento bloqueia ready/idle sem impedir fechamento/report inválido.
+- Sete ensaios reais sequenciais e duas repetições visíveis por runtime; resultados/dados brutos preservados sem modificar produção/dependências ou aceitar RNF01/DPI.
+
+### Arquivos principais alterados
+- `tools/perf_gui_worker.py`, `tests/test_perf_gui_worker.py`.
+- `docs/PERFORMANCE_COLLECTOR_CONTRACT.md`, `docs/PERFORMANCE_COLLECTOR.md`, `docs/PERFORMANCE_COLLECTOR_RESULTS.md`, `docs/PERFORMANCE_GEOMETRY_RESULTS.md`, `docs/PERFORMANCE_PROTOCOL.md`.
+- `docs/TEST_PLAN.md`, `docs/GUI_PERFORMANCE.md`, `docs/README.md`, `docs/DELIVERY_PLAN.md`, `docs/DEVELOPMENT_LOG.md`.
+
+### Decisões técnicas
+- Getter CTk é lógico, winfo é cliente bruto; não exigir dimensão física880×660 ou inferir escala Windows de Tk. Confirmação amostrada nas fronteiras não comprova estabilidade global ou pixels apresentados. T-P mede render visível antes da ocultação; idle é na bandeja.
+- `after_idle` substitui `update_idletasks` somente nos renders; layout_wait inclui espera/getters, sem representar CPU/layout exclusivo. Timings históricos ficam separados; build mantém o endpoint síncrono antigo. Watchdog cooperativo não preempta render síncrono; supervisor mantém timeout externo.
+- Fonte congelada após corrigir P2 de cancelamento permitindo continuidade e margem do watchdog renovada por getters. Nenhum commit intermediário ou mudança de comportamento de produto a partir da variação CPU.
+
+### Estado atual
+- Base `513fdc4`, produção `79607c9` intacta. Maestro: **82/82 testes aprovados/zero skips**, Python 3.14.6/3,249 s e 3.12.14/3,299 s, sendo 28 worker/20 métricas/19 artefatos/15 supervisor, sem import/execução GUI pelos testes. Frontend validou 28 fake nos dois runtimes; Backend/Banco reconferiram fonte final somente leitura sem P2 pendentes.
+- AST 3.12/UTF-8 dos 85 arquivos Python, UTF-8 dos 37 documentos e 182 links locais conferidos; validação dos sete artefatos/manifestos/endpoints passou. Diff de produção/dependências vazio.
+- Banco conferiu os oito artefatos de cada run e recalculou tabelas/cobertura/CPU/RSS/chamadas/esperas/12 recortes raw sem divergência material; revisão final de resultados somente leitura, sem rerun da suíte ou benchmark.
+- Worker SHA256 `4495468BEA61704DD0612D6AAF7953C74CCB54D78742E41A47C0895B4946A67D`; teste `2E0FDF1DAEA661D9F7AA8850A02AF3BF073F88EDC7B060B214C9C61DD9A16AB0`. Manifestos dos sete runs coincidem com as fontes entregues. Regressoes novas cobrem geometria atrasada/oscilante/escala raw/timeout, resize/unmap/after_idle starvation, fechamento/oldcallbacks/consumed membership, warmup0, cancel error, getter/registro lento e ceil do restante.
+- Native Maestro: H-F1000 nos dois runtimes, T-P100 em3.14 e dois G-P100 por runtime com warmup30/idle15s. Todos ok, exit0/closed/trayfalse/timers[]/QA callbacks0, hashes/bytes/modelo/baseline/history/FULL/projeção/zero starts intactos e PID medido ausente. G-P/T-P cliente880×660/mapped nas três fronteiras dos dois renders; H-F/build200×200 não comparáveis. Artefatos/logs ignorados conservados em `.qa`.
+- CPU G-P lógico: 3.14 observou 0%/0,316830%; 3.12, 4,962224%/0,316563%. Pico variável dentro do runtime e recortes raw estão em RESULTS; não demonstram causa, melhoria garantida ou RNF01. RSS máximo visível 60,480–61,117 MiB; contadores/conversões não reinterpretados como critério D18.
+- Suíte completa do produto não repetida, última842/841/um skip nos dois runtimes. Nenhuma captura ou aceite visual novo; falhas anteriores da ferramenta continuam no registro visual. D18/Q-PERF e sites/pausa/avisos sem respostas novas.
+
+### Próximos passos
+- Medir latência de busca/query com endpoints/revisões/callbacks do debounce vinculados à conclusão real, sem flush/IO durante timing; manter schema/versionamento e fixtures isoladas.
+- Investigar pico CPU em diagnóstico separado (perfil/overhead/atividade de fundo explícitos) e ampliar sessão/cargas antes de otimizar polling/Tk. D18 precisa fechar hardware/método/perímetro/estatística/artefato para aceite final.
+- Retomar roteiro visual quando houver observação/captura funcional, registrar escala real e executar teclado/leitor/retorno da bandeja; não aceitar casos a partir da confirmação geométrica do coletor.
+
 ## 2026-10-13 — Coletor exploratório de desempenho da GUI
 
 ### Implementado

@@ -231,6 +231,13 @@ externos/reversíveis no harness, sem mudanças em produção ou patch para reti
 o debounce. Guardar callbacks e revisões de consulta para vincular cada fim ao
 último valor escrito; callback cancelado não produz amostra válida de conclusão.
 
+O [coletor v2](PERFORMANCE_COLLECTOR.md) conserva build de startup e mede
+renders em callbacks do mainloop após confirmação amostrada da geometria nos
+perfis reais. Sua continuação `after_idle` publica espera de event loop,
+não duração exclusiva de layout nem pintura. Esses endpoints novos ficam
+versionados e separados do `update_idletasks` histórico; não redefinem os
+endpoints propostos nesta tabela ou os critérios D18.
+
 O debounce **atual** é um `after(200, ...)`, conforme
 [RULE_SEARCH_DEBOUNCE_CONTRACT.md](RULE_SEARCH_DEBOUNCE_CONTRACT.md).
 200 ms é atraso solicitado ao event loop, não latência medida, limite de resposta
@@ -250,8 +257,9 @@ registrados, sem flush intermediário que transforme o trabalho medido.
 ## Registro bruto proposto e análise
 
 Propor manifest JSON e amostras CSV/JSONL UTF-8 locais por run, gravados fora
-das fronteiras de timing quando possível. O formato ainda será implementado;
-não inventar resultados. Conservar stdout/stderr, erros Tk e runs inválidos.
+das fronteiras de timing quando possível. O formato proposto completo ainda
+não é implementado; o subconjunto disponível está no guia do coletor.
+Não inventar resultados. Conservar stdout/stderr, erros Tk e runs inválidos.
 
 | Registro proposto | Campos mínimos |
 | --- | --- |
@@ -297,8 +305,9 @@ Conferir saída do launcher/app/filhos próprios, threads encerradas, ausência 
 bgerrors/timers owned e remoção apenas das fixtures verificadas. Conservar
 evidências brutas; nunca encerrar PIDs ou excluir caminhos de terceiros.
 
-Próximo passo: estender o coletor exploratório com geometria estabilizada,
-repetições/estados e latência de busca, mantendo contadores/endpoints e limites
+Próximo passo: estender a exploração v2 de geometria confirmada com diagnóstico
+da CPU variável, repetições/estados adicionais e latência de busca, mantendo
+contadores/endpoints e limites
 registrados. Para aceite final, consolidar
 D18 com o usuário (hardware, matriz, repouso/carga, CPU, memória/perímetro,
 estatística e artefato) pelo canal [USER_ANSWERS.md](USER_ANSWERS.md).

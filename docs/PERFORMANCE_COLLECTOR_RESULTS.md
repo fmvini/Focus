@@ -6,6 +6,10 @@ Cada manifesto conserva HEAD/status e hashes dos arquivos realmente usados.
 Execuções do Maestro, sequenciais, sem GUI/benchmark/suíte nativa concorrente.
 **Não há aceite RNF01, visual/DPI ou garantia estatística.**
 
+Evolução posterior: [timings v2 e geometria confirmada](PERFORMANCE_GEOMETRY_RESULTS.md).
+As tabelas abaixo preservam a primeira implementação, sem comparação retroativa
+dos seus renders pré-mainloop com os endpoints novos.
+
 ## Ambiente e método
 
 Máquina reportou quatro núcleos físicos/oito lógicos. Python 3.14.6 e 3.12.14,
@@ -28,9 +32,9 @@ RSS é o máximo amostrado do working set em MiB; bytes/MB, commit privado e
 pico lifetime estão separados no resumo bruto. Zero CPU observado pode resultar
 da quantização do contador e não significa custo nulo.
 
-## Fonte final
+## Fonte da primeira implementação — `513fdc4`
 
-Estes três runs usam a fonte final do coletor, incluindo retenção na preparação,
+Estes três runs usam a fonte final dessa primeira unidade, incluindo retenção na preparação,
 Ctrl+C/publicação, nome UUID comum e versões Python/executável no worker.
 Os 65 testes com doubles passaram nesta fonte em Python 3.14.6/2,336 s e
 3.12.14/2,215 s, sem skips; nenhuma GUI foi importada pelos testes.

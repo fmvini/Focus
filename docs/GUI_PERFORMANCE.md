@@ -107,7 +107,11 @@ continuam pendentes.
 O [coletor exploratório](PERFORMANCE_COLLECTOR.md) foi implementado e seus
 [resultados](PERFORMANCE_COLLECTOR_RESULTS.md) preservam raw, cobertura CPU,
 invariantes e saída do PID. Geometria síncrona e warmup variaram; não comparar
-estritamente seus timings com os históricos acima. Próxima medição deve seguir
+estritamente seus timings com os históricos acima. Os
+[resultados v2](PERFORMANCE_GEOMETRY_RESULTS.md) registram renders reais no mainloop
+com geometria confirmada nas fronteiras e espera after_idle separada; build e
+raiz oculta continuam não comparáveis. Duas repetições por runtime mostraram
+variação CPU dentro do mesmo runtime, sem causa demonstrada. Próxima medição deve seguir
 [PERFORMANCE_PROTOCOL.md](PERFORMANCE_PROTOCOL.md),
 registrando fontes/dados brutos e desvios. Matriz, cargas, durações e método de
 aceite continuam propostas de D18; ensaios curtos não executam a matriz completa.

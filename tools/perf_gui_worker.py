@@ -1,11 +1,14 @@
 """Internal exploratory QA worker; importing this module never imports a GUI.
 
 Run with python -B -m tools.perf_gui_worker and an existing isolated R_N run.
-Timings contain start_ns, return_ns, layout_start_ns, layout_end_ns,
-duration_ns (call only), layout_duration_ns, instrumentation_duration_ns
-(hook setup between return and layout), and through_layout_ns (total).
-Each timing records requested/reported geometry: build 1000x740, subsequent
-renders 880x660. Layout is not presented pixels; Windows DPI is unknown.
+Timing schema 2 retains the startup build/update_idletasks endpoint, unverified.
+Renders run in mainloop with a separate after_idle observation: duration_ns is
+call only; layout_duration_ns is None and layout_wait_ns is return to completed
+observation (loop wait, scheduling, getters/instrumentation, not exclusive layout
+CPU). through_layout_ns includes that wait. Geometry/getters, validation and
+scheduling are outside duration_ns. G-P/T-P render visibly after two stable
+after(50) observations; H-F renders hidden/unverified, never comparable.
+CTk geometry getter is logical; winfo dimensions are raw, not verified DPI.
 ready.json precedes warmup; idle markers exclude diagnostics and teardown.
 This tool neither starts a blocker nor establishes RNF01 or visual acceptance.
 """
@@ -173,18 +176,107 @@ class Worker:
         self.identity = {"pid": os.getpid(), "create_time": None}
         self.bgerror_installed = False
         self.bgerror_saved = None
+        self.phase, self.callback_token = "startup", 0
+        self.owned_callbacks = {}
+        self.pending_timing = None
+        self.render_anchor = None
+        self.geometry_gate = dict(status="not_started", reason=None, observations=[],
+                                  poll_ms=50, timeout_ns=10_000_000_000)
 
     def publish(self, name, value):
+        if name != "report.json":
+            self.require_clean()
         # Reject nonfinite values even if the injected writer is permissive.
         json.dumps(value, allow_nan=False)
         self.deps.write_json(self.options.run_dir / name, value)
+
+    def require_clean(self):
+        if self.errors:
+            raise RuntimeError("QA worker aborted after previous error: " + self.errors[0])
 
     def fail(self, exc):
         if self.idle_begin_ns is not None and self.idle_end_ns is None:
             self.idle_end_ns = self.clock()
         self.errors.append(f"{type(exc).__name__}: {exc}")
+        self.invalidate_pending(str(exc))
         if self.app is not None and not self.app.closed and not self.app.closing:
-            self.app.close_editor()
+            try:
+                self.app.close_editor()
+            except Exception as close_error:
+                self.errors.append(f"close after error: {type(close_error).__name__}: {close_error}")
+
+    def invalidate_pending(self, reason):
+        if self.pending_timing is not None:
+            timing = self.timings[self.pending_timing]
+            if timing["status"] != "invalid":
+                failed = self.clock()
+                timing.update(status="invalid", reason=reason, geometry_verified=False, comparable=False,
+                              failed_ns=failed)
+                if timing["start_ns"] is not None:
+                    timing["partial_total_ns"] = failed - timing["start_ns"]
+                if timing["return_ns"] is not None:
+                    timing["partial_layout_wait_ns"] = failed - timing["return_ns"]
+        if self.geometry_gate["status"] == "waiting":
+            self.geometry_gate.update(status="invalid", reason=reason)
+
+    def cancel_owned(self):
+        self.callback_token += 1
+        handles, self.owned_callbacks = self.owned_callbacks, {}
+        if self.app is not None and not self.app.closed:
+            for handle in handles:
+                try:
+                    self.app.after_cancel(handle)
+                except Exception as exc:
+                    self.errors.append(f"cancel QA callback: {type(exc).__name__}: {exc}")
+
+    def transition(self, phase):
+        self.cancel_owned()
+        # Logical invalidation must happen even on failure. Closing still reaches
+        # the app's original lifecycle; never recursively fail from cancel_owned.
+        if phase != "closing":
+            self.require_clean()
+        self.phase = phase
+
+    def schedule(self, operation, *, delay=0, idle=False, deadline_ns=None, timeout_reason=None):
+        self.require_clean()
+        phase, token = self.phase, self.callback_token
+        handle = None
+
+        def invoke():
+            # Plain Python guards precede any getter/Tk and never erase a new owner.
+            if (token != self.callback_token or phase != self.phase or handle not in self.owned_callbacks
+                    or self.app is None
+                    or self.app.closed or self.app.closing):
+                return
+            self.owned_callbacks.pop(handle, None)
+            try:
+                self.require_clean()
+                operation()
+            except Exception as exc:
+                self.fail(exc)
+
+        if deadline_ns is not None:
+            remaining = deadline_ns - self.clock()
+            if remaining <= 0:
+                raise RuntimeError(timeout_reason)
+            if not idle:
+                delay = (remaining + 999_999) // 1_000_000  # positive ceil, no float conversion
+        handle = self.app.after_idle(invoke) if idle else self.app.after(delay, invoke)
+        self.owned_callbacks[handle] = phase
+        self.require_clean()
+        if deadline_ns is not None and self.clock() >= deadline_ns:
+            raise RuntimeError(timeout_reason)
+        return handle
+
+    def watchdog(self, reason, *, deadline_ns=None):
+        # Cooperative Tk deadline; cannot preempt a blocked synchronous operation.
+        deadline = self.clock() + 10_000_000_000 if deadline_ns is None else deadline_ns
+        def check():
+            if self.clock() >= deadline:
+                self.fail(RuntimeError(reason))
+            else:
+                self.watchdog(reason, deadline_ns=deadline)
+        self.schedule(check, deadline_ns=deadline, timeout_reason=reason)
 
     def install_error_hooks(self):
         def callback_error(kind, exc, tb):
@@ -197,6 +289,8 @@ class Worker:
             if self.idle_begin_ns is not None and self.idle_end_ns is None:
                 self.idle_end_ns = self.clock()
             try:
+                if self.app.closed or self.app.closing:
+                    raise RuntimeError("window is closing or closed")
                 detail = self.app.tk.call("set", "errorInfo")
             except Exception as exc:
                 detail = f"errorInfo unavailable: {type(exc).__name__}: {exc}"
@@ -208,6 +302,16 @@ class Worker:
             self.app.tk.call("rename", "bgerror", self.bgerror_saved)
         self.app.tk.createcommand("bgerror", bgerror)
         self.bgerror_installed = True
+        original_close = self.app.close_editor
+
+        def close():
+            self.invalidate_pending("window closing before measurement completed")
+            self.transition("closing")
+            original_close()
+
+        self.app.close_editor = close
+        # The original WM callback was bound when the factory constructed the root.
+        self.app.protocol("WM_DELETE_WINDOW", close)
 
     def restore_error_hooks(self):
         if self.bgerror_installed:
@@ -218,40 +322,203 @@ class Worker:
             self.bgerror_saved = None
 
     def geometry_data(self, requested):
-        return dict(requested_logical=requested, geometry=self.app.geometry(),
+        observed = self.clock()
+        getter = self.app.geometry()
+        parsed = re.fullmatch(r"(\d+)x(\d+)(?:[+-]\d+[+-]\d+)?", getter)
+        result = dict(requested_logical=requested, geometry=getter,
+                    getter_units="ctk_logical",
+                    logical_size=[int(parsed[1]), int(parsed[2])] if parsed else None,
                     client_width=self.app.winfo_width(), client_height=self.app.winfo_height(),
+                    client_units="winfo_raw", state=self.app.state(), mapped=bool(self.app.winfo_ismapped()),
                     tk_scaling=float(self.app.tk.call("tk", "scaling")),
                     tk_version=self.app.tk.call("info", "patchlevel"),
-                    windows_scale=None, monitor_dpi=None, layout_is_pixels=False)
+                    windows_scale=None, monitor_dpi=None, layout_is_pixels=False,
+                    observed_ns=observed)
+        result["observation_end_ns"] = self.clock()
+        return result
 
-    def callback(self, operation):
-        def invoke():
-            try:
-                operation()
-            except Exception as exc:
-                self.fail(exc)
-        return invoke
+    def new_timing(self, name, phase, method):
+        timing = dict(timing_schema_version=2, phase=phase, method=method,
+                      status="partial", reason=None, geometry_verified=False, comparable=False,
+                      start_ns=None, return_ns=None, layout_start_ns=None, layout_end_ns=None,
+                      duration_ns=None, layout_duration_ns=None, layout_wait_ns=None,
+                      instrumentation_duration_ns=None, through_layout_ns=None,
+                      observation_deadline_ns=None,
+                      geometry=None, geometry_before=None, geometry_after=None,
+                      instrumentation="getters/validation/scheduling excluded from duration_ns; "
+                                      "render layout_wait includes event-loop wait and observation instrumentation")
+        self.timings[name] = timing
+        self.pending_timing = name
+        return timing
 
-    def timed(self, name, operation):
+    def timed_build(self, operation):
+        self.require_clean()
+        timing = self.new_timing("build", "startup", "startup_observed")
         begin = self.clock()
+        timing["start_ns"] = begin
         result = operation()
         returned = self.clock()
-        app = result if name == "build" else self.app
+        timing.update(return_ns=returned, duration_ns=returned - begin)
         # Retain ownership even if build-layout fails.
-        if name == "build":
-            self.app = app
-            self.install_error_hooks()
+        self.app = result
+        self.install_error_hooks()
         layout_start = self.clock()
-        app.update_idletasks()
+        self.app.update_idletasks()
         layout = self.clock()
-        self.timings[name] = dict(start_ns=begin, return_ns=returned,
-                                 layout_start_ns=layout_start,
-                                 layout_end_ns=layout, duration_ns=returned - begin,
-                                 layout_duration_ns=layout - layout_start,
-                                 instrumentation_duration_ns=layout_start - returned,
-                                 through_layout_ns=layout - begin,
-                                 geometry=self.geometry_data("1000x740" if name == "build" else "880x660"))
+        timing.update(layout_start_ns=layout_start, layout_end_ns=layout,
+                      layout_duration_ns=layout - layout_start,
+                      instrumentation_duration_ns=layout_start - returned,
+                      through_layout_ns=layout - begin)
+        if self.errors or self.app.closed or self.app.closing:
+            raise RuntimeError("build ended with callback error or closed window")
+        geometry = self.geometry_data("1000x740")
+        timing.update(geometry=geometry, geometry_after=geometry)
+        timing["status"] = "complete"
+        self.pending_timing = None
         return result
+
+    @staticmethod
+    def geometry_signature(geometry):
+        return (geometry["logical_size"], geometry["client_width"], geometry["client_height"],
+                geometry["state"], geometry["mapped"])
+
+    @staticmethod
+    def mapped_geometry(geometry):
+        return (geometry["logical_size"] == [880, 660] and geometry["state"] == "normal"
+                and geometry["mapped"] and geometry["client_width"] > 0 and geometry["client_height"] > 0)
+
+    def check_render_geometry(self, geometry):
+        if self.options.profile == "H-F":
+            valid = geometry["state"] == "withdrawn" and not geometry["mapped"]
+        else:
+            valid = self.mapped_geometry(geometry)
+        if not valid or (self.render_anchor is not None and
+                         self.geometry_signature(geometry) != self.geometry_signature(self.render_anchor)):
+            raise RuntimeError("render geometry/state changed or unavailable")
+
+    def prepare_renders(self):
+        self.require_clean()
+        if self.options.profile == "H-F":
+            self.app.withdraw()
+            self.geometry_gate.update(status="not_required", reason="hidden_unverified")
+            self.queue_render("render_complete")
+        else:
+            self.transition("geometry_wait")
+            self.geometry_gate.update(status="waiting", start_ns=self.clock())
+            self.geometry_deadline_ns = self.clock() + 10_000_000_000
+            self.previous_geometry = None
+            self.watchdog("mapped geometry timeout")
+            self.schedule(self.poll_geometry, delay=50)
+
+    def poll_geometry(self):
+        if self.clock() >= self.geometry_deadline_ns:
+            raise RuntimeError("mapped geometry timeout")
+        geometry = self.geometry_data("880x660")
+        self.geometry_gate["observations"].append(geometry)
+        if geometry["observation_end_ns"] >= self.geometry_deadline_ns:
+            raise RuntimeError("mapped geometry timeout")
+        if self.mapped_geometry(geometry):
+            if (self.previous_geometry is not None and
+                    self.geometry_signature(self.previous_geometry) == self.geometry_signature(geometry)
+                    and geometry["observed_ns"] - self.previous_geometry["observed_ns"] >= 50_000_000):
+                self.render_anchor = geometry
+                self.geometry_gate.update(status="confirmed", confirmed_ns=self.clock())
+                self.queue_render("render_complete")
+                return
+            self.previous_geometry = geometry
+        else:
+            self.previous_geometry = None
+        self.schedule(self.poll_geometry, delay=50)
+
+    def queue_render(self, name):
+        self.transition(name + "_call")
+        self.watchdog(name + " callback timeout")
+        self.schedule(lambda: self.render_call(name), delay=50)
+
+    def render_call(self, name):
+        self.require_clean()
+        hidden = self.options.profile == "H-F"
+        timing = self.new_timing(name, "hidden" if hidden else "visible_before_tray",
+                                 "hidden_unverified" if hidden else "mapped_stable_v1")
+        before = self.geometry_data("880x660")
+        timing["geometry_before"] = before
+        self.check_render_geometry(before)
+        if self.render_anchor is None:
+            self.render_anchor = before
+        self.require_clean()
+        begin = self.clock()
+        timing["start_ns"] = begin
+        operation = self.app.render if name == "render_complete" else self.app.render_rules
+        operation()
+        returned = self.clock()
+        timing.update(return_ns=returned, duration_ns=returned - begin)
+        self.observation_deadline_ns = returned + 10_000_000_000
+        timing["observation_deadline_ns"] = self.observation_deadline_ns
+        if self.errors or self.app.closed or self.app.closing:
+            raise RuntimeError("render call ended with callback error or closed window")
+        # Revalidate at return as well: an idle continuation cannot rehabilitate it.
+        at_return = self.geometry_data("880x660")
+        timing["geometry_at_return"] = at_return
+        self.check_render_geometry(at_return)
+        reason = name + " after_idle observation timeout"
+        if self.clock() >= self.observation_deadline_ns:
+            raise RuntimeError(reason)
+        self.transition(name + "_observation")
+        timing["status"] = "awaiting_observation"
+        self.watchdog(reason, deadline_ns=self.observation_deadline_ns)
+        self.schedule(lambda: self.render_observed(name), idle=True,
+                      deadline_ns=self.observation_deadline_ns, timeout_reason=reason)
+
+    def render_observed(self, name):
+        self.require_clean()
+        timing = self.timings[name]
+        # Timer order/cancellation cannot rehabilitate a late continuation.
+        # This deadline starts at return, not call start: long calls are not
+        # preempted or classified as starvation of their subsequent observation.
+        if self.clock() >= self.observation_deadline_ns:
+            raise RuntimeError(name + " after_idle observation timeout")
+        after = self.geometry_data("880x660")
+        timing.update(geometry_after=after, geometry=after,
+                      layout_end_ns=after["observation_end_ns"],
+                      layout_wait_ns=after["observation_end_ns"] - timing["return_ns"],
+                      through_layout_ns=after["observation_end_ns"] - timing["start_ns"])
+        if after["observation_end_ns"] >= self.observation_deadline_ns:
+            raise RuntimeError(name + " after_idle observation timeout")
+        self.check_render_geometry(after)
+        timing.update(status="complete", geometry_verified=self.options.profile != "H-F",
+                      comparable=self.options.profile != "H-F")
+        self.pending_timing = None
+        if name == "render_complete":
+            self.queue_render("render_rules")
+        else:
+            self.start_profile()
+
+    def start_profile(self):
+        self.require_clean()
+        self.transition("profile_wait")
+        if self.options.profile == "H-F":
+            self.schedule(self.profile_ready)
+        else:
+            self.tray_deadline_ns = self.clock() + 10_000_000_000
+            if self.options.profile == "T-P":
+                self.app.send_to_tray()
+            else:
+                self.tray.start()
+            self.schedule(self.await_tray, delay=50)
+
+    def check_profile_geometry(self, geometry):
+        if self.options.profile == "H-F":
+            valid = geometry["state"] == "withdrawn" and not geometry["mapped"]
+        elif self.options.profile == "G-P":
+            valid = self.mapped_geometry(geometry)
+        else:
+            valid = (geometry["state"] == "withdrawn" and not geometry["mapped"]
+                     and geometry["logical_size"] == [880, 660])
+        if self.options.profile != "H-F" and self.render_anchor is not None:
+            valid = valid and all(geometry[key] == self.render_anchor[key] for key in
+                                  ("logical_size", "client_width", "client_height"))
+        if not valid:
+            raise RuntimeError("profile geometry changed before ready/idle completion")
 
     def observe(self):
         app, session = self.app, self.session
@@ -298,28 +565,40 @@ class Worker:
         }
 
     def begin_idle(self):
+        self.require_clean()
         # All diagnostics and IO precede the idle marker.
         self.before = self.observe()
         if not all(self.state_checks(self.before).values()):
             raise RuntimeError("invalid pre-idle invariants")
-        self.app.after(math.ceil(self.options.idle * 1000), self.callback(self.end_idle))
+        self.before["geometry"] = self.geometry_data("880x660")
+        self.check_profile_geometry(self.before["geometry"])
+        self.transition("idle")
+        self.schedule(self.end_idle, delay=math.ceil(self.options.idle * 1000))
+        self.require_clean()
         self.idle_begin_ns = self.clock()
 
     def end_idle(self):
         self.idle_end_ns = self.clock()
         self.after = self.observe()
+        self.after["geometry"] = self.geometry_data("880x660")
+        self.check_profile_geometry(self.after["geometry"])
         self.app.close_editor()
 
     def profile_ready(self):
+        self.require_clean()
         state = self.observe()
         if not all(self.state_checks(state).values()):
             raise RuntimeError("invalid ready invariants")
         self.geometry = self.geometry_data("880x660")
+        self.check_profile_geometry(self.geometry)
+        self.transition("ready")
         self.publish("ready.json", dict(ok=True, profile=self.options.profile,
                      rules=self.options.rules, **self.identity, timings=self.timings,
+                     timing_schema_version=2, geometry_gate=self.geometry_gate,
                      geometry=self.geometry, ready_ns=self.clock()))
         self.ready = True
-        self.app.after(math.ceil(self.options.warmup * 1000), self.callback(self.begin_idle))
+        self.transition("warmup")
+        self.schedule(self.begin_idle, delay=math.ceil(self.options.warmup * 1000))
 
     def await_tray(self):
         if self.app.closed or self.app.closing:
@@ -331,7 +610,7 @@ class Worker:
         elif self.clock() >= self.tray_deadline_ns:
             raise RuntimeError("real tray ready timeout")
         else:
-            self.app.after(50, self.callback(self.await_tray))
+            self.schedule(self.await_tray, delay=50)
 
     def execute(self):
         try:
@@ -353,7 +632,7 @@ class Worker:
             self.controller = ControllerGate(native)
             self.mailbox = self.deps.mailbox()
             self.tray = FakeTray() if self.options.profile == "H-F" else self.deps.tray(self.mailbox)
-            self.timed("build", lambda: self.deps.build(self.session, self.controller, self.tray, self.mailbox))
+            self.timed_build(lambda: self.deps.build(self.session, self.controller, self.tray, self.mailbox))
             original_tray_error = self.app.tray_error
 
             def tray_error(detail):
@@ -363,23 +642,12 @@ class Worker:
             self.app.tray_error = tray_error
             self.app.geometry("880x660")
             self.app.tabs.set("Jogos / Apps")
-            self.app.update_idletasks()
-            self.timed("render_complete", self.app.render)
-            self.timed("render_rules", self.app.render_rules)
-            if self.options.profile == "H-F":
-                self.app.withdraw()
-                self.app.after(0, self.callback(self.profile_ready))
-            else:
-                self.tray_deadline_ns = self.clock() + 10_000_000_000
-                if self.options.profile == "T-P":
-                    self.app.send_to_tray()
-                else:
-                    self.tray.start()
-                self.app.after(50, self.callback(self.await_tray))
+            self.prepare_renders()
             self.app.mainloop()
         except Exception as exc:
-            self.errors.append(f"{type(exc).__name__}: {exc}")
+            self.fail(exc)
         finally:
+            self.cancel_owned()
             # Only outside mainloop may tray.wait block. Normal closure polls.
             for component in (self.controller, self.tray, self.mailbox):
                 if component is not None:
@@ -433,12 +701,24 @@ class Worker:
         checks["idle_complete"] = (self.ready and self.before is not None and self.after is not None
                                    and self.idle_begin_ns is not None and self.idle_end_ns is not None
                                    and self.idle_end_ns > self.idle_begin_ns)
+        checks["renders_complete"] = all(
+            name in self.timings and self.timings[name]["status"] == "complete"
+            for name in ("render_complete", "render_rules"))
+        checks["geometry_gate"] = self.geometry_gate["status"] == (
+            "not_required" if self.options.profile == "H-F" else "confirmed")
+        checks["qa_callbacks_cancelled"] = not self.owned_callbacks
         if not all(checks.values()) and not self.errors:
             self.errors.append("invariants failed: " + ", ".join(k for k, v in checks.items() if not v))
+        if self.errors:
+            for timing in self.timings.values():
+                timing["comparable"] = False
+                timing["run_invalid_reason"] = self.errors[0]
         result = dict(ok=not self.errors and all(checks.values()), profile=self.options.profile,
                       rules=self.options.rules, warmup_s=self.options.warmup, idle_s=self.options.idle,
                       **self.identity, idle_begin_ns=self.idle_begin_ns, idle_end_ns=self.idle_end_ns,
                       timings=self.timings, geometry=self.geometry, versions=getattr(self, "versions", {}),
+                      timing_schema_version=2, geometry_gate=self.geometry_gate,
+                      qa_callbacks_pending=len(self.owned_callbacks),
                       invariants=dict(before=self.before, after=self.after, checks=checks),
                       errors=self.errors, closed=closed, tray_alive=tray_alive, after_info=after_info,
                       exploratory=True, acceptance=False)

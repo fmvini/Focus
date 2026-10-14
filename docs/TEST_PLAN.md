@@ -2,6 +2,28 @@
 
 Fonte: [escopo](Focus%20Blocker_%20escopo%20do%20projeto.md), [requisitos](REQUIREMENTS.md) e [decisões](DECISIONS.md). Fases 1/2: 206 testes OK em Python 3.14.6/psutil 7.2.2 por `.venv/Scripts/python.exe -B -m unittest discover -s tests` (10,542 s). Sintaxe 3.12 dos 18 arquivos Python conferida; runtime 3.12 ainda não executado. Encerramentos reais e fases posteriores continuam pendentes.
 
+## Geometria e timings v2 do coletor — 2026-10-13
+
+- Worker mede renders em callbacks distintos do mainloop; gate de duas
+  observações CTk lógico880×660/cliente bruto estável, revalidação nas fronteiras,
+  after_idle com espera separada e deadline monotônico/watchdog restante.
+  Build e H-F não promovidos a geometria confirmada. T-P renderiza antes de ocultar.
+- **82 testes/82 aprovados/zero skips**, Maestro na fonte final: Python
+  3.14.6/3,249 s e 3.12.14/3,299 s. 28 worker, 20 métricas, 19 artefatos,
+  15 supervisor. Novos fake cobrem atraso/instabilidade/timeout/escala raw,
+  resize/unmap, starvation/fechamento, stale/consumed callbacks e cancelamento
+  com erro impedindo ready/idle; getter/registro lento e margem restante.
+- Sete ensaios sequenciais reais em [RESULTS](PERFORMANCE_GEOMETRY_RESULTS.md):
+  H-F1000 nos dois runtimes, T-P100 em 3.14 e dois G-P100 por runtime com
+  warmup30/idle15 s. Todos válidos, hashes/invariantes/zero starts preservados,
+  closed/tray/timers/callbacks corretos e PID medido ausente. G-P/T-P tiveram
+  cliente880×660/mapped nas três fronteiras; H-F/build200×200 não comparáveis.
+- Backend/Banco revisões finais somente leitura sem achados P2 pendentes;
+  root verificou artefatos/hashes/endpoints. CPU varia dentro do mesmo runtime;
+  não conclui causa/RNF01. Produto/dependências intactos, suíte completa não
+  repetida (última842/841/um skip nos dois runtimes). Nenhuma captura nova ou
+  aprovação visual/DPI/teclado/leitor de tela nesta unidade.
+
 ## Coletor exploratório e nova tentativa visual — 2026-10-13
 
 - [Contrato](PERFORMANCE_COLLECTOR_CONTRACT.md), [CLI](PERFORMANCE_COLLECTOR.md)
